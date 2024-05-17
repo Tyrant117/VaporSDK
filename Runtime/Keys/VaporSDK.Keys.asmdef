@@ -1,0 +1,19 @@
+{
+    "name": "VaporSDK.Keys",
+    "rootNamespace": "Vapor.Keys",
+    "references": [
+        "GUID:50cb284694900174982da26fd2a77ac7",
+        "GUID:4abe2effbf01aba4ebd592e1ea351bc0"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "VAPOR_INSPECTOR"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

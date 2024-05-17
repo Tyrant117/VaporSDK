@@ -1,0 +1,16 @@
+{
+    "name": "VaporSDK.GraphTools",
+    "rootNamespace": "Vapor.GraphTools",
+    "references": [
+        "GUID:2263522c048880d4589d81976f4dd961"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
