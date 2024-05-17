@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace VaporGraphToolsEditor.Math
+namespace VaporEditor.GraphTools.Math
 {
     [AttributeUsage(AttributeTargets.Parameter, AllowMultiple = false)]
     public class GraphToolsMathParameterAttribute : Attribute

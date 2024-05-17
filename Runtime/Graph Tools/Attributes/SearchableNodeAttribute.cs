@@ -1,6 +1,6 @@
 using System;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     public class SearchableNodeAttribute : Attribute
     {

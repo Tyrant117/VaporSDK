@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace VaporObservables
+namespace Vapor.Observables
 {
     public interface IWrapper
     {

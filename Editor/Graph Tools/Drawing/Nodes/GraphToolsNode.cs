@@ -2,9 +2,9 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
-using VaporGraphTools;
+using Vapor.GraphTools;
 
-namespace VaporGraphToolsEditor
+namespace VaporEditor.GraphTools
 {
     public abstract class GraphToolsNode<T, U> : Node, IGraphToolsNode where T : ScriptableObject where U : NodeSo
     {

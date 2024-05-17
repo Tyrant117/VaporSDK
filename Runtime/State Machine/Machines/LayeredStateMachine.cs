@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Unity.Profiling;
 using UnityEngine;
 
-namespace VaporStateMachine
+namespace Vapor.StateMachine
 {
     /// <summary>
     /// A state machine that can be active on multiple layers at once.

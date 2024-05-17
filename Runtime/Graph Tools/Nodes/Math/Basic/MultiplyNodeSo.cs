@@ -1,6 +1,6 @@
 using System;
 
-namespace VaporGraphTools.Math
+namespace Vapor.GraphTools.Math
 {
     [SearchableNode("Math/Basic/Multiply", "Multiply")]
     public class MultiplyNodeSo : MathNodeSo

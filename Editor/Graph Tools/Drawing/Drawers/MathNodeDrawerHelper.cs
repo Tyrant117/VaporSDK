@@ -2,10 +2,10 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
-using VaporGraphTools;
-using VaporGraphToolsEditor.Math;
+using Vapor.GraphTools;
+using VaporEditor.GraphTools.Math;
 
-namespace VaporGraphToolsEditor
+namespace VaporEditor.GraphTools
 {
     public static class MathNodeDrawerHelper
     {

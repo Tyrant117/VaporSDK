@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace VaporGraphTools.Math
+namespace Vapor.GraphTools.Math
 {
     [SearchableNode("Math/Range/Maximum", "Maximum")]
     public class MaximumNodeSo : MathNodeSo

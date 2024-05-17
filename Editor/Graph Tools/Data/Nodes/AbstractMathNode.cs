@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 
-namespace VaporGraphToolsEditor.Math
+namespace VaporEditor.GraphTools.Math
 {
     public abstract class AbstractMathNode
     {

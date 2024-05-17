@@ -1,4 +1,4 @@
-namespace VaporStateMachine
+namespace Vapor.StateMachine
 {
     public interface IStateMachine
     {

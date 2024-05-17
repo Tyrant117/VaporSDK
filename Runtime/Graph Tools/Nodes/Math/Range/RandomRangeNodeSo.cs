@@ -1,7 +1,7 @@
 using System;
 using Random = UnityEngine.Random;
 
-namespace VaporGraphTools.Math
+namespace Vapor.GraphTools.Math
 {
     [SearchableNode("Math/Range/Random Range", "Random Range")]
     public class RandomRangeNodeSo : MathNodeSo

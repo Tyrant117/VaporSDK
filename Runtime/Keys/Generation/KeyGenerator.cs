@@ -11,7 +11,7 @@ using System.Reflection;
 using Vapor;
 using Object = UnityEngine.Object;
 
-namespace VaporKeys
+namespace Vapor.Keys
 {
     /// <summary>
     /// A static class for generating custom enum classes from IKey or string values.
@@ -428,7 +428,7 @@ namespace VaporKeys
 
             sb.Append("//\t* THIS SCRIPT IS AUTO-GENERATED *\n");
             sb.Append("using System;\n");
-            sb.Append("using VaporKeys;\n");
+            sb.Append("using Vapor.Keys;\n");
             sb.Append("using System.Collections.Generic;\n\n");
 
             sb.Append($"namespace {namespaceName}\n");

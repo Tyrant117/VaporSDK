@@ -4,9 +4,9 @@ using System.Collections.Generic;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
-using VaporGraphTools;
+using Vapor.GraphTools;
 
-namespace VaporGraphToolsEditor
+namespace VaporEditor.GraphTools
 {
     public class GraphToolsTokenPropertyNode<T, U, Z> : GraphToolsTokenNode<T, U> where T : ScriptableObject where U : ValueNodeSo<Z> where Z : struct
     {

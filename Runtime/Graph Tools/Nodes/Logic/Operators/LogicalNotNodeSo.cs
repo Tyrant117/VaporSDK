@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     [SearchableNode("Logic/Operator/Logical Not", "!A")]
     public class LogicalNotNodeSo : LogicNodeSo

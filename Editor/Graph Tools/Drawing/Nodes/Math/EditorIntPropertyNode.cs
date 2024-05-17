@@ -1,8 +1,8 @@
 ﻿using UnityEngine;
 using UnityEngine.UIElements;
-using VaporGraphTools;
+using Vapor.GraphTools;
 
-namespace VaporGraphToolsEditor
+namespace VaporEditor.GraphTools
 { 
     public class EditorIntPropertyNode<GraphArg> : GraphToolsTokenPropertyNode<GraphArg, IntValueNodeSo, int> where GraphArg : ScriptableObject
     {

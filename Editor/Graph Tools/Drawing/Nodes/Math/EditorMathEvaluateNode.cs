@@ -1,9 +1,9 @@
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
-using VaporGraphTools;
+using Vapor.GraphTools;
 
-namespace VaporGraphToolsEditor.Math
+namespace VaporEditor.GraphTools.Math
 {
     public class EditorMathEvaluateNode<T> : GraphToolsTokenNode<T, MathEvaluateNodeSo> where T : ScriptableObject
     {

@@ -6,13 +6,13 @@ using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
-using VaporGraphTools;
-using VaporGraphTools.Math;
-using VaporGraphToolsEditor;
-using VaporGraphToolsEditor.Math;
-using VaporKeys;
+using Vapor.GraphTools;
+using Vapor.GraphTools.Math;
+using VaporEditor.GraphTools;
+using VaporEditor.GraphTools.Math;
+using Vapor.Keys;
 
-namespace VaporGraphToolsEditor
+namespace VaporEditor.GraphTools
 {
     public class MathAndLogicGraphEditorView<SearchProviderArg, GraphViewArg, GraphArg> : GraphEditorView<GraphArg> where SearchProviderArg : GraphToolsSearchProvider<GraphArg> where GraphViewArg : GraphToolsGraphView<GraphArg> where GraphArg : ScriptableObject
     {

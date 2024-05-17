@@ -1,6 +1,6 @@
 using System;
 
-namespace VaporGraphTools.Math
+namespace Vapor.GraphTools.Math
 {
     [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
     public class MathNodeParamAttribute : Attribute

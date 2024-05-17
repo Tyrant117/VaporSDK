@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace VaporKeys
+namespace Vapor.Keys
 {
     /// <summary>
     /// Helper class to serialize and deserialize key data to json.

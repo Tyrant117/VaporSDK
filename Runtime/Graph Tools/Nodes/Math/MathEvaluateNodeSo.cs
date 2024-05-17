@@ -4,9 +4,9 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Assertions;
-using VaporGraphTools.Math;
+using Vapor.GraphTools.Math;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     public class MathEvaluateNodeSo : NodeSo, IEvaluatorNode<float>
     {

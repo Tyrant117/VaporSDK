@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
     public class NodeResultAttribute : Attribute

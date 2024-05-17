@@ -5,10 +5,10 @@ using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
-using VaporGraphTools;
+using Vapor.GraphTools;
 using Object = UnityEngine.Object;
 
-namespace VaporGraphToolsEditor
+namespace VaporEditor.GraphTools
 {
     public abstract class GraphEditorView<T> : VisualElement, IDisposable where T : ScriptableObject
     {

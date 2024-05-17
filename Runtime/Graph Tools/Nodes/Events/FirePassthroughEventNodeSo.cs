@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     [SearchableNode("Events/Fire Passthrough Event", "Fire Event"), NodeResult("Out",1, typeof(bool), typeof(int), typeof(float))]
     public class FirePassthroughEventNodeSo : NodeSo, IEvaluatorNode<bool>, IEvaluatorNode<int>, IEvaluatorNode<float>

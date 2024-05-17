@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Unity.Profiling;
 using UnityEngine;
 
-namespace VaporStateMachine
+namespace Vapor.StateMachine
 {
     /// <summary>
     /// Standard implementation of the <see cref="IStateMachine"/>

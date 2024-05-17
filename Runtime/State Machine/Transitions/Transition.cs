@@ -1,7 +1,7 @@
 using System;
 using Vapor;
 
-namespace VaporStateMachine
+namespace Vapor.StateMachine
 {
     public class Transition
     {

@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace VaporGraphTools.Math
+namespace Vapor.GraphTools.Math
 {
     [SearchableNode("Math/Interpolation/Lerp", "Lerp")]
     public class LerpNodeSo : MathNodeSo

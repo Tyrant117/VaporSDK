@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace VaporKeys
+namespace Vapor.Keys
 {
     /// <summary>
     /// A scriptable object implementation of the IKey interface that derives its display name from the <see cref="ScriptableObject.name"/>

@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace VaporGraphTools.Math
+namespace Vapor.GraphTools.Math
 {
     [SearchableNode("Math/Range/Minimun", "Minimun")]
     public class MinimunNodeSo : MathNodeSo

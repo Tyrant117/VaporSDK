@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
     public class NodeParamAttribute : Attribute

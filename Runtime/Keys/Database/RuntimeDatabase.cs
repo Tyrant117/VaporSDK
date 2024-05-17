@@ -6,7 +6,7 @@ using UnityEngine;
 using Vapor;
 using Object = UnityEngine.Object;
 
-namespace VaporKeys
+namespace Vapor.Keys
 {
     public class RuntimeDatabase<T>
     {

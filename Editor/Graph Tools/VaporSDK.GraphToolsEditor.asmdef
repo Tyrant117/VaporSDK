@@ -1,6 +1,6 @@
 {
     "name": "VaporSDK.GraphToolsEditor",
-    "rootNamespace": "",
+    "rootNamespace": "VaporEditor.GraphTools",
     "references": [
         "GUID:c3e0c15dbfebef745b03e5cb9c7b48e0",
         "GUID:9c4e7bed29baa58418a066f4f3cfb7c2",
@@ -16,7 +16,9 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": [],
+    "defineConstraints": [
+        "VAPOR_INSPECTOR"
+    ],
     "versionDefines": [],
     "noEngineReferences": false
 }

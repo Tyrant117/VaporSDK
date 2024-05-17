@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     public class MathGraphSo : ScriptableObject
     {

@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace VaporEvents
+namespace Vapor.Events
 {
     public class ValueProviderData<TResult> : IProviderData where TResult : struct
     {

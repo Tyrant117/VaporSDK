@@ -7,7 +7,7 @@ using System.Reflection;
 using UnityEngine;
 using UnityEngine.Assertions;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     public class NodeSo : ScriptableObject, IGuidNode, IGraphPosition
     {

@@ -1,6 +1,6 @@
 {
     "name": "VaporSDK.EventsEditor",
-    "rootNamespace": "",
+    "rootNamespace": "VaporEditor.Events",
     "references": [
         "GUID:39d7916d324ad3a42a771d7fd0a554db",
         "GUID:4abe2effbf01aba4ebd592e1ea351bc0",

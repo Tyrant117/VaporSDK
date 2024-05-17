@@ -4,7 +4,7 @@ using System;
 using UnityEngine;
 using UnityEngine.Assertions;
 
-namespace VaporObservables
+namespace Vapor.Observables
 {
     [Serializable]
     public struct SavedObservable

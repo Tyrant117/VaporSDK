@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace VaporEvents
+namespace Vapor.Events
 {
     /// <summary>
     /// A static class that can be used to create singletons. 

@@ -1,9 +1,9 @@
 using System;
 using UnityEngine;
 using UnityEngine.Serialization;
-using VaporKeys;
+using Vapor.Keys;
 
-namespace VaporEvents
+namespace Vapor.Events
 {
     /// <summary>
     /// A serializable class container for requesting <see cref="CachedProviderData{TResult}"/> results.

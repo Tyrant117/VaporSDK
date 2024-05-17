@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
-using VaporGraphTools;
+using Vapor.GraphTools;
 
-namespace VaporGraphToolsEditor
+namespace VaporEditor.GraphTools
 {
     public static class LogicNodeDrawerHelper
     {

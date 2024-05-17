@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
 	public abstract class MathNodeSo : NodeSo, IEvaluatorNode<float>
     {

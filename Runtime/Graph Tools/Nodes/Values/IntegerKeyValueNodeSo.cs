@@ -1,9 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using VaporKeys;
+using Vapor.Keys;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     public class IntegerKeyValueNodeSo : ValueNodeSo<IntegerKeySo>
     {

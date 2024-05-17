@@ -1,9 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using VaporGraphTools;
+using Vapor.GraphTools;
 
-namespace VaporGraphToolsEditor
+namespace VaporEditor.GraphTools
 {
     //public class MathAndLogicGraphView<T> : GraphToolsGraphView<T> where T : MathGraphSo
     //{

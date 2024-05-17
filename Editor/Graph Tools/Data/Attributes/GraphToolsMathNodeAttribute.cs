@@ -1,6 +1,6 @@
 using System;
 
-namespace VaporGraphToolsEditor.Math
+namespace VaporEditor.GraphTools.Math
 {
     public class GraphToolsMathNodeAttribute : Attribute
     {

@@ -5,7 +5,7 @@ using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-namespace VaporGraphToolsEditor
+namespace VaporEditor.GraphTools
 {
     public class GraphToolsGraphView<T> : GraphView where T : ScriptableObject
     {

@@ -4,10 +4,10 @@ using System.Reflection;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
-using VaporGraphTools;
-using VaporGraphTools.Math;
+using Vapor.GraphTools;
+using Vapor.GraphTools.Math;
 
-namespace VaporGraphToolsEditor.Math
+namespace VaporEditor.GraphTools.Math
 {
     public class TwoParamMathNode<T> : GraphToolsNode<T, MathNodeSo> where T : ScriptableObject
     {

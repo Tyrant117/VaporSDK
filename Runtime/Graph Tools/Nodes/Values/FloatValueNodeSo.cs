@@ -2,9 +2,9 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
-using VaporGraphTools.Math;
+using Vapor.GraphTools.Math;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     [SearchableNode("Value/Float Value", "Float")]
     public class FloatValueNodeSo : ValueNodeSo<float>, IEvaluatorNode<float>

@@ -7,11 +7,10 @@ using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 using Vapor.Inspector;
-using Vapor.InspectorEditor;
-using VaporInspector;
-using VaporKeys;
+using Vapor.Keys;
+using VaporEditor.Inspector;
 
-namespace VaporKeysEditor
+namespace VaporEditor.Keys
 {
     [CustomPropertyDrawer(typeof(KeyDropdownValue))]
     public class KeyDropdownValueDrawer : PropertyDrawer

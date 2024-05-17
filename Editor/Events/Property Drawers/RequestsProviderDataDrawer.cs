@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine.UIElements;
-using VaporEvents;
-using VaporInspector;
-using VaporKeys;
+using Vapor.Events;
+using Vapor.Inspector;
+using Vapor.Keys;
 
-namespace VaporEventsEditor
+namespace VaporEditor.Events
 {
     public abstract class BaseRequestsProviderDataDrawer : PropertyDrawer
     {

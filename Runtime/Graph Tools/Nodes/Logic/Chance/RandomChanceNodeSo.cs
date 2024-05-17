@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine.Assertions;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     [SearchableNode("Logic/Chance/Random Chance", "Random Chance")]
     public class RandomChanceNodeSo : LogicNodeSo

@@ -1,6 +1,6 @@
 using System;
 
-namespace VaporGraphTools.Math
+namespace Vapor.GraphTools.Math
 {
     [SearchableNode("Math/Compound/Math Average", "Average"), NodeResult("Out", 2, typeof(float))]
     public class MathAverageNodeSo : MathNodeSo

@@ -2,10 +2,9 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Assertions;
 using Vapor.Inspector;
-using VaporInspector;
-using VaporKeys;
+using Vapor.Keys;
 
-namespace VaporEvents
+namespace Vapor.Events
 {
     public abstract class ProvidedMonoBehaviour : VaporBehaviour
     {

@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Vapor;
-using VaporKeys;
+using Vapor.Keys;
 
-namespace VaporEvents
+namespace Vapor.Events
 {
     /// <summary>
     /// A static class for managing keys generated from <see cref="EventKeySo"/> and <see cref="ProviderKeySo"/>

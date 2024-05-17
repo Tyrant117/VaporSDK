@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using UnityEditor.Experimental.GraphView;
-using VaporGraphTools;
+using Vapor.GraphTools;
 
-namespace VaporGraphToolsEditor
+namespace VaporEditor.GraphTools
 {
     public interface IGraphToolsNode
     {

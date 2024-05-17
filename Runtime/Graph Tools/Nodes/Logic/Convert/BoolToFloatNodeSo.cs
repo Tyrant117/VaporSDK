@@ -5,7 +5,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.Assertions;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     [SearchableNode("Logic/Convert/Bool To Float", "Bool to Float")]
     public class BoolToFloatNodeSo : MathNodeSo

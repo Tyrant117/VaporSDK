@@ -4,9 +4,9 @@ using System.Collections.Generic;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
-using VaporGraphTools;
+using Vapor.GraphTools;
 
-namespace VaporGraphToolsEditor
+namespace VaporEditor.GraphTools
 {
     public class LogicGraphEditorNode<T> : GraphToolsNode<T, LogicGraphNodeSo> where T : ScriptableObject
     {

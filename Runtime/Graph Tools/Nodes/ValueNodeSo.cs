@@ -1,8 +1,6 @@
-using System.Runtime.CompilerServices;
 using UnityEngine;
-using VaporKeys;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     public abstract class ValueNodeSo<T> : PropertyNodeSo
     {

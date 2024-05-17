@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Vapor;
 
-namespace VaporStateMachine
+namespace Vapor.StateMachine
 {
     public class State
     {

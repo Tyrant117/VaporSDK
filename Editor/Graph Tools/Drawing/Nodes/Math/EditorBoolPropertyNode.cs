@@ -3,9 +3,9 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
-using VaporGraphTools;
+using Vapor.GraphTools;
 
-namespace VaporGraphToolsEditor
+namespace VaporEditor.GraphTools
 {
     public class EditorBoolPropertyNode<T> : GraphToolsTokenPropertyNode<T, BoolValueNodeSo, bool> where T : ScriptableObject
     {

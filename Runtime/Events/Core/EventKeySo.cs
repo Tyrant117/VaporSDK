@@ -1,9 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using VaporKeys;
+using Vapor.Keys;
 
-namespace VaporEvents
+namespace Vapor.Events
 {
     /// <summary>
     /// A scriptable object implementation of the IKey interface that derives its display name from the <see cref="ScriptableObject.name"/> and is used with functionality relating to the <see cref="EventBus"/>

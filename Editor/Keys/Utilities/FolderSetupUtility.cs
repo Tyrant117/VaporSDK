@@ -1,7 +1,7 @@
 using UnityEditor;
-using Vapor.InspectorEditor;
+using VaporEditor.Inspector;
 
-namespace VaporKeysEditor
+namespace VaporEditor.Keys
 {
     internal static class FolderSetupUtility
     {

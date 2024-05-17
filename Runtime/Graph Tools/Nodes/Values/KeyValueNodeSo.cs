@@ -1,8 +1,8 @@
 using System.Runtime.CompilerServices;
-using VaporGraphTools.Math;
-using VaporKeys;
+using Vapor.GraphTools.Math;
+using Vapor.Keys;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     public class KeyValueNodeSo : ValueNodeSo<KeyDropdownValue>, IEvaluatorNode<int>
     {

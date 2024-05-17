@@ -1,6 +1,6 @@
 using System;
 
-namespace VaporGraphTools.Math
+namespace Vapor.GraphTools.Math
 {
     [SearchableNode("Math/Advanced/Reciprocal", "Reciprocal")]
     public class ReciprocalNodeSo : MathNodeSo

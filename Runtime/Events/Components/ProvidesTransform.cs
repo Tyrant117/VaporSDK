@@ -1,10 +1,10 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using VaporInspector;
-using VaporKeys;
+using Vapor.Inspector;
+using Vapor.Keys;
 
-namespace VaporEvents
+namespace Vapor.Events
 {
     public class ProvidesTransform : VaporBehaviour
     {

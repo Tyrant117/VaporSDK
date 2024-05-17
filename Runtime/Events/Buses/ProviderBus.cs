@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Vapor;
 
-namespace VaporEvents
+namespace Vapor.Events
 {
     /// <summary>
     /// Static class used to access providers

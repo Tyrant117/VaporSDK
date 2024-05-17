@@ -2,9 +2,9 @@ using System;
 using UnityEditor;
 using UnityEngine;
 using VaporEditor;
-using VaporGraphTools;
+using Vapor.GraphTools;
 
-namespace VaporGraphToolsEditor
+namespace VaporEditor.GraphTools
 {
     //public class GraphToolsMathAndLogicSearchProvider<T> : GraphToolsSearchProvider<T> where T: MathGraphSo
     //{

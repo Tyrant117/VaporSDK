@@ -1,9 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
-using Vapor;
-using VaporInspector;
+using Vapor.Inspector;
 
-namespace VaporKeys
+namespace Vapor.Keys
 {
     public abstract class TypeDatabaseSo<T> : ScriptableObject where T : Object
     {

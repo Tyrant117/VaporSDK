@@ -1,6 +1,6 @@
 using System;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     [SearchableNode("Math/Logic/If Else", "If Else")]
     public class IfElseNodeSo : MathNodeSo

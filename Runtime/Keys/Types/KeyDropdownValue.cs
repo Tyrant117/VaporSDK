@@ -1,9 +1,9 @@
 using System;
 using System.Diagnostics;
 using UnityEngine;
-using VaporInspector;
+using Vapor.Inspector;
 
-namespace VaporKeys
+namespace Vapor.Keys
 {
     /// <summary>
     /// The base struct that contains a key. Optionally links to the guid of an object and can be used for remapping key values if that objects key changes.

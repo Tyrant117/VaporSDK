@@ -1,9 +1,9 @@
 using System;
 using UnityEngine;
 using Vapor;
-using VaporInspector;
+using Vapor.Inspector;
 
-namespace VaporKeys
+namespace Vapor.Keys
 {
     /// <summary>
     /// A scriptable object implementation of the IKey interface.

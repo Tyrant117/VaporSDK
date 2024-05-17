@@ -5,11 +5,10 @@ using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 using Vapor;
-using Vapor.InspectorEditor;
-using VaporInspector;
-using VaporKeys;
+using Vapor.Keys;
+using VaporEditor.Inspector;
 
-namespace VaporKeysEditor
+namespace VaporEditor.Keys
 {
     public class EnumGeneratorWindow : EditorWindow
     {

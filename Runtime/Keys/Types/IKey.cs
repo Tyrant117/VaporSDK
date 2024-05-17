@@ -1,5 +1,5 @@
 
-namespace VaporKeys
+namespace Vapor.Keys
 {
     /// <summary>
     /// Base interface that gives unique integer key functionality.

@@ -4,7 +4,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.Assertions;
 
-namespace VaporGraphTools.Math
+namespace Vapor.GraphTools.Math
 {
     [SearchableNode("Logic/Conditional/Less Than Or Equal", "A <= B")]
     public class LessThanEqualNodeSo : LogicNodeSo

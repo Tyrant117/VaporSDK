@@ -1,7 +1,7 @@
 using System;
 using UnityEngine.Pool;
 
-namespace VaporStateMachine
+namespace Vapor.StateMachine
 {
     public class StatePool<T> where T : State
     {

@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using UnityEngine;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     [SearchableNode("Value/Delta Time Value", "Delta Time")]
     public class DeltaTimeValueNodeSo : ValueNodeSo<float>, IEvaluatorNode<float>

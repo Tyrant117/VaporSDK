@@ -5,9 +5,9 @@ using System.Reflection;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
-using VaporGraphTools;
+using Vapor.GraphTools;
 
-namespace VaporGraphToolsEditor
+namespace VaporEditor.GraphTools
 {
     public class LabelEditorToken<T> : GraphToolsTokenNode<T, NodeSo> where T : ScriptableObject
     {

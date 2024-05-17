@@ -1,8 +1,8 @@
 using System;
 using UnityEngine;
-using VaporKeys;
+using Vapor.Keys;
 
-namespace VaporEvents
+namespace Vapor.Events
 {
     /// <summary>
     /// A serializable class container for receiving <see cref="EventData"/> events.

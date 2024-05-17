@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     [SearchableNode("Value/Bool Value", "Bool")]
     public class BoolValueNodeSo : ValueNodeSo<bool>, IEvaluatorNode<float>, IEvaluatorNode<bool>

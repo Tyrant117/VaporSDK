@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace VaporStateMachine
+namespace Vapor.StateMachine
 {
     /// <summary>
     /// A bundle of a state together with the outgoing transitions and trigger transitions.

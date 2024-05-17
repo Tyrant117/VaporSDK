@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     [SearchableNode("Value/Exposed Property", "Exposed Property", "values"), NodeIsToken, NodeResult("", 0, typeof(bool), typeof(int), typeof(float))]
     public class ExposedPropertyNodeSo : NodeSo, IEvaluatorNode<bool>, IEvaluatorNode<int>, IEvaluatorNode<float>

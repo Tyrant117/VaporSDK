@@ -1,6 +1,6 @@
 using System;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     /// <summary>
     /// Implement this interface on classes that need deliver external values into a <see cref="MathNodeSo.Evaluate(IExternalValueGetter, int)"/>

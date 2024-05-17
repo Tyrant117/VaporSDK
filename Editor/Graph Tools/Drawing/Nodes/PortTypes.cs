@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace VaporGraphToolsEditor
+namespace VaporEditor.GraphTools
 {
     public readonly struct DynamicValuePort { }
 }

@@ -1,6 +1,6 @@
 using System;
 
-namespace VaporGraphTools.Math
+namespace Vapor.GraphTools.Math
 {
     [SearchableNode("Math/Basic/Add", "Add"), NodeResult("Out", 2, typeof(float))]
     public class AddNodeSo : MathNodeSo

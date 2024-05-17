@@ -1,8 +1,8 @@
 using System;
-using VaporGraphTools;
-using VaporKeys;
+using Vapor.GraphTools;
+using Vapor.Keys;
 
-namespace VaporGraphToolsEditor
+namespace VaporEditor.GraphTools
 {
     public abstract class KeyNodeContainer
     {

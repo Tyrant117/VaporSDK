@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     public abstract class LogicNodeSo : NodeSo, IEvaluatorNode<bool>
     {

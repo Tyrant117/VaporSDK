@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     [SearchableNode("Value/Int Value", "Int")]
     public class IntValueNodeSo : ValueNodeSo<int>, IEvaluatorNode<int>

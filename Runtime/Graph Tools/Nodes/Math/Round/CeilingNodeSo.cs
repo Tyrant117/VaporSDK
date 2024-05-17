@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace VaporGraphTools.Math
+namespace Vapor.GraphTools.Math
 {
     [SearchableNode("Math/Round/Ceiling", "Ceiling")]
     public class CeilingNodeSo : MathNodeSo

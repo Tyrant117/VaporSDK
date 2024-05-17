@@ -1,6 +1,6 @@
 using System;
 
-namespace VaporGraphTools.Math
+namespace Vapor.GraphTools.Math
 {
     [SearchableNode("Math/Round/Truncate", "Truncate")]
     public class TruncateNodeSo : MathNodeSo

@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
-using VaporGraphTools;
+using Vapor.GraphTools;
 
-namespace VaporGraphToolsEditor
+namespace VaporEditor.GraphTools
 {
     public class LogicEvaluateEditorNode<T> : GraphToolsTokenNode<T, LogicEvaluateNodeSo> where T : ScriptableObject
     {

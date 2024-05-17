@@ -7,9 +7,9 @@ using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 using VaporEditor;
-using VaporGraphTools;
+using Vapor.GraphTools;
 
-namespace VaporGraphToolsEditor
+namespace VaporEditor.GraphTools
 {
     public abstract class GraphToolsEditWindow<T> : EditorWindow where T : ScriptableObject
     {

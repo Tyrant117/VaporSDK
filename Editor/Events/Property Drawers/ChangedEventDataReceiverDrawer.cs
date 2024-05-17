@@ -4,11 +4,11 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
-using VaporEvents;
-using VaporInspector;
-using VaporKeys;
+using Vapor.Events;
+using Vapor.Keys;
+using Vapor.Inspector;
 
-namespace VaporEventsEditor
+namespace VaporEditor.Events
 {
     public abstract class BaseChangedEventDataReceiverDrawer : PropertyDrawer
     {

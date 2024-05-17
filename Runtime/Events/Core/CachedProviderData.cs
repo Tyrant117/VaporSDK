@@ -3,7 +3,7 @@ using System.Collections;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
-namespace VaporEvents
+namespace Vapor.Events
 {
     public class CachedProviderData<TResult> : IProviderData where TResult : class
     {

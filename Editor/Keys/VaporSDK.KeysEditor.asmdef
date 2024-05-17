@@ -1,6 +1,6 @@
 {
     "name": "VaporSDK.KeysEditor",
-    "rootNamespace": "Vapor.KeysEditor",
+    "rootNamespace": "VaporEditor.Keys",
     "references": [
         "GUID:50cb284694900174982da26fd2a77ac7",
         "GUID:9c4e7bed29baa58418a066f4f3cfb7c2",

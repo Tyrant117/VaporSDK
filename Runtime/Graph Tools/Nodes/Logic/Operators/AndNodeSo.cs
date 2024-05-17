@@ -5,7 +5,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.Assertions;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     [SearchableNode("Logic/Conditional/Logical And", "A && B")]
     public class AndNodeSo : LogicNodeSo

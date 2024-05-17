@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
-using VaporInspector;
-using VaporKeys;
+using Vapor.Inspector;
+using Vapor.Keys;
 
-namespace VaporEvents
+namespace Vapor.Events
 {
     /// <summary>
     /// A <see cref="MonoBehaviour"/> that provides the linked <see cref="_component"/> to anything requesting it with provided <see cref="_key"/><br />

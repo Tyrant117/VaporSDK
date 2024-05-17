@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using Debug = UnityEngine.Debug;
 
-namespace VaporEvents
+namespace Vapor.Events
 {
     /// <summary>
     /// A static class for conditionally logging messages from events.

@@ -1,6 +1,6 @@
 using System;
 
-namespace VaporGraphTools.Math
+namespace Vapor.GraphTools.Math
 {
     [SearchableNode("Math/Basic/Subtract", "Subtract")]
     public class SubtractNodeSo : MathNodeSo

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     public readonly struct DynamicValue : IEquatable<DynamicValue>
     {

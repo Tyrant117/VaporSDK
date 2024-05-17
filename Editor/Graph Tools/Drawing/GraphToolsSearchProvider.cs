@@ -8,10 +8,10 @@ using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
 using VaporEditor;
-using VaporGraphTools;
-using VaporKeys;
+using Vapor.GraphTools;
+using Vapor.Keys;
 
-namespace VaporGraphToolsEditor
+namespace VaporEditor.GraphTools
 {
     public struct SearchContextElement
     {

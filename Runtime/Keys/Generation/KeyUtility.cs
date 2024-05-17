@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 
-namespace VaporKeys
+namespace Vapor.Keys
 {
     public static class KeyUtility
     {

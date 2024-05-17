@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     public interface IGraphPosition
     {

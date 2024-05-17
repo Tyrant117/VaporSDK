@@ -1,6 +1,6 @@
 using System;
 
-namespace VaporEvents
+namespace Vapor.Events
 {
     public class EventData : IEventData
     {

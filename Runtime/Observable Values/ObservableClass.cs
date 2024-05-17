@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace VaporObservables
+namespace Vapor.Observables
 {
     /// <summary>
     /// Container for a collection of saved fields.

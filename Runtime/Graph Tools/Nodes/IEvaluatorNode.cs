@@ -1,4 +1,4 @@
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     public interface IArgsEvaluatorNode
     {

@@ -1,9 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using VaporGraphTools.Math;
+using Vapor.GraphTools.Math;
 
-namespace VaporGraphTools
+namespace Vapor.GraphTools
 {
     public abstract class PropertyNodeSo : NodeSo
     {

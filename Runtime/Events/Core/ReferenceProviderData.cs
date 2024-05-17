@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using UnityEngine;
 
-namespace VaporEvents
+namespace Vapor.Events
 {
     public class ReferenceProviderData<TResult> : IProviderData where TResult : class
     {
