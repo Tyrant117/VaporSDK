@@ -8,6 +8,10 @@ namespace Vapor.StateMachine
         public int From { get; }
         public int To { get; }
         public int Desire { get; }
+        /// <summary>
+        /// If true, and this transition is chosen it will always force the transition to happen immediatly.
+        /// </summary>
+        public bool ForceTransition { get; protected set; }
 
         public IStateMachine StateMachine { get; set; }
 
@@ -23,23 +27,17 @@ namespace Vapor.StateMachine
         /// <param name="to">The name / identifier of the next state</param>
         /// <param name="desire">The desire value of this transition. Higher is more desirable</param>
         /// <param name="condition">A function that returns true if the state machine should transition to the <b>to</b> state</param>
-        public Transition(string from, string to, int desire, Func<Transition, bool> condition)
+        public Transition(string from, string to, int desire, Func<Transition, bool> condition) : this(from, to, desire)
         {
-            From = from.GetStableHashU16();
-            To = to.GetStableHashU16();
-            Desire = desire;
             Condition = condition;
             _inverse = false;
         }
 
-        public Transition(State from, State to, int desire, Func<Transition, bool> condition)
+        public Transition(State from, State to, int desire, Func<Transition, bool> condition) : this(from, to, desire)
         {
-            From = from.ID;
-            To = to.ID;
-            Desire = desire;
             Condition = condition;
             _inverse = false;
-        }
+        }        
         
         protected Transition(string from, string to, int desire)
         {
@@ -65,12 +63,18 @@ namespace Vapor.StateMachine
             _inverse = inverse;
             Condition = condition;
         }
-        
+
+        public Transition ShouldForceTransition(bool force)
+        {
+            ForceTransition = force;
+            return this;
+        }
+
 
         /// <summary>
-		/// Called to initialise the transition, after values like mono and fsm have been set
-		/// </summary>
-		public virtual void Init()
+        /// Called to initialise the transition, after values like mono and fsm have been set
+        /// </summary>
+        public virtual void Init()
         {
 
         }
@@ -102,7 +106,7 @@ namespace Vapor.StateMachine
 
         public virtual Transition Reverse()
         {
-            return new Transition(To, From, Desire, true, Condition);
+            return new Transition(To, From, Desire, true, Condition).ShouldForceTransition(ForceTransition);
         }
     }
 }

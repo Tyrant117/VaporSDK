@@ -32,10 +32,10 @@ namespace Vapor.StateMachine
 
         public override void OnEnter()
         {
-            base.OnEnter();
             Routine = null;
             CoroutineIsComplete = false;
             IterationCount = 0;
+            base.OnEnter();
         }
 
         public override void OnUpdate()
@@ -68,7 +68,6 @@ namespace Vapor.StateMachine
                     routine = OnCoroutineUpdated(this);
                 }
             }
-            Debug.Log("Run Iterated");
             CoroutineIsComplete = true;
         }
 

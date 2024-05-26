@@ -1,8 +1,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using System;
+using Object = UnityEngine.Object;
 
-#if  UNITY_EDITOR
+
+
+#if UNITY_EDITOR
 using UnityEditor;
 #endif
 
@@ -18,6 +22,16 @@ namespace Vapor
 #if UNITY_EDITOR
             var guids = AssetDatabase.FindAssets($"t:{typeof(T)}");
             return guids.Select(AssetDatabase.GUIDToAssetPath).Select(AssetDatabase.LoadAssetAtPath<T>).Where(asset => asset != null).ToList();
+#else
+            return null;
+#endif
+        }
+
+        public static List<Object> FindAssetsByType(Type type)
+        {
+#if UNITY_EDITOR
+            var guids = AssetDatabase.FindAssets($"t:{type}");
+            return guids.Select(AssetDatabase.GUIDToAssetPath).Select(AssetDatabase.LoadAssetAtPath<Object>).Where(asset => asset != null).ToList();
 #else
             return null;
 #endif

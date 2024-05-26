@@ -23,8 +23,7 @@ namespace Vapor.StateMachine
         /// Request a transition to the next state via transition.
         /// </summary>
         /// <param name="transition">The transition to use for the request</param>
-        /// <param name="force">If true, the transition will be forced through</param>
-        void RequestStateChange(Transition transition, bool force = false);
+        void RequestStateChange(Transition transition);
         /// <summary>
         /// Request a transition to the named state on a specific layer
         /// </summary>
@@ -38,7 +37,8 @@ namespace Vapor.StateMachine
         /// <param name="layer">The layer of the state</param>
         /// <param name="transition">The name of the state to transition to</param>
         /// <param name="force">If true, the transition will be forced through</param>
-        void RequestStateChange(int layer, Transition transition, bool force = false);
+        void RequestStateChange(int layer, Transition transition);
+
         /// <summary>
         /// Attaches a logger to debug the states.
         /// </summary>

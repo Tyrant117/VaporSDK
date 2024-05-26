@@ -112,7 +112,7 @@ namespace Vapor.StateMachine
         /// <summary>
 		/// Calls OnEnter if it is the root machine, therefore initialising the state machine
 		/// </summary>
-		public override void Init()
+		public override void OnEnable()
         {
             if (!IsRoot) return;
 
@@ -324,9 +324,9 @@ namespace Vapor.StateMachine
         /// <param name="name">The name / identifier of the target state</param>
         /// <param name="forceInstantly">Overrides the needsExitTime of the active state if true,
         /// therefore forcing an immediate state change</param>
-        public void RequestStateChange(int layer, Transition transition, bool force = false)
+        public void RequestStateChange(int layer, Transition transition)
         {
-            if (force)
+            if (transition.ForceTransition)
             {
                 ChangeState(layer, transition.To, transition);
             }
@@ -372,9 +372,9 @@ namespace Vapor.StateMachine
 		/// <param name="name">The name / identifier of the target state</param>
 		/// <param name="forceInstantly">Overrides the needsExitTime of the active state if true,
 		/// therefore forcing an immediate state change</param>
-		public void RequestStateChange(Transition transition, bool force = false)
+		public void RequestStateChange(Transition transition)
         {
-            if (force)
+            if (transition.ForceTransition)
             {
                 ChangeState(0, transition.To, transition);
             }
@@ -418,7 +418,7 @@ namespace Vapor.StateMachine
 		public void AddState(State state, int layer, bool canBeStartingState = true)
         {
             state.StateMachine = this;
-            state.Init();
+            state.OnEnable();
 
             StateBundle bundle = GetOrCreateStateBundle(layer, state.ID);
             bundle.State = state;
@@ -545,46 +545,6 @@ namespace Vapor.StateMachine
         }
 
         /// <summary>
-		/// Adds two transitions:
-		/// If the condition of the transition instance is true, it transitions from the "from"
-		/// state to the "to" state. Otherwise it performs a transition in the opposite direction,
-		/// i.e. from "to" to "from".
-		/// </summary>
-		/// <remarks>
-		/// Internally the same transition instance will be used for both transitions
-		/// by wrapping it in a ReverseTransition.
-		/// </remarks>
-		public void AddTwoWayTransition(Transition transition, int layer)
-        {
-            InitTransition(transition);
-            AddTransition(transition, layer);
-
-            Transition reverse = transition.Reverse();
-            InitTransition(reverse);
-            AddTransition(reverse, layer);
-        }
-
-        /// <summary>
-		/// Adds two transitions that are only checked when the specified trigger is activated:
-		/// If the condition of the transition instance is true, it transitions from the "from"
-		/// state to the "to" state. Otherwise it performs a transition in the opposite direction,
-		/// i.e. from "to" to "from".
-		/// </summary>
-		/// <remarks>
-		/// Internally the same transition instance will be used for both transitions
-		/// by wrapping it in a ReverseTransition.
-		/// </remarks>
-		public void AddTwoWayTriggerTransition(int trigger, Transition transition, int layer)
-        {
-            InitTransition(transition);
-            AddTriggerTransition(trigger, transition, layer);
-
-            Transition reverse = transition.Reverse();
-            InitTransition(reverse);
-            AddTriggerTransition(trigger, reverse, layer);
-        }
-
-        /// <summary>
 		/// Checks if a transition can take place, and if this is the case, transition to the
 		/// "to" state and return true. Otherwise it returns false.
 		/// </summary>
@@ -707,7 +667,7 @@ namespace Vapor.StateMachine
 		public void OnInvokeAction(int actionID, int layer)
         {
             EnsureIsInitializedFor();
-            _activeStates[layer]?.OnAction(actionID);
+            _activeStates[layer]?.OnUserDefinedAction(actionID);
         }
 
         /// <summary>
@@ -720,51 +680,7 @@ namespace Vapor.StateMachine
         public void OnInvokeAction<TData>(int actionID, int layer, TData data)
         {
             EnsureIsInitializedFor();
-            _activeStates[layer]?.OnAction(actionID, data);
-        }
-        #endregion
-
-        #region - Pooling -
-        public override void RemoveFromPool()
-        {
-            foreach (var sb in _nameToStateBundle.Values)
-            {
-                sb.State.StateMachine = this;
-                sb.State.RemoveFromPool();
-            }
-        }
-
-        public override void OnReturnedToPool()
-        {
-            base.OnReturnedToPool();
-            for (int i = 0; i < _activeStates.Count; i++)
-            {
-                _activeStates[i] = null;
-            }
-
-            for (int i = 0; i < _layerCount; i++)
-            {
-                int layer = i;
-                _startStates[i] = (layer, EmptyState, false);
-            }
-
-            for (int i = 0; i < _layerCount; i++)
-            {
-                int layer = i;
-                _pendingStates[i] = (layer, EmptyState, false);
-            }
-
-            for (int i = 0; i < _layerCount; i++)
-            {
-                int layer = i;
-                _activeTransitions[layer] = noTransitions;
-                _activeTriggerTransitions[layer] = noTriggerTransitions;
-            }
-
-            foreach (var sb in _nameToStateBundle.Values)
-            {
-                sb.State.OnReturnedToPool();
-            }
+            _activeStates[layer]?.OnUserDefinedAction(actionID, data);
         }
         #endregion
 

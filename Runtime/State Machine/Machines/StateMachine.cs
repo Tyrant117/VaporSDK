@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Unity.Profiling;
 using UnityEngine;
+using UnityEngine.Assertions;
 
 namespace Vapor.StateMachine
 {
@@ -13,7 +14,23 @@ namespace Vapor.StateMachine
         private static readonly ProfilerMarker EnterMarker = new(ProfilerCategory.Scripts, "Vapor.StateMachine.Enter");
         private static readonly ProfilerMarker UpdateMarker = new(ProfilerCategory.Scripts, "Vapor.StateMachine.Update");
         private static readonly ProfilerMarker ExitMarker = new(ProfilerCategory.Scripts, "Vapor.StateMachine.Exit");
-        private static readonly ProfilerMarker ChangeStateMarker = new(ProfilerCategory.Scripts, "Vapor.StateMachine.ChangeState");        
+        private static readonly ProfilerMarker ChangeStateMarker = new(ProfilerCategory.Scripts, "Vapor.StateMachine.ChangeState");
+
+        #region Types
+        protected readonly struct PendingState
+        {
+            public readonly int State;
+            public readonly bool IsPending;
+
+            public PendingState(int state, bool isPending)
+            {
+                State = state;
+                IsPending = isPending;
+            }
+
+            public static PendingState Default => new(EmptyState, false);
+        }
+        #endregion
 
         protected State _activeState = null;
         public State ActiveState
@@ -31,7 +48,7 @@ namespace Vapor.StateMachine
         public bool IsEnabled { get; protected set; }
 
         protected (int state, bool hasState) _startState = (EmptyState, false);
-        protected (int state, bool isPending) _pendingState = (EmptyState, false);
+        protected PendingState _pendingState = PendingState.Default;
 
         // A cached empty list of transitions (For improved readability, less GC)
         protected static readonly List<Transition> s_noTransitions = new(0);
@@ -50,6 +67,13 @@ namespace Vapor.StateMachine
         protected StateLogger _logger;
         protected StateLogger.LayerLog _layerLog;
 
+        protected event Action<StateMachine> AfterEntered;
+        protected event Action<StateMachine> AfterUpdated;
+        protected event Action<StateMachine, Transition> BeforeExited;
+
+        protected event Action<StateMachine> Disabled;
+        protected event Action<StateMachine, State> ActiveStateChanged;
+
         #region - Initialization -
         /// <summary>
 		/// Initialises a new instance of the StateMachine class
@@ -61,7 +85,7 @@ namespace Vapor.StateMachine
 		public StateMachine(string name, bool canExitInstantly = false) : base(name, canExitInstantly)
         {
 
-        }
+        }        
 
         /// <summary>
         /// Throws an exception if the state machine is not initialised yet.
@@ -70,10 +94,7 @@ namespace Vapor.StateMachine
         /// 	be initialised for.</param>
         private void EnsureIsInitializedFor()
         {
-            if (_activeState == null)
-            {
-                Debug.LogError(StateMachineExceptions.StateMachineNotInitialized);
-            }
+            Assert.IsNotNull(_activeState, StateMachineExceptions.StateMachineNotInitialized);
         }
 
         /// <summary>
@@ -97,7 +118,7 @@ namespace Vapor.StateMachine
         /// <summary>
 		/// Calls OnEnter if it is the root machine, therefore initialising the state machine
 		/// </summary>
-		public override void Init()
+		public override void OnEnable()
         {
             IsEnabled = true;
             if (!IsRoot) return;
@@ -105,18 +126,38 @@ namespace Vapor.StateMachine
             OnEnter();
         }
 
-        public void Disable()
+        public virtual void OnDisable()
         {
             IsEnabled = false;
+            Disabled?.Invoke(this);
         }
+        #endregion
+
+        #region - Event Registration -
+        public StateMachine RegisterAfterEntered(Action<StateMachine> callback) { AfterEntered += callback; return this; }
+        public StateMachine DeregisterAfterEntered(Action<StateMachine> callback) { AfterEntered -= callback; return this; }
+
+        public StateMachine RegisterAfterUpdated(Action<StateMachine> callback) { AfterUpdated += callback; return this; }
+        public StateMachine DeegisterAfterUpdated(Action<StateMachine> callback) { AfterUpdated -= callback; return this; }
+
+        public StateMachine RegisterBeforeExited(Action<StateMachine, Transition> callback) { BeforeExited += callback; return this; }
+        public StateMachine DeregisterBeforeExited(Action<StateMachine, Transition> callback) { BeforeExited -= callback; return this; }
+
+
+        public StateMachine RegisterDisabled(Action<StateMachine> callback) { Disabled += callback; return this; }
+        public StateMachine DeegisterDisabled(Action<StateMachine> callback) { Disabled -= callback; return this; }
+
+
+        public StateMachine RegisterActiveStateChanged(Action<StateMachine, State> callback) { ActiveStateChanged += callback; return this; }
+        public StateMachine DeegisterActiveStateChanged(Action<StateMachine, State> callback) { ActiveStateChanged -= callback; return this; }
         #endregion
 
         #region - State Management -
         /// <summary>
-		/// Initialises the state machine and must be called before OnLogic is called.
-		/// It sets the activeState to the selected startState.
-		/// </summary>
-		public override void OnEnter()
+        /// Initialises the state machine and must be called before OnLogic is called.
+        /// It sets the activeState to the selected startState.
+        /// </summary>
+        public override void OnEnter()
         {
             EnterMarker.Begin();
             if (!_startState.hasState)
@@ -139,6 +180,7 @@ namespace Vapor.StateMachine
                     t.OnEnter();
                 }
             }
+            AfterEntered?.Invoke(this);
             EnterMarker.End();
         }
 
@@ -158,20 +200,23 @@ namespace Vapor.StateMachine
             }
 
             _activeState.OnUpdate();
+            AfterUpdated?.Invoke(this);
             UpdateMarker.End();
         }
 
         public override void OnExit(Transition transition)
         {
             ExitMarker.Begin();
-            base.OnExit(transition);
+            BeforeExited?.Invoke(this, transition);
             if (_activeState != null)
             {
                 _activeState.OnExit(transition);
                 // By setting the activeState to null, the state's onExit method won't be called
                 // a second time when the state machine enters again (and changes to the start state)
                 _activeState = null;
+                ActiveStateChanged?.Invoke(this, null);
             }
+            base.OnExit(transition);
             ExitMarker.End();
         }
 
@@ -181,17 +226,16 @@ namespace Vapor.StateMachine
         /// </summary>
         public void StateCanExit(Transition transition = null)
         {
-            if (_pendingState.isPending)
-            {
-                int state = _pendingState.state;
-                // When the pending state is a ghost state, ChangeState() will have
-                // to try all outgoing transitions, which may overwrite the pendingState.
-                // That's why it is first cleared, and not afterwards, as that would overwrite
-                // a new, valid pending state.
-                _pendingState = (EmptyState, false);
-                ChangeState(state, transition);
-            }
+            if (!_pendingState.IsPending)
+                return;
 
+            int state = _pendingState.State;
+            // When the pending state is a ghost state, ChangeState() will have
+            // to try all outgoing transitions, which may overwrite the pendingState.
+            // That's why it is first cleared, and not afterwards, as that would overwrite
+            // a new, valid pending state.
+            _pendingState = PendingState.Default;
+            ChangeState(state, transition);
             StateMachine?.StateCanExit(transition);
         }
 
@@ -208,10 +252,10 @@ namespace Vapor.StateMachine
         {
             ChangeStateMarker.Begin();
 
+            transition?.OnExit();
             if (_activeState != null)
             {
                 _layerLog?.LogExit(_activeState.Name);
-                transition?.OnExit();
                 _activeState?.OnExit(transition);
             }
 
@@ -231,27 +275,25 @@ namespace Vapor.StateMachine
             activeTriggerTransitions = bundle.TriggerToTransitions ?? s_noTriggerTransitions;
 
             _activeState = bundle.State;
-            if (_activeState != null)
+            ActiveStateChanged?.Invoke(this, _activeState);
+            _layerLog?.LogEnter(_activeState.Name);
+            _activeState.OnEnter();
+            foreach (Transition t in activeTransitions)
             {
-                _layerLog?.LogEnter(_activeState.Name);
-                _activeState.OnEnter();
-                foreach (Transition t in activeTransitions)
+                t.OnEnter();
+            }
+
+            foreach (List<Transition> transitions in activeTriggerTransitions.Values)
+            {
+                foreach (Transition t in transitions)
                 {
                     t.OnEnter();
                 }
+            }
 
-                foreach (List<Transition> transitions in activeTriggerTransitions.Values)
-                {
-                    foreach (Transition t in transitions)
-                    {
-                        t.OnEnter();
-                    }
-                }
-
-                if (_activeState != null && _activeState.CanExitInstantly)
-                {
-                    TryAllDirectTransitions();
-                }
+            if (_activeState.CanExitInstantly)
+            {
+                TryAllDirectTransitions();
             }
 
             ChangeStateMarker.End();
@@ -267,11 +309,12 @@ namespace Vapor.StateMachine
         {
             if (force)
             {
+                _pendingState = PendingState.Default;
                 ChangeState(id);
             }
             else
             {
-                _pendingState = (id, true);
+                _pendingState = new PendingState(id, true);
                 _activeState.OnExitRequest();
                 /**
 				 * If it can exit, the activeState would call
@@ -287,17 +330,18 @@ namespace Vapor.StateMachine
 		/// <param name="name">The name / identifier of the target state</param>
 		/// <param name="forceInstantly">Overrides the needsExitTime of the active state if true,
 		/// therefore forcing an immediate state change</param>
-		public void RequestStateChange(Transition transition, bool force = false)
+		public void RequestStateChange(Transition transition)
         {
             if (!IsEnabled) { return; }
 
-            if (force)
+            if (transition.ForceTransition)
             {
+                _pendingState = PendingState.Default;
                 ChangeState(transition.To, transition);
             }
             else
             {
-                _pendingState = (transition.To, true);
+                _pendingState = new PendingState(transition.To, true);
                 _activeState.OnExitRequest(transition);
                 /**
 				 * If it can exit, the activeState would call
@@ -317,11 +361,12 @@ namespace Vapor.StateMachine
         {
             if (force)
             {
+                _pendingState = PendingState.Default;
                 ChangeState(name);
             }
             else
             {
-                _pendingState = (name, true);
+                _pendingState = new PendingState(name, true);
                 _activeState.OnExitRequest();
                 /**
 				 * If it can exit, the activeState would call
@@ -337,15 +382,18 @@ namespace Vapor.StateMachine
         /// <param name="name">The name / identifier of the target state</param>
         /// <param name="forceInstantly">Overrides the needsExitTime of the active state if true,
         /// therefore forcing an immediate state change</param>
-        public void RequestStateChange(int layer, Transition transition, bool force = false)
+        public void RequestStateChange(int layer, Transition transition)
         {
-            if (force)
+            if (!IsEnabled) { return; }
+
+            if (transition.ForceTransition)
             {
+                _pendingState = PendingState.Default;
                 ChangeState(transition.To, transition);
             }
             else
             {
-                _pendingState = (transition.To, true);
+                _pendingState = new PendingState(transition.To, true);
                 _activeState.OnExitRequest(transition);
                 /**
 				 * If it can exit, the activeState would call
@@ -383,7 +431,7 @@ namespace Vapor.StateMachine
 		public void AddState(State state)
         {
             state.StateMachine = this;
-            state.Init();
+            state.OnEnable();
 
             StateBundle bundle = GetOrCreateStateBundle(state.ID);
             bundle.State = state;
@@ -397,7 +445,7 @@ namespace Vapor.StateMachine
 
         public T GetState<T>(string name) where T : State
         {
-            if (!_nameToStateBundle.TryGetValue(name.GetHashCode(), out StateBundle bundle) || bundle.State == null)
+            if (!_nameToStateBundle.TryGetValue(name.GetStableHashU16(), out StateBundle bundle) || bundle.State == null)
             {
                 Debug.LogError(StateMachineExceptions.StateNotFound(name));
             }
@@ -419,16 +467,6 @@ namespace Vapor.StateMachine
             }
             return bundle.State as T;
         }
-
-        public T GetSubStateMachine<T>(string name) where T : State, IStateMachine
-        {
-            return GetState<T>(name);
-        }
-
-        public T GetSubStateMachine<T>(int name) where T : State, IStateMachine
-        {
-            return GetState<T>(name);
-        }
         #endregion
 
         #region - Transitions -
@@ -436,7 +474,7 @@ namespace Vapor.StateMachine
 		/// Initialises a transition, i.e. sets its fsm attribute, and then calls its Init method.
 		/// </summary>
 		/// <param name="transition"></param>
-		private void InitTransition(Transition transition)
+		protected void InitTransition(Transition transition)
         {
             transition.StateMachine = this;
             transition.Init();
@@ -501,63 +539,12 @@ namespace Vapor.StateMachine
         }
 
         /// <summary>
-		/// Adds two transitions:
-		/// If the condition of the transition instance is true, it transitions from the "from"
-		/// state to the "to" state. Otherwise it performs a transition in the opposite direction,
-		/// i.e. from "to" to "from".
-		/// </summary>
-		/// <remarks>
-		/// Internally the same transition instance will be used for both transitions
-		/// by wrapping it in a ReverseTransition.
-		/// </remarks>
-		public void AddTwoWayTransition(Transition transition)
+        /// Tries the "normal" transitions that transition from one specific state to another.
+        /// </summary>
+        /// <returns>Returns true if a transition occurred.</returns>
+        private bool TryAllDirectTransitions()
         {
-            InitTransition(transition);
-            AddTransition(transition);
-
-            Transition reverse = transition.Reverse();
-            InitTransition(reverse);
-            AddTransition(reverse);
-        }
-
-        /// <summary>
-		/// Adds two transitions that are only checked when the specified trigger is activated:
-		/// If the condition of the transition instance is true, it transitions from the "from"
-		/// state to the "to" state. Otherwise it performs a transition in the opposite direction,
-		/// i.e. from "to" to "from".
-		/// </summary>
-		/// <remarks>
-		/// Internally the same transition instance will be used for both transitions
-		/// by wrapping it in a ReverseTransition.
-		/// </remarks>
-		public void AddTwoWayTriggerTransition(int trigger, Transition transition)
-        {
-            InitTransition(transition);
-            AddTriggerTransition(trigger, transition);
-
-            Transition reverse = transition.Reverse();
-            InitTransition(reverse);
-            AddTriggerTransition(trigger, reverse);
-        }
-
-        /// <summary>
-		/// Checks if a transition can take place, and if this is the case, transition to the
-		/// "to" state and return true. Otherwise it returns false.
-		/// </summary>
-		/// <param name="transition"></param>
-		/// <returns></returns>
-		private int TryTransition(Transition transition)
-        {
-            return !transition.ShouldTransition() ? 0 : transition.Desire;
-        }
-
-        /// <summary>
-		/// Tries the "normal" transitions that transition from one specific state to another.
-		/// </summary>
-		/// <returns>Returns true if a transition occurred.</returns>
-		private bool TryAllDirectTransitions()
-        {
-            if (DetermineTransition(activeTransitions, true, out var to))
+            if (DetermineTransition(activeTransitions, false, out var to))
             {
                 RequestStateChange(to);
                 return true;
@@ -574,7 +561,7 @@ namespace Vapor.StateMachine
 		/// <returns>Returns true if a transition occurred.</returns>
 		private bool TryAllGlobalTransitions()
         {
-            if (DetermineTransition(_transitionsFromAny, false, out var to))
+            if (DetermineTransition(_transitionsFromAny, true, out var to))
             {
                 RequestStateChange(to);
                 return true;
@@ -585,19 +572,20 @@ namespace Vapor.StateMachine
             }
         }
 
-        private bool DetermineTransition(List<Transition> transitions, bool canTransitionOnSelf, out Transition ToStateTransition)
+        private bool DetermineTransition(List<Transition> transitions, bool isGlobalTransition, out Transition ToStateTransition)
         {
             int desire = 0;
             ToStateTransition = null;
             foreach (Transition transition in transitions)
             {
                 // Don't transition to the "to" state, if that state is already the active state
-                if (!canTransitionOnSelf && transition.To == _activeState.ID)
+                // Unless the state can explicitly transition to itself, but only on local transitions. Global transitions can never transition to the currently active state.
+                if ((isGlobalTransition || !_activeState.CanTransitionToSelf) && transition.To == _activeState.ID)
                 {
                     continue;
                 }
 
-                int d = TryTransition(transition);
+                int d = !transition.ShouldTransition() ? 0 : transition.Desire;
                 if (d > desire)
                 {
                     ToStateTransition = transition;
@@ -621,7 +609,7 @@ namespace Vapor.StateMachine
 
             if (_triggerTransitionsFromAny.TryGetValue(trigger, out List<Transition> triggerTransitions))
             {
-                if (DetermineTransition(triggerTransitions, false, out var to))
+                if (DetermineTransition(triggerTransitions, true, out var to))
                 {
                     RequestStateChange(to);
                     return true;
@@ -630,7 +618,7 @@ namespace Vapor.StateMachine
 
             if (activeTriggerTransitions.TryGetValue(trigger, out triggerTransitions))
             {
-                if (DetermineTransition(triggerTransitions, true, out var to))
+                if (DetermineTransition(triggerTransitions, false, out var to))
                 {
                     RequestStateChange(to);
                     return true;
@@ -656,15 +644,15 @@ namespace Vapor.StateMachine
         }
         #endregion
 
-        #region - Actions -
+        #region - User Defined Actions -
         /// <summary>
 		/// Runs an action on the currently active state.
 		/// </summary>
 		/// <param name="trigger">Name of the action</param>
-		public void OnInvokeAction(int actionID)
+		public void OnInvokeUserDefinedAction(int actionID)
         {
             EnsureIsInitializedFor();
-            _activeState?.OnAction(actionID);
+            _activeState?.OnUserDefinedAction(actionID);
         }
 
         /// <summary>
@@ -674,36 +662,10 @@ namespace Vapor.StateMachine
         /// <param name="data">Any custom data for the parameter</param>
         /// <typeparam name="TData">Type of the data parameter.
         /// 	Should match the data type of the action that was added via AddAction<T>(...).</typeparam>
-        public void OnInvokeAction<TData>(int actionID, TData data)
+        public void OnInvokeUserDefinedAction<TData>(int actionID, TData data)
         {
             EnsureIsInitializedFor();
-            _activeState?.OnAction(actionID, data);
-        }
-        #endregion
-
-        #region - Pooling -
-        public override void RemoveFromPool()
-        {
-            foreach (var sb in _nameToStateBundle.Values)
-            {
-                sb.State.StateMachine = this;
-                sb.State.RemoveFromPool();
-            }
-        }
-
-        public override void OnReturnedToPool()
-        {
-            base.OnReturnedToPool();
-            _activeState = null;
-            _startState = (EmptyState, false);
-            _pendingState = (EmptyState, false);
-            activeTransitions = s_noTransitions;
-            activeTriggerTransitions = s_noTriggerTransitions;
-
-            foreach (var sb in _nameToStateBundle.Values)
-            {
-                sb.State.OnReturnedToPool();
-            }
+            _activeState?.OnUserDefinedAction(actionID, data);
         }
         #endregion
 

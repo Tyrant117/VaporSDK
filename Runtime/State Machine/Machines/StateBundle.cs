@@ -9,9 +9,9 @@ namespace Vapor.StateMachine
     {
         // By default, these fields are all null and only get a value when you need them
         // => Lazy evaluation => Memory efficient, when you only need a subset of features
-        public State State;
-        public List<Transition> Transitions;
-        public Dictionary<int, List<Transition>> TriggerToTransitions;
+        public State State { get; set; }
+        public List<Transition> Transitions { get; set; }
+        public Dictionary<int, List<Transition>> TriggerToTransitions { get; set; }
 
         public void AddTransition(Transition t)
         {

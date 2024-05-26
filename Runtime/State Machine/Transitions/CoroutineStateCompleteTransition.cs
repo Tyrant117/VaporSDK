@@ -33,7 +33,7 @@ namespace Vapor.StateMachine
 
         public override Transition Reverse()
         {
-            return new CoroutineStateCompleteTransition(From, To, Desire, CoroutineComplete, WatchingState);
+            return new CoroutineStateCompleteTransition(From, To, Desire, CoroutineComplete, WatchingState).ShouldForceTransition(ForceTransition);
         }
     }
 }

@@ -17,6 +17,12 @@ namespace Vapor
         public void Reset() => StartTime = Time.timeAsDouble;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool IsOver(float duration) => Elapsed >= duration;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool IsOver(double duration) => Elapsed >= duration;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool operator >(Timer timer, float duration) => timer.Elapsed > duration;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

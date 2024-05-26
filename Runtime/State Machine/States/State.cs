@@ -22,13 +22,22 @@ namespace Vapor.StateMachine
         /// </summary>
         public string Name { get; }
         /// <summary>
+        /// The full path to this state.
+        /// e.g. "Movement/Walking/WalkForward"
+        /// </summary>
+        public string Path { get; }
+        /// <summary>
         /// The ID of the state
         /// </summary>
         public int ID { get; }
         /// <summary>
-        /// True if the state can exit immediately when it is transitioned to.
+        /// If true, the state will immediatly test all outgoing transitions before calling OnUpdate.
         /// </summary>
         public bool CanExitInstantly { get; }
+        /// <summary>
+        /// If true, this state can trigger transitions that will restart the state calling OnExit then OnEnter
+        /// </summary>
+        public bool CanTransitionToSelf { get; }
 
         /// <summary>
         /// The state machine this state belongs to.
@@ -44,32 +53,54 @@ namespace Vapor.StateMachine
         /// </summary>
         public bool IsPlaying { get; protected set; }
 
-        protected Action<State> Entered;
-        protected Action<State> Updated;
-        protected Action<State, Transition> Exited;
-        protected Dictionary<int, Delegate> ActionsByEventMap = new();
+        protected event Action<State> Entered;
+        protected event Action<State> Updated;
+        protected event Action<State, Transition> Exited;
+        protected Func<State, bool> CanExit;
+        protected Dictionary<int, Delegate> ActionsByEventMap;
 
-        public State(string name, bool canExitInstantly)
+        public State(string name, bool canExitInstantly, bool canTransitionToSelf = false)
         {
             Name = name;
             ID = name.GetStableHashU16();
             CanExitInstantly = canExitInstantly;
-
+            CanTransitionToSelf = canTransitionToSelf;
             Timer = new Timer();
+            CanExit = CanAlwaysExit;
         }
 
-        public void InitEvents(Action<State> entered = null, Action<State> updated = null, Action<State, Transition> exited = null)
+        public State WithEntered(Action<State> entered)
         {
-            Entered = entered;
-            Updated = updated;
-            Exited = exited;
+            Entered += entered;
+            return this;
         }
 
-        public virtual void Init()
+        public State WithUpdated(Action<State> updated)
+        {
+            Updated += updated;
+            return this;
+        }
+
+        public State WithExited(Action<State, Transition> exited)
+        {
+            Exited += exited;
+            return this;
+        }
+
+        public State WithCanExitRequest(Func<State, bool> canExit)
+        {
+            CanExit = canExit;
+            return this;
+        }
+
+        public virtual void OnEnable()
         {
 
         }
 
+        /// <summary>
+        /// Called once when the state is entered. Always called after OnExit of the previous state.
+        /// </summary>
         public virtual void OnEnter()
         {
             IsPlaying = true;
@@ -78,25 +109,39 @@ namespace Vapor.StateMachine
             Entered?.Invoke(this);
         }
 
+        /// <summary>
+        /// Called everytime the parent StateMachine calls Update.
+        /// </summary>
         public virtual void OnUpdate()
         {
             Updated?.Invoke(this);
         }
 
+        /// <summary>
+        /// Called when the state is exited.
+        /// </summary>
+        /// <param name="transition"></param>
         public virtual void OnExit(Transition transition)
         {
             IsPlaying = false;
             Exited?.Invoke(this, transition);
         }
 
+        /// <summary>
+        /// Called when a state transition from this state should happen. If the state should not transition immediatly this method can be overriden.
+        /// Call <see cref="StateMachine.StateCanExit(Transition)"/> when the transition should happen.
+        /// </summary>
+        /// <param name="transition"></param>
         public virtual void OnExitRequest(Transition transition = null)
         {
-            StateMachine.StateCanExit(transition);
-        }
+            if (CanExit.Invoke(this))
+            {
+                StateMachine.StateCanExit(transition);
+            }
+        }    
 
-        #region - Actions -
-
-        protected void AddGenericAction(int actionID, Delegate action)
+        #region - User Defined Actions -
+        protected void AddUserDefinedAction(int actionID, Delegate action)
         {
             ActionsByEventMap ??= new Dictionary<int, Delegate>();
             ActionsByEventMap[actionID] = action;
@@ -109,9 +154,9 @@ namespace Vapor.StateMachine
         /// <param name="actionID">ID of the action</param>
         /// <param name="action">Function that should be called when the action is run</param>
         /// <returns>Itself</returns>
-        public State AddAction(int actionID, Action action)
+        public State WithUserDefinedAction(int actionID, Action action)
         {
-            AddGenericAction(actionID, action);
+            AddUserDefinedAction(actionID, action);
             return this;
         }
 
@@ -124,13 +169,13 @@ namespace Vapor.StateMachine
         /// <param name="action">Function that should be called when the action is run</param>
         /// <typeparam name="TData">Data type of the parameter of the function</typeparam>
         /// <returns>Itself</returns>
-        public State AddAction<TData>(int actionID, Action<TData> action)
+        public State WithUserDefinedAction<TData>(int actionID, Action<TData> action)
         {
-            AddGenericAction(actionID, action);
+            AddUserDefinedAction(actionID, action);
             return this;
         }
 
-        protected TTarget TryGetAndCastAction<TTarget>(int actionID) where TTarget : Delegate
+        protected TTarget TryGetAndCastUserDefinedAction<TTarget>(int actionID) where TTarget : Delegate
         {
             if (!ActionsByEventMap.TryGetValue(actionID, out var action))
             {
@@ -151,7 +196,7 @@ namespace Vapor.StateMachine
         /// If the action is not defined / hasn't been added, nothing will happen.
         /// </summary>
         /// <param name="actionID">Name of the action</param>
-        public void OnAction(int actionID) => TryGetAndCastAction<Action>(actionID)?.Invoke();
+        public void OnUserDefinedAction(int actionID) => TryGetAndCastUserDefinedAction<Action>(actionID)?.Invoke();
 
         /// <summary>
         /// Runs an action with a given name and lets you pass in one parameter to the action function.
@@ -160,29 +205,15 @@ namespace Vapor.StateMachine
         /// <param name="actionID">Name of the action</param>
         /// <param name="data">Data to pass as the first parameter to the action</param>
         /// <typeparam name="TData">Type of the data parameter</typeparam>
-        public void OnAction<TData>(int actionID, TData data) => TryGetAndCastAction<Action<TData>>(actionID)?.Invoke(data);
-
+        public void OnUserDefinedAction<TData>(int actionID, TData data) => TryGetAndCastUserDefinedAction<Action<TData>>(actionID)?.Invoke(data);
         #endregion
 
-        #region - Pooling -
-
-        public virtual void RemoveFromPool()
-        {
-
-        }
-
-        public virtual void OnReturnedToPool()
-        {
-            // Clear StateMachine
-            StateMachine = null;
-            // Clear Events
-            Entered = null;
-            Updated = null;
-            Exited = null;
-            // Clear Actions
-            ActionsByEventMap.Clear();
-        }
-
+        #region - Helpers -
+        /// <summary>
+        /// Helper method to always return true when trying to exit. Saves a null check on the CanExit Func.
+        /// </summary>
+        /// <returns>True</returns>
+        private bool CanAlwaysExit(State thisState) => true;
         #endregion
     }
 }

@@ -24,6 +24,11 @@ namespace VaporEditor.Keys
             {
                 return new Label($"{property.displayName} must implement {TooltipMarkup.ClassMarkup(nameof(ValueDropdownAttribute))}");
             }
+            if(atr.AssemblyQualifiedType == null)
+            {
+                return new Label($"{property.displayName} must have a fully qualified type. " +
+                    $"\nMust resolve to a Tuple<{TooltipMarkup.LangWordMarkup("string")},{TooltipMarkup.StructMarkup(nameof(KeyDropdownValue))}>");
+            }
             ConvertToTupleList(keys, values, GetKeysField(atr.AssemblyQualifiedType, atr.Resolver[1..]));
             var foldout = new StyledFoldoutProperty(property.displayName);
             var tooltip = "";

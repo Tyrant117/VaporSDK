@@ -7,8 +7,8 @@ namespace Vapor.StateMachine
 {
     public class StateMachineExceptions
     {
-        public static string StateMachineNotInitialized => $"The State machine has not been initialized.\n" +
-                $"Call SetDefaultState, Init(), or OnEnter to initialize.";
+        public const string StateMachineNotInitialized = "The State machine has not been initialized.\n" +
+                "Call SetDefaultState, OnEnable(), or OnEnter to initialize.";
 
         public static string StateNotFound(string state)
         {
@@ -22,6 +22,6 @@ namespace Vapor.StateMachine
             return $"The expected argument type ({type}) does not match the type of the added action ({action}).";
         }
 
-        public static string NoDefaultStateFound => $"The State machine does not have any states before OnEnter was called.";
+        public const string NoDefaultStateFound = "The State machine does not have any states before OnEnter was called.";
     }
 }

@@ -1,9 +1,10 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Vapor.Inspector;
 
 namespace Vapor.GraphTools
 {
-    public class MathGraphSo : ScriptableObject
+    public class MathGraphSo : VaporScriptableObject
     {
         [SerializeField]
         private MathEvaluateNodeSo _root;

@@ -20,8 +20,8 @@ namespace Vapor.Keys
     {
         public const string AbsoluteConfigPath = "Assets/Vapor/Keys/Config";
         public const string RelativeConfigPath = "Vapor/Keys/Config";
-        public const string AbsoluteKeyPath = "Assets/Vapor/Keys/Keys";
-        public const string RelativeKeyPath = "Vapor/Keys/Keys";
+        public const string AbsoluteKeyPath = "Assets/Vapor/Keys/Definitions";
+        public const string RelativeKeyPath = "Vapor/Keys/Definitions";
         public const string NamespaceName = "VaporKeyDefinitions";              
 
         #region - Keys -

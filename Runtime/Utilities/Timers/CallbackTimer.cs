@@ -5,6 +5,7 @@ using UnityEngine;
 
 namespace Vapor
 {
+    //TODO: Add this into custom player loop update.
     public class CallbackTimer : MonoBehaviour
     {
         public static long CurrentTick { get; protected set; }
@@ -21,6 +22,12 @@ namespace Vapor
                 _instance = go.AddComponent<CallbackTimer>();
                 return _instance;
             }
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void Init()
+        {
+            _instance = null;
         }
 
         private List<Action> _mainThreadActions;
