@@ -1,0 +1,14 @@
+{
+    "name": "VaporSDK.PackageManager",
+    "rootNamespace": "Vapor.PackageManager",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

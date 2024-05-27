@@ -45,19 +45,23 @@ namespace Vapor.GraphTools
         [Conditional("UNITY_EDITOR")]
         private void FindNodeAndConnectedPort(FieldInfo[] fields, List<NodeSo> nodesToLink)
         {
+            // Search the node for all fields that are marked with a NodeParam
             var ins = fields.Where(x => Attribute.IsDefined(x, typeof(NodeParamAttribute)));
             foreach (var port in ins)
             {
+                // Get the NodeParam Attribute and then find the first Edge that matches that attributes port index.
                 var atr = port.GetCustomAttribute<NodeParamAttribute>();
                 var edge = Edges.FirstOrDefault(e => e.PortIndex == atr.PortIndex);
+
                 if (edge != null)
                 {
+                    // In the list of all the nodes in the graph find the node that matches the edges Guid.
                     var node = nodesToLink.First(x => edge == x.GetGuid());
-                    port.SetValue(this, node);
+                    port.SetValue(this, node); // Set the port nodes value to this selected node.
                     var portIndex = GetType().GetField($"ConnectedPort_{port.Name}");
                     Assert.IsNotNull(portIndex, $"There is no public field with the name ConnectedPort_{port.Name}, all fields marked with a NodeParamAttribute," +
-                        $" must have an integer field with the name punlic int ConnectedPort_<NodeParamAttribute.FieldName>");
-                    portIndex.SetValue(this, edge.ConnectedPortIndex);
+                        $" must have an integer field with the name public int ConnectedPort_<NodeParamAttribute.FieldName>");
+                    portIndex.SetValue(this, edge.ConnectedPortIndex); // Set the port nodes connected port to the index that it matches in its child.
                 }
                 else
                 {

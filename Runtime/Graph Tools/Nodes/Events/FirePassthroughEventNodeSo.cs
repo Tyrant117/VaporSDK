@@ -5,12 +5,12 @@ using UnityEngine;
 
 namespace Vapor.GraphTools
 {
-    [SearchableNode("Events/Fire Passthrough Event", "Fire Event"), NodeResult("Out",1, typeof(bool), typeof(int), typeof(float))]
+    [SearchableNode("Events/Fire Passthrough Event", "Fire Event"), NodeResult("Out", 2, typeof(bool), typeof(int), typeof(float))]
     public class FirePassthroughEventNodeSo : NodeSo, IEvaluatorNode<bool>, IEvaluatorNode<int>, IEvaluatorNode<float>
     {
         [NodeParam("In", 0, true, typeof(bool), typeof(int), typeof(float))]
         public NodeSo In;
-        [NodeParam("Event",1,false,typeof(int))]
+        [NodeParam("Event", 1, false, typeof(int))]
         public NodeSo Event;
 
         public int ConnectedPort_In;

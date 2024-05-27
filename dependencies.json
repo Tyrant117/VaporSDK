@@ -1,0 +1,5 @@
+{
+ "dependencies": {
+    "com.carbonfibergames.vaporobservables": "https://github.com/Tyrant117/Vapor-Observables.git"
+ }
+}
