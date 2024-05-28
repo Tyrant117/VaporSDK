@@ -11,9 +11,8 @@ namespace VaporEditor.GraphTools
         private U _node;
         public U Node { get => _node; protected set => _node = value; }
 
-        private List<Port> _ports = new();        
-
-        public List<Port> Ports => _ports;
+        public List<Port> InPorts { get; set; } = new();
+        public List<Port> OutPorts { get; set; } = new();
 
         public GraphEditorView<T> View { get; protected set; }
 

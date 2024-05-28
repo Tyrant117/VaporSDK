@@ -11,9 +11,6 @@ namespace VaporEditor.GraphTools
     {
         private static readonly StyleSheet _portColors = Resources.Load<StyleSheet>("Styles/PortColors");
 
-        private List<Port> _inPorts;
-        private Port _outPort;
-
         public EditorMathGraphNode(GraphEditorView<T> view, MathGraphNodeSo node)
         {
             View = view;
@@ -40,7 +37,7 @@ namespace VaporEditor.GraphTools
 
         private void CreateFlowInPort()
         {
-            _inPorts = new(Node.Graph.ExposedProperties.Count);
+            InPorts = new(Node.Graph.ExposedProperties.Count);
             foreach (var exposedProp in Node.Graph.ExposedProperties)
             {
                 var port = InstantiatePort(Orientation.Horizontal, Direction.Input, Port.Capacity.Single, typeof(DynamicValuePort));
@@ -54,20 +51,19 @@ namespace VaporEditor.GraphTools
                 port.portName = exposedProp.ValueName;
                 port.tooltip = "The flow input";
                 port.styleSheets.Add(_portColors);
-                _inPorts.Add(port);
-                Ports.Add(port);
+                InPorts.Add(port);
                 inputContainer.Add(port);
             }
         }
 
         private void CreateFlowOutPort()
         {
-            _outPort = InstantiatePort(Orientation.Horizontal, Direction.Output, Port.Capacity.Multi, typeof(float));
-            _outPort.portName = "Out";
-            _outPort.tooltip = "The graph evaluation";
+            var outPort = InstantiatePort(Orientation.Horizontal, Direction.Output, Port.Capacity.Multi, typeof(float));
+            outPort.portName = "Out";
+            outPort.tooltip = "The graph evaluation";
             //_inPort.Q<Label>().style.display = DisplayStyle.None;
-            Ports.Add(_outPort);
-            outputContainer.Add(_outPort);
+            OutPorts.Add(outPort);
+            outputContainer.Add(outPort);
         }
     }
 }

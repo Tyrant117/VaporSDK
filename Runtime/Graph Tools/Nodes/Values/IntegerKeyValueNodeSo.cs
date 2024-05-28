@@ -1,12 +1,18 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+using System;
+using System.Runtime.CompilerServices;
 using Vapor.Keys;
 
 namespace Vapor.GraphTools
 {
     public class IntegerKeyValueNodeSo : ValueNodeSo<IntegerKeySo>
     {
+        [PortOut("Out", 0, true, typeof(int))]
+        public NodeSo Out;
+        public int OutConnectedPort_Out;
+
         public virtual int FromID { get; } = -1;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override Type GetValueType() => typeof(IntegerKeySo);
     }
 }

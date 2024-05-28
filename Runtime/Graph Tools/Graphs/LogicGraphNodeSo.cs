@@ -20,9 +20,9 @@ namespace Vapor.GraphTools
 
             LinkedProperties.Clear();
             int idx = 0;
-            foreach (var edge in Edges)
+            foreach (var edge in InEdges)
             {
-                var node = nodesToLink.First(x => edge == x.GetGuid());
+                var node = nodesToLink.First(node => edge.GuidMatches(node.GetGuid()));
                 LinkedProperties.Add(node);
                 node.LinkingGuid = Graph.ExposedProperties[idx].GetGuid();
                 callback?.Invoke(node);

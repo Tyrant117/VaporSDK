@@ -13,7 +13,7 @@ namespace VaporEditor.GraphTools
             {
                 case FloatValueNodeSo floatNode:
                     {
-                        var editorNode = new EditorFloatPropertyNode<GraphArg>(editorView, floatNode);
+                        var editorNode = new PropertyEditorToken<GraphArg>(editorView, floatNode, default);
                         editorNode.SetPosition(floatNode.Position);
                         graphView.AddElement(editorNode);
                         editorNodes.Add(editorNode);
@@ -23,7 +23,7 @@ namespace VaporEditor.GraphTools
 
                 case IntValueNodeSo intNode:
                     {
-                        var editorNode = new EditorIntPropertyNode<GraphArg>(editorView, intNode);
+                        var editorNode = new PropertyEditorToken<GraphArg>(editorView, intNode, default);
                         editorNode.SetPosition(intNode.Position);
                         graphView.AddElement(editorNode);
                         editorNodes.Add(editorNode);
@@ -33,7 +33,7 @@ namespace VaporEditor.GraphTools
 
                 case BoolValueNodeSo boolNode:
                     {
-                        var editorNode = new EditorBoolPropertyNode<GraphArg>(editorView, boolNode, typeof(bool));
+                        var editorNode = new PropertyEditorToken<GraphArg>(editorView, boolNode, default);
                         editorNode.SetPosition(boolNode.Position);
                         graphView.AddElement(editorNode);
                         editorNodes.Add(editorNode);
@@ -43,7 +43,7 @@ namespace VaporEditor.GraphTools
 
                 case ExposedPropertyNodeSo propertyNode:
                     {
-                        var editorNode = new ExposedPropertyEditorToken<GraphArg>(editorView, propertyNode, default, null);
+                        var editorNode = new ExposedPropertyEditorToken<GraphArg>(editorView, propertyNode, default);
                         editorNode.SetPosition(propertyNode.Position);
                         graphView.AddElement(editorNode);
                         editorNodes.Add(editorNode);
@@ -53,9 +53,7 @@ namespace VaporEditor.GraphTools
 
                 case TimeValueNodeSo timeNode:
                     {
-                        var editorNode = new EditorLabelPropertyNode<GraphArg, TimeValueNodeSo, float>(editorView, timeNode, typeof(float));
-                        editorNode.SetPosition(timeNode.Position);
-                        graphView.AddElement(editorNode);
+                        var editorNode = NodeUtility.GetNParamNodeOrToken(editorView, graphView, timeNode);
                         editorNodes.Add(editorNode);
                         refNodes?.Add(timeNode);
                         return true;
@@ -63,9 +61,7 @@ namespace VaporEditor.GraphTools
 
                 case DeltaTimeValueNodeSo deltaTimeNode:
                     {
-                        var editorNode = new EditorLabelPropertyNode<GraphArg, DeltaTimeValueNodeSo, float>(editorView, deltaTimeNode, typeof(float));
-                        editorNode.SetPosition(deltaTimeNode.Position);
-                        graphView.AddElement(editorNode);
+                        var editorNode = NodeUtility.GetNParamNodeOrToken(editorView, graphView, deltaTimeNode);
                         editorNodes.Add(editorNode);
                         refNodes?.Add(deltaTimeNode);
                         return true;
@@ -73,9 +69,7 @@ namespace VaporEditor.GraphTools
 
                 case FixedDeltaTimeValueNodeSo fixedDeltaTimeNode:
                     {
-                        var editorNode = new EditorLabelPropertyNode<GraphArg, FixedDeltaTimeValueNodeSo, float>(editorView, fixedDeltaTimeNode, typeof(float));
-                        editorNode.SetPosition(fixedDeltaTimeNode.Position);
-                        graphView.AddElement(editorNode);
+                        var editorNode = NodeUtility.GetNParamNodeOrToken(editorView, graphView, fixedDeltaTimeNode);
                         editorNodes.Add(editorNode);
                         refNodes?.Add(fixedDeltaTimeNode);
                         return true;

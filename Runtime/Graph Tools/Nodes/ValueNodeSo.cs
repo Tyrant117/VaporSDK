@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace Vapor.GraphTools
@@ -8,7 +9,7 @@ namespace Vapor.GraphTools
         private T _value;
         public virtual T Value { get => _value; set => _value = value; }
 
-        //[MethodImpl(MethodImplOptions.AggressiveInlining)]
-        //public override object GetBoxedValue(IExternalValueGetter getter) => Value;
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        protected override object GetBoxedValue() => Value;
     }
 }

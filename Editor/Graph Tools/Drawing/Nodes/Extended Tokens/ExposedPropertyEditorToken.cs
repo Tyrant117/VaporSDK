@@ -11,7 +11,7 @@ namespace VaporEditor.GraphTools
     {
         private readonly ExposedPropertyNodeSo _node;
 
-        public ExposedPropertyEditorToken(GraphEditorView<GraphArg> view, ExposedPropertyNodeSo node, EditorLabelVisualData visualData, params Type[] outPortTypes) : base(view, node, visualData, outPortTypes)
+        public ExposedPropertyEditorToken(GraphEditorView<GraphArg> view, ExposedPropertyNodeSo node, EditorLabelVisualData visualData) : base(view, node, visualData)
         {
             _node = node;
             var contents = mainContainer.Q("contents");

@@ -5,6 +5,7 @@ using UnityEditor;
 using UnityEngine;
 using VaporEditor;
 using Vapor.GraphTools;
+using UnityEditor.Experimental.GraphView;
 
 namespace VaporEditor.GraphTools
 {
@@ -52,6 +53,24 @@ namespace VaporEditor.GraphTools
             mainGraphAsset.name = name;
             EditorUtility.SetDirty(mainGraphAsset);
             AssetDatabase.SaveAssets();
+        }
+
+        public static IGraphToolsNode GetNParamNodeOrToken<GraphArg>(GraphEditorView<GraphArg> editorView, GraphView graphView, NodeSo nodeSo) where GraphArg : ScriptableObject
+        {
+            if (nodeSo.GetType().IsDefined(typeof(NodeIsTokenAttribute), true))
+            {
+                var editorNode = new NParamEditorToken<GraphArg>(editorView, nodeSo, default);
+                editorNode.SetPosition(nodeSo.Position);
+                graphView.AddElement(editorNode);
+                return editorNode;
+            }
+            else
+            {
+                var editorNode = new NParamEditorNode<GraphArg>(editorView, nodeSo);
+                editorNode.SetPosition(nodeSo.Position);
+                graphView.AddElement(editorNode);
+                return editorNode;
+            }
         }
     }
 }

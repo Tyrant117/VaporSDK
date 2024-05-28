@@ -1,18 +1,19 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
-using UnityEngine.Assertions;
 
 namespace Vapor.GraphTools.Math
 {
-    [SearchableNode("Math/Advanced/Absolute", "Absolute")]
+    [SearchableNode("Math/Advanced/Absolute", "Absolute", "math")]
     public class AbsoluteNodeSo : MathNodeSo
     {
-        [NodeParam("A", 0, true, typeof(float))]
+        [PortIn("A", 0, true, typeof(float))]
         public NodeSo A;
 
-        public int ConnectedPort_A;
+        [PortOut("Out", 0, true, typeof(float))]
+        public NodeSo Out;
+
+        public int InConnectedPort_A;
+        public int OutConnectedPort_Out;
 
         [NonSerialized]
         private bool _hasInit;
@@ -27,7 +28,7 @@ namespace Vapor.GraphTools.Math
                 _hasInit = true;
             }
 
-            return Mathf.Abs(_a.Evaluate(externalValues, ConnectedPort_A));
+            return Mathf.Abs(_a.Evaluate(externalValues, InConnectedPort_A));
         }
     }
 }

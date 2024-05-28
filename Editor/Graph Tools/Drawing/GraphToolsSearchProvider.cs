@@ -53,29 +53,29 @@ namespace VaporEditor.GraphTools
                 FilterNewNode(type, atr);
             }
 
-            if (IncludeFlags.Contains("math"))
-            {
-                var mathGraphs = AssetDatabaseUtility.FindAssetsByType<MathGraphSo>();
-                foreach (var graph in mathGraphs)
-                {
-                    if (View.Graph.name == graph.name) { continue; }
+            //if (IncludeFlags.Contains("math"))
+            //{
+            //    var mathGraphs = AssetDatabaseUtility.FindAssetsByType<MathGraphSo>();
+            //    foreach (var graph in mathGraphs)
+            //    {
+            //        if (View.Graph.name == graph.name) { continue; }
 
-                    AssetNodeContainer containerTarget = new(graph.name, AssetDatabase.GetAssetPath(graph), graph.GetType());
-                    Elements.Add(new SearchContextElement(typeof(MathGraphNodeSo), $"Graphs/Math/{graph.name}", containerTarget));
-                }
-            }
+            //        AssetNodeContainer containerTarget = new(graph.name, AssetDatabase.GetAssetPath(graph), graph.GetType());
+            //        Elements.Add(new SearchContextElement(typeof(MathGraphNodeSo), $"Graphs/Math/{graph.name}", containerTarget));
+            //    }
+            //}
 
-            if (IncludeFlags.Contains("logic"))
-            {
-                var logicGraphs = AssetDatabaseUtility.FindAssetsByType<LogicGraphSo>();
-                foreach (var graph in logicGraphs)
-                {
-                    if (View.Graph.name == graph.name) { continue; }
+            //if (IncludeFlags.Contains("logic"))
+            //{
+            //    var logicGraphs = AssetDatabaseUtility.FindAssetsByType<LogicGraphSo>();
+            //    foreach (var graph in logicGraphs)
+            //    {
+            //        if (View.Graph.name == graph.name) { continue; }
 
-                    AssetNodeContainer containerTarget = new(graph.name, AssetDatabase.GetAssetPath(graph), graph.GetType());
-                    Elements.Add(new SearchContextElement(typeof(LogicGraphNodeSo), $"Graphs/Logic/{graph.name}", containerTarget));
-                }
-            }
+            //        AssetNodeContainer containerTarget = new(graph.name, AssetDatabase.GetAssetPath(graph), graph.GetType());
+            //        Elements.Add(new SearchContextElement(typeof(LogicGraphNodeSo), $"Graphs/Logic/{graph.name}", containerTarget));
+            //    }
+            //}
 
             AddAdditionalNodes();
 

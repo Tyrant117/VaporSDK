@@ -1,9 +1,7 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using Vapor.GraphTools;
-using VaporEditor.GraphTools.Math;
 
 namespace VaporEditor.GraphTools
 {
@@ -13,9 +11,7 @@ namespace VaporEditor.GraphTools
         {
             if (node is MathEvaluateNodeSo resultNode)
             {
-                var editorNode = new EditorMathEvaluateNode<GraphArg>(editorView, resultNode);
-                editorNode.SetPosition(resultNode.Position);
-                graphView.AddElement(editorNode);
+                var editorNode = NodeUtility.GetNParamNodeOrToken(editorView, graphView, resultNode);
                 editorNodes.Add(editorNode);
                 refNodes?.Add(resultNode);
                 return true;
@@ -33,9 +29,7 @@ namespace VaporEditor.GraphTools
 
             if (node is MathNodeSo mathNode)
             {
-                var editorNode = new NParamEditorNode<GraphArg>(editorView, mathNode, typeof(float));
-                editorNode.SetPosition(mathNode.Position);
-                graphView.AddElement(editorNode);
+                var editorNode = NodeUtility.GetNParamNodeOrToken(editorView, graphView, mathNode);
                 editorNodes.Add(editorNode);
                 refNodes?.Add(mathNode);
                 return true;

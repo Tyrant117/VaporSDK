@@ -1,21 +1,14 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Assertions;
-using Vapor.GraphTools.Math;
 
 namespace Vapor.GraphTools
 {
+    [NodeName("Evaluate()"), NodeIsToken]
     public class MathEvaluateNodeSo : NodeSo, IEvaluatorNode<float>
     {
-        public string NodeName = "Evaluate()";
-
-        [NodeParam("Start", 0, true, typeof(float))]
+        [PortIn("", 0, true, typeof(float))]
         public NodeSo Start;
 
-        public int ConnectedPort_Start;
+        public int InConnectedPort_Start;
 
         [NonSerialized]
         private bool _hasInit;
@@ -41,7 +34,7 @@ namespace Vapor.GraphTools
                 _hasInit = true;
             }
 
-            return _eval.Evaluate(externalValues, ConnectedPort_Start);
+            return _eval.Evaluate(externalValues, InConnectedPort_Start);
         }        
     }
 }

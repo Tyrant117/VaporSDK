@@ -10,10 +10,7 @@ namespace VaporEditor.GraphTools
 {
     public class LogicGraphEditorNode<T> : GraphToolsNode<T, LogicGraphNodeSo> where T : ScriptableObject
     {
-        private static readonly StyleSheet _portColors = Resources.Load<StyleSheet>("Styles/PortColors");
-
-        private List<Port> _inPorts;
-        private Port _outPort;
+        private static readonly StyleSheet s_PortColors = Resources.Load<StyleSheet>("Styles/PortColors");
 
         public LogicGraphEditorNode(GraphEditorView<T> view, LogicGraphNodeSo node)
         {
@@ -41,7 +38,7 @@ namespace VaporEditor.GraphTools
 
         private void CreateFlowInPort()
         {
-            _inPorts = new(Node.Graph.ExposedProperties.Count);
+            InPorts = new(Node.Graph.ExposedProperties.Count);
             foreach (var exposedProp in Node.Graph.ExposedProperties)
             {
                 var port = InstantiatePort(Orientation.Horizontal, Direction.Input, Port.Capacity.Single, typeof(DynamicValuePort));
@@ -54,22 +51,21 @@ namespace VaporEditor.GraphTools
                 port.userData = set;
                 port.portName = exposedProp.ValueName;
                 port.tooltip = "The flow input";
-                port.styleSheets.Add(_portColors);
-                _inPorts.Add(port);
-                Ports.Add(port);
+                port.styleSheets.Add(s_PortColors);
+                InPorts.Add(port);
                 inputContainer.Add(port);
             }
         }
 
         private void CreateFlowOutPort()
         {
-            _outPort = InstantiatePort(Orientation.Horizontal, Direction.Output, Port.Capacity.Multi, typeof(bool));
-            _outPort.portName = "Out";
-            _outPort.tooltip = "The graph evaluation";
-            _outPort.styleSheets.Add(_portColors);
+            var outPort = InstantiatePort(Orientation.Horizontal, Direction.Output, Port.Capacity.Multi, typeof(bool));
+            outPort.portName = "Out";
+            outPort.tooltip = "The graph evaluation";
+            outPort.styleSheets.Add(s_PortColors);
             //_inPort.Q<Label>().style.display = DisplayStyle.None;
-            Ports.Add(_outPort);
-            outputContainer.Add(_outPort);
+            OutPorts.Add(outPort);
+            outputContainer.Add(outPort);
         }
     }
 }

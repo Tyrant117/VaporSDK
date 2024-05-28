@@ -30,14 +30,20 @@ namespace VaporEditor.GraphTools
 
             foreach (var node in View.EditorNodes)
             {
-                allPorts.AddRange(node.Ports);
+                if (startPort.direction == Direction.Input)
+                {
+                    allPorts.AddRange(node.OutPorts);
+                }
+                else
+                {
+                    allPorts.AddRange(node.InPorts);
+                }
             }
 
             foreach (var p in allPorts)
             {
                 if (p == startPort) { continue; }
                 if (p.node == startPort.node) { continue; }
-                if (p.direction == startPort.direction) { continue; }
                 if (p.portType == startPort.portType)
                 {
                     ports.Add(p);

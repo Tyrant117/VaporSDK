@@ -5,16 +5,21 @@ using UnityEngine.Assertions;
 
 namespace Vapor.GraphTools
 {
-    [SearchableNode("Logic/Operators/Equal To", "A == B")]
+    [SearchableNode("Logic/Operators/Equal To", "A == B", "logic")]
     public class EqualToNodeSo : LogicNodeSo
     {
-        [NodeParam("A", 0, true, typeof(int))]
+        [PortIn("A", 0, true, typeof(int))]
         public NodeSo A;
-        [NodeParam("B", 1, true, typeof(int))]
+        [PortIn("B", 1, true, typeof(int))]
         public NodeSo B;
 
-        public int ConnectedPort_A;
-        public int ConnectedPort_B;
+        [PortOut("Out", 0, true, typeof(bool))]
+        public NodeSo Out;
+
+        public int InConnectedPort_A;
+        public int InConnectedPort_B;
+
+        public int OutConnectedPort_Out;
 
         [NonSerialized]
         private bool _hasInit;
@@ -32,7 +37,7 @@ namespace Vapor.GraphTools
                 _hasInit = true;
             }
 
-            return _a.Evaluate(externalValues, ConnectedPort_A) == _b.Evaluate(externalValues, ConnectedPort_B);
+            return _a.Evaluate(externalValues, InConnectedPort_A) == _b.Evaluate(externalValues, InConnectedPort_B);
         }
     }
 }

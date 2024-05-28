@@ -2,12 +2,13 @@ using System;
 
 namespace Vapor.GraphTools
 {
+    [NodeName("Evaluate()")]
     public class LogicEvaluateNodeSo : NodeSo, IEvaluatorNode<bool>
     {
-        [NodeParam("Start", 0, true, typeof(bool))]
+        [PortIn("", 0, true, typeof(bool))]
         public NodeSo Start;
 
-        public int ConnectedPort_Start;
+        public int InConnectedPort_Start;
 
         [NonSerialized]
         private bool _hasInit;
@@ -33,7 +34,7 @@ namespace Vapor.GraphTools
                 _hasInit = true;
             }
 
-            return _eval.Evaluate(externalValues, ConnectedPort_Start);
+            return _eval.Evaluate(externalValues, InConnectedPort_Start);
         }
     }
 }

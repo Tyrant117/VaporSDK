@@ -9,9 +9,7 @@ namespace VaporEditor.GraphTools
 {
     public class LogicEvaluateEditorNode<T> : GraphToolsTokenNode<T, LogicEvaluateNodeSo> where T : ScriptableObject
     {
-        private static readonly StyleSheet _portColors = Resources.Load<StyleSheet>("Styles/PortColors");
-
-        private Port _inPort;
+        private static readonly StyleSheet s_PortColors = Resources.Load<StyleSheet>("Styles/PortColors");
 
         public LogicEvaluateEditorNode(GraphEditorView<T> view, LogicEvaluateNodeSo node) : base(null, null)
         {
@@ -40,19 +38,19 @@ namespace VaporEditor.GraphTools
 
         private void CreateInOutPort()
         {
-            _inPort = InstantiatePort(Orientation.Horizontal, Direction.Input, Port.Capacity.Single, typeof(bool));
+            var inPort = InstantiatePort(Orientation.Horizontal, Direction.Input, Port.Capacity.Single, typeof(bool));
             //_inPort.portName = "In";
-            _inPort.tooltip = "The logic evaluation";
-            _inPort.Q("connector").pickingMode = PickingMode.Position;
-            _inPort.Q<Label>().style.display = DisplayStyle.None;
-            _inPort.styleSheets.Add(_portColors);
-            Ports.Add(_inPort);
-            inputContainer.Add(_inPort);
+            inPort.tooltip = "The logic evaluation";
+            inPort.Q("connector").pickingMode = PickingMode.Position;
+            inPort.Q<Label>().style.display = DisplayStyle.None;
+            inPort.styleSheets.Add(s_PortColors);
+            InPorts.Add(inPort);
+            inputContainer.Add(inPort);
 
-            if (_inPort != null)
+            if (inPort != null)
             {
                 var pill = this.Q<Pill>("pill");
-                pill.left = _inPort;
+                pill.left = inPort;
             }
         }
     }

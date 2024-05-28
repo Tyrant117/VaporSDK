@@ -11,7 +11,7 @@ namespace VaporEditor.GraphTools
         {
             if (node is LogicEvaluateNodeSo resultNode)
             {
-                var editorNode = new LogicEvaluateEditorNode<GraphArg>(editorView, resultNode);
+                var editorNode = new NParamEditorToken<GraphArg>(editorView, resultNode, default);
                 editorNode.SetPosition(resultNode.Position);
                 graphView.AddElement(editorNode);
                 editorNodes.Add(editorNode);
@@ -31,7 +31,7 @@ namespace VaporEditor.GraphTools
 
             if (node is LogicNodeSo logicNode)
             {
-                var editorNode = new NParamEditorNode<GraphArg>(editorView, logicNode, typeof(bool));
+                var editorNode = new NParamEditorNode<GraphArg>(editorView, logicNode);
                 editorNode.SetPosition(logicNode.Position);
                 graphView.AddElement(editorNode);
                 editorNodes.Add(editorNode);

@@ -5,12 +5,16 @@ using UnityEngine;
 
 namespace Vapor.GraphTools
 {
-    [SearchableNode("Value/Exposed Property", "Exposed Property", "values"), NodeIsToken, NodeResult("", 0, typeof(bool), typeof(int), typeof(float))]
+    [SearchableNode("Value/Exposed Property", "Exposed Property", "values")]
     public class ExposedPropertyNodeSo : NodeSo, IEvaluatorNode<bool>, IEvaluatorNode<int>, IEvaluatorNode<float>
     {
         [SerializeField]
         private string _valueName;
         public string ValueName { get => _valueName; set => _valueName = value; }
+
+        [PortOut("", 0, true, typeof(bool), typeof(int), typeof(float))]
+        public NodeSo Out;
+        public int OutConnectedPort_Out;
 
         bool IEvaluatorNode<bool>.GetValue(int portIndex)
         {
