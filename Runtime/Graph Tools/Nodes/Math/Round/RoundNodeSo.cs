@@ -3,13 +3,17 @@ using UnityEngine;
 
 namespace Vapor.GraphTools.Math
 {
-    [SearchableNode("Math/Round/Round", "Round")]
+    [SearchableNode("Math/Round/Round", "Round", "math")]
     public class RoundNodeSo : MathNodeSo
     {
-        [NodeParam("A", 0, true, typeof(float))]
+        [PortIn("A", 0, true, typeof(float))]
         public NodeSo A;
 
-        public int ConnectedPort_A;
+        [PortOut("Out", 0, true, typeof(float))]
+        public NodeSo Out;
+
+        public int InConnectedPort_A;
+        public int OutConnectedPort_Out;
 
         [NonSerialized]
         private bool _hasInit;
@@ -24,7 +28,7 @@ namespace Vapor.GraphTools.Math
                 _hasInit = true;
             }
 
-            return Mathf.Round(_a.Evaluate(externalValues, ConnectedPort_A));
+            return Mathf.Round(_a.Evaluate(externalValues, InConnectedPort_A));
         }
     }
 }

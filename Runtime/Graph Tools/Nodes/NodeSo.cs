@@ -26,17 +26,22 @@ namespace Vapor.GraphTools
         public string Name { get => _name; set => _name = value; }
 
         [SerializeField]
-        private List<EdgeConnection> _edges = new();
-        public List<EdgeConnection> Edges { get => _edges; set => _edges = value; }
+        private List<EdgeConnection> _inEdges = new();
+        public List<EdgeConnection> InEdges { get => _inEdges; set => _inEdges = value; }
 
-        
+        [SerializeField]
+        private List<EdgeConnection> _outEdges = new();
+        public List<EdgeConnection> OutEdges { get => _outEdges; set => _outEdges = value; }
+
+
         public string GetGuid() => _guid;
         public void SetGuid(string guid) => _guid = guid;
 
         [Conditional("UNITY_EDITOR")]
         public virtual void LinkNodeData(List<NodeSo> nodesToLink, Action<NodeSo> callback)
         {
-            Edges.Sort((l, r) => l.PortIndex.CompareTo(r.PortIndex));
+            InEdges.Sort((l, r) => l.InPortIndex.CompareTo(r.InPortIndex));
+            OutEdges.Sort((l, r) => l.OutPortIndex.CompareTo(r.OutPortIndex));
 
             var fields = GetType().GetFields(BindingFlags.Public | BindingFlags.Instance);
             FindNodeAndConnectedPort(fields, nodesToLink);
@@ -46,26 +51,50 @@ namespace Vapor.GraphTools
         private void FindNodeAndConnectedPort(FieldInfo[] fields, List<NodeSo> nodesToLink)
         {
             // Search the node for all fields that are marked with a NodeParam
-            var ins = fields.Where(x => Attribute.IsDefined(x, typeof(NodeParamAttribute)));
+            var ins = fields.Where(x => Attribute.IsDefined(x, typeof(PortInAttribute)));
+            var outs = fields.Where(x => Attribute.IsDefined(x, typeof(PortOutAttribute)));
             foreach (var port in ins)
             {
                 // Get the NodeParam Attribute and then find the first Edge that matches that attributes port index.
-                var atr = port.GetCustomAttribute<NodeParamAttribute>();
-                var edge = Edges.FirstOrDefault(e => e.PortIndex == atr.PortIndex);
+                var atr = port.GetCustomAttribute<PortInAttribute>();
+                var edge = InEdges.FirstOrDefault(e => e.InPortIndex == atr.PortIndex);
 
                 if (edge != null)
                 {
                     // In the list of all the nodes in the graph find the node that matches the edges Guid.
-                    var node = nodesToLink.First(x => edge == x.GetGuid());
+                    var node = nodesToLink.First(node => edge.GuidMatches(node.GetGuid()));
                     port.SetValue(this, node); // Set the port nodes value to this selected node.
-                    var portIndex = GetType().GetField($"ConnectedPort_{port.Name}");
-                    Assert.IsNotNull(portIndex, $"There is no public field with the name ConnectedPort_{port.Name}, all fields marked with a NodeParamAttribute," +
-                        $" must have an integer field with the name public int ConnectedPort_<NodeParamAttribute.FieldName>");
-                    portIndex.SetValue(this, edge.ConnectedPortIndex); // Set the port nodes connected port to the index that it matches in its child.
+                    var portIndex = GetType().GetField($"InConnectedPort_{port.Name}");
+                    Assert.IsNotNull(portIndex, $"There is no public field with the name InConnectedPort_{port.Name}, all fields marked with a PortInAttribute," +
+                        $" must have an integer field with the name public int InConnectedPort_<PortInAttribute.FieldName>");
+                    portIndex.SetValue(this, edge.OutPortIndex); // Set the port nodes connected port to the index that it matches in its child.
                 }
                 else
                 {
-                    Assert.IsFalse(atr.Required, $"Node:{name} of type:{GetType()} has a NodeParamAttribute with the name {atr.ParamName} that is a required node," +
+                    Assert.IsFalse(atr.Required, $"Node:{name} of type:{GetType()} has a PortInAttribute with the name {atr.Name} that is a required node," +
+                        $" but there is no edge connecting to it in the graph.");
+                }
+            }
+
+            foreach (var port in outs)
+            {
+                // Get the NodeParam Attribute and then find the first Edge that matches that attributes port index.
+                var atr = port.GetCustomAttribute<PortOutAttribute>();
+                var edge = OutEdges.FirstOrDefault(e => e.OutPortIndex == atr.PortIndex);
+
+                if (edge != null)
+                {
+                    // In the list of all the nodes in the graph find the node that matches the edges Guid.
+                    var node = nodesToLink.First(x => edge.GuidMatches(x.GetGuid()));
+                    port.SetValue(this, node); // Set the port nodes value to this selected node.
+                    var portIndex = GetType().GetField($"OutConnectedPort_{port.Name}");
+                    Assert.IsNotNull(portIndex, $"There is no public field with the name OutConnectedPort_{port.Name}, all fields marked with a PortOutAttribute," +
+                        $" must have an integer field with the name public int OutConnectedPort_<PortOutAttribute.FieldName>");
+                    portIndex.SetValue(this, edge.InPortIndex); // Set the port nodes connected port to the index that it matches in its child.
+                }
+                else
+                {
+                    Assert.IsFalse(atr.Required, $"Node:{name} of type:{GetType()} has a PortOutAttribute with the name {atr.Name} that is a required node," +
                         $" but there is no edge connecting to it in the graph.");
                 }
             }

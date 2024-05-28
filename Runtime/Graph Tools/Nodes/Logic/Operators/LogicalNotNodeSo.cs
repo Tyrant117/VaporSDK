@@ -5,13 +5,18 @@ using UnityEngine;
 
 namespace Vapor.GraphTools
 {
-    [SearchableNode("Logic/Operator/Logical Not", "!A")]
+    [SearchableNode("Logic/Operators/Logical Not", "!A", "logic")]
     public class LogicalNotNodeSo : LogicNodeSo
     {
-        [NodeParam("A", 0, true, typeof(bool))]
+        [PortIn("A", 0, true, typeof(bool))]
         public NodeSo A;
 
-        public int ConnectedPort_A;
+        [PortOut("Out", 0, true, typeof(bool))]
+        public NodeSo Out;
+
+        public int InConnectedPort_A;
+
+        public int OutConnectedPort_Out;
 
         [NonSerialized]
         private bool _hasInit;
@@ -26,7 +31,7 @@ namespace Vapor.GraphTools
                 _hasInit = true;
             }
 
-            return !_a.Evaluate(externalValues, ConnectedPort_A);
+            return !_a.Evaluate(externalValues, InConnectedPort_A);
         }
 
         //public override void LinkNodeData(List<NodeSo> nodesToLink, Action<NodeSo> callback)

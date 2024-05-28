@@ -11,21 +11,16 @@ namespace VaporEditor.GraphTools
 {
     public class NParamEditorToken<T> : GraphToolsTokenNode<T, NodeSo> where T : ScriptableObject
     {
-        private static readonly Texture2D exposedIcon = Resources.Load<Texture2D>("GraphView/Nodes/BlackboardFieldExposed");
+        private static readonly Texture2D s_ExposedIcon = Resources.Load<Texture2D>("GraphView/Nodes/BlackboardFieldExposed");
         protected static readonly StyleSheet _portColors = Resources.Load<StyleSheet>("Styles/PortColors");
 
-        private List<Port> _inPorts;
-        protected List<Port> _outPorts;
+        private List<(PortInAttribute portAtr, Type[] portTypes)> _inPortData;
+        private List<(PortOutAttribute portAtr, Type[] portTypes)> _outPortData;
 
-        private List<(NodeParamAttribute portAtr, Type[] portTypes)> _inPortData;
-        private List<(NodeResultAttribute portAtr, Type[] portTypes)> _outPortData;
-        private readonly Type[] _outPortTypes;
-
-        public NParamEditorToken(GraphEditorView<T> view, NodeSo node, EditorLabelVisualData visualData, params Type[] outPortTypes) : base(null, null)
+        public NParamEditorToken(GraphEditorView<T> view, NodeSo node, EditorLabelVisualData visualData) : base(null, null)
         {
             View = view;
             Node = node;
-            _outPortTypes = outPortTypes;
             FindParams();
 
             name = "PropertyTokenView";
@@ -41,7 +36,7 @@ namespace VaporEditor.GraphTools
 
             if (string.IsNullOrEmpty(visualData.IconPath))
             {
-                icon = exposedIcon;
+                icon = s_ExposedIcon;
             }
             else
             {
@@ -65,29 +60,34 @@ namespace VaporEditor.GraphTools
         {
             // Get all fields of the class
             var fields = Node.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            var atrs = Node.GetType().GetCustomAttributes<NodeResultAttribute>();
-
 
             // Loop through each field and check if it has the MathNodeParamAttribute
             _inPortData = new();
             _outPortData = new();
             foreach (FieldInfo field in fields)
             {
-                if (field.IsDefined(typeof(NodeParamAttribute)))
+                if (field.IsDefined(typeof(PortInAttribute)))
                 {
-                    var atr = field.GetCustomAttribute<NodeParamAttribute>();
+                    var atr = field.GetCustomAttribute<PortInAttribute>();
                     _inPortData.Add((atr, atr.PortTypes));
+                }
+                else if (field.IsDefined(typeof(PortOutAttribute)))
+                {
+                    var atr = field.GetCustomAttribute<PortOutAttribute>();
+                    _outPortData.Add((atr, atr.PortTypes));
                 }
             }
 
-            foreach (var atr in atrs)
-            {
-                _outPortData.Add((atr, atr.PortTypes));
-            }
+            _inPortData.Sort((l, r) => l.portAtr.PortIndex.CompareTo(r.portAtr.PortIndex));
+            _outPortData.Sort((l, r) => l.portAtr.PortIndex.CompareTo(r.portAtr.PortIndex));
         }
 
         private void CreateTitle(string title)
         {
+            var overrideAtr = Node.GetType().GetCustomAttribute<NodeNameAttribute>();
+            if (overrideAtr != null)
+                title = overrideAtr.Name;
+
             this.title = title;
             var titleLabel = this.Q<Label>("title-label");
             titleLabel.style.marginTop = 6;
@@ -98,12 +98,13 @@ namespace VaporEditor.GraphTools
 
         private void CreateFlowInPort()
         {
-            _inPorts = new(_inPortData.Count);
-            if (_inPortData.Count == 0) { return; }
+            InPorts = new(_inPortData.Count);
+            if (_inPortData.Count == 0)
+                return;
 
             VisualElement inVe = inputContainer;
             bool inGroup = false;
-            if (_outPortData.Count > 1)
+            if (_inPortData.Count > 1)
             {
                 inVe = new();
                 inGroup = true;
@@ -130,17 +131,16 @@ namespace VaporEditor.GraphTools
                 {
                     port.AddToClassList("optionalPort");
                 }
-                port.portName = portAtr.ParamName;
+                port.portName = portAtr.Name;
                 port.tooltip = "The flow input";
                 port.styleSheets.Add(_portColors);
-                _inPorts.Add(port);
-                Ports.Add(port);
+                InPorts.Add(port);
                 inVe.Add(port);
             }
             if (inGroup)
             {
                 inputContainer.Add(inVe);
-                if (_inPorts[0] != null)
+                if (InPorts[0] != null)
                 {
                     var pill = this.Q<Pill>("pill");
                     pill.left = inVe;
@@ -148,10 +148,10 @@ namespace VaporEditor.GraphTools
             }
             else
             {
-                if (_inPorts[0] != null)
+                if (InPorts[0] != null)
                 {
                     var pill = this.Q<Pill>("pill");
-                    pill.left = _inPorts[0];
+                    pill.left = InPorts[0];
                 }
             }
             _inPortData.Clear();
@@ -159,96 +159,60 @@ namespace VaporEditor.GraphTools
 
         private void CreateFlowOutPort()
         {
-            if (_outPortTypes == null)
-            {
-                _outPorts = new(_outPortData.Count);
-                VisualElement outVe = outputContainer;
-                bool inGroup = false;
-                if (_outPortData.Count > 1)
-                {
-                    outVe = new();
-                    inGroup = true;
-                }
+            OutPorts = new(_outPortData.Count);
+            if (_outPortData.Count == 0)
+                return;
 
-                foreach (var (portAtr, portTypes) in _outPortData)
+            VisualElement outVe = outputContainer;
+            bool inGroup = false;
+            if (_outPortData.Count > 1)
+            {
+                outVe = new();
+                inGroup = true;
+            }
+
+            foreach (var (portAtr, portTypes) in _outPortData)
+            {
+                var type = portTypes[0];
+                if (portTypes.Length > 1)
                 {
-                    var type = portTypes[0];
-                    if (portTypes.Length > 1)
-                    {
-                        type = typeof(DynamicValuePort);
-                    }
-                    var capacity = portAtr.MultiPort ? Port.Capacity.Multi : Port.Capacity.Single;
-                    var port = InstantiatePort(Orientation.Horizontal, Direction.Output, capacity, type);
-                    if (portTypes.Length > 1)
-                    {
-                        var set = new HashSet<Type>();
-                        for (int i = 0; i < portTypes.Length; i++)
-                        {
-                            set.Add(portTypes[i]);
-                        }
-                        port.userData = set;
-                    }
-                    port.portName = portAtr.ParamName;
-                    port.tooltip = "The flow output";
-                    port.styleSheets.Add(_portColors);
-                    _outPorts.Add(port);
-                    Ports.Add(port);
-                    outVe.Add(port);
+                    type = typeof(DynamicValuePort);
                 }
-                if (inGroup)
+                var capacity = portAtr.MultiPort ? Port.Capacity.Multi : Port.Capacity.Single;
+                var port = InstantiatePort(Orientation.Horizontal, Direction.Output, capacity, type);
+                if (portTypes.Length > 1)
                 {
-                    outputContainer.Add(outVe);
-                    if (_outPorts[0] != null)
+                    var set = new HashSet<Type>();
+                    for (int i = 0; i < portTypes.Length; i++)
                     {
-                        var pill = this.Q<Pill>("pill");
-                        pill.right = outVe;
+                        set.Add(portTypes[i]);
                     }
+                    port.userData = set;
                 }
-                else
+                port.portName = portAtr.Name;
+                port.tooltip = "The flow output";
+                port.styleSheets.Add(_portColors);
+                OutPorts.Add(port);
+                outVe.Add(port);
+            }
+            if (inGroup)
+            {
+                outputContainer.Add(outVe);
+                if (OutPorts[0] != null)
                 {
-                    if (_outPorts[0] != null)
-                    {
-                        var pill = this.Q<Pill>("pill");
-                        pill.right = _outPorts[0];
-                    }
+                    var pill = this.Q<Pill>("pill");
+                    pill.right = outVe;
                 }
-                _outPortData.Clear();
             }
             else
             {
-                AddCustomOutPorts();
-            }
-        }
-
-        protected virtual void AddCustomOutPorts()
-        {
-            _outPorts = new(1);
-            var type = _outPortTypes[0];
-            if (_outPortTypes.Length > 1)
-            {
-                type = typeof(DynamicValuePort);
-            }
-            var port = InstantiatePort(Orientation.Horizontal, Direction.Output, Port.Capacity.Multi, type);
-            if (_outPortTypes.Length > 1)
-            {
-                var set = new HashSet<Type>();
-                for (int i = 0; i < _outPortTypes.Length; i++)
+                if (OutPorts[0] != null)
                 {
-                    set.Add(_outPortTypes[i]);
+                    var pill = this.Q<Pill>("pill");
+                    pill.right = OutPorts[0];
                 }
-                port.userData = set;
             }
-            //port.portName = "Out";
-            //port.tooltip = "The flow output";
-            port.styleSheets.Add(_portColors);
-            _outPorts.Add(port);
-            Ports.Add(port);
-            outputContainer.Add(port);
-            if (_outPorts[0] != null)
-            {
-                var pill = this.Q<Pill>("pill");
-                pill.right = _outPorts[0];
-            }
+            _outPortData.Clear();
         }
     }
 }

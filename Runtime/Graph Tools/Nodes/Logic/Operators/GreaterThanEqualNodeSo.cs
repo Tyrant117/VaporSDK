@@ -6,16 +6,21 @@ using UnityEngine.Assertions;
 
 namespace Vapor.GraphTools.Math
 {
-    [SearchableNode("Logic/Conditional/Greater Than Or Equal", "A >= B")]
+    [SearchableNode("Logic/Operators/Greater Than Or Equal", "A >= B", "logic")]
     public class GreaterThanEqualNodeSo : LogicNodeSo
     {
-        [NodeParam("A", 0, true, typeof(float), typeof(int))]
+        [PortIn("A", 0, true, typeof(float), typeof(int))]
         public NodeSo A;
-        [NodeParam("B", 1, true, typeof(float), typeof(int))]
+        [PortIn("B", 1, true, typeof(float), typeof(int))]
         public NodeSo B;
 
-        public int ConnectedPort_A;
-        public int ConnectedPort_B;
+        [PortOut("Out", 0, true, typeof(bool))]
+        public NodeSo Out;
+
+        public int InConnectedPort_A;
+        public int InConnectedPort_B;
+
+        public int OutConnectedPort_Out;
 
         [NonSerialized]
         private bool _hasInit;

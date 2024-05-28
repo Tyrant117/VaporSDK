@@ -7,16 +7,21 @@ using UnityEngine.Assertions;
 
 namespace Vapor.GraphTools
 {
-    [SearchableNode("Logic/Conditional/Logical Or", "A || B")]
+    [SearchableNode("Logic/Operators/Logical Or", "A || B", "logic")]
     public class OrNodeSO : LogicNodeSo
     {
-        [NodeParam("A", 0, true, typeof(bool))]
+        [PortIn("A", 0, true, typeof(bool))]
         public NodeSo A;
-        [NodeParam("B", 1, true, typeof(bool))]
+        [PortIn("B", 1, true, typeof(bool))]
         public NodeSo B;
 
-        public int ConnectedPort_A;
-        public int ConnectedPort_B;
+        [PortOut("Out", 0, true, typeof(bool))]
+        public NodeSo Out;
+
+        public int InConnectedPort_A;
+        public int InConnectedPort_B;
+
+        public int OutConnectedPort_Out;
 
         [NonSerialized]
         private bool _hasInit;
@@ -34,7 +39,7 @@ namespace Vapor.GraphTools
                 _hasInit = true;
             }
 
-            return _a.Evaluate(externalValues, ConnectedPort_A) || _b.Evaluate(externalValues, ConnectedPort_B);
+            return _a.Evaluate(externalValues, InConnectedPort_A) || _b.Evaluate(externalValues, InConnectedPort_B);
         }
 
         //public override void LinkNodeData(List<NodeSo> nodesToLink, Action<NodeSo> callback)

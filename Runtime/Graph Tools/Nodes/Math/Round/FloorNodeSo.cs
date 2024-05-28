@@ -3,13 +3,17 @@ using UnityEngine;
 
 namespace Vapor.GraphTools.Math
 {
-    [SearchableNode("Math/Round/Floor", "Floor")]
+    [SearchableNode("Math/Round/Floor", "Floor", "math")]
     public class FloorNodeSo : MathNodeSo
     {
-        [NodeParam("A", 0, true, typeof(float))]
+        [PortIn("A", 0, true, typeof(float))]
         public NodeSo A;
 
-        public int ConnectedPort_A;
+        [PortOut("Out", 0, true, typeof(float))]
+        public NodeSo Out;
+
+        public int InConnectedPort_A;
+        public int OutConnectedPort_Out;
 
         [NonSerialized]
         private bool _hasInit;
@@ -24,7 +28,7 @@ namespace Vapor.GraphTools.Math
                 _hasInit = true;
             }
 
-            return Mathf.Floor(_a.Evaluate(externalValues, ConnectedPort_A));
+            return Mathf.Floor(_a.Evaluate(externalValues, InConnectedPort_A));
         }
     }
 }

@@ -52,6 +52,7 @@ namespace VaporEditor.GraphTools
             _searchProvider.IncludeFlags.Add("math");
             _searchProvider.IncludeFlags.Add("logic");
             _searchProvider.IncludeFlags.Add("values");
+            _searchProvider.IncludeFlags.Add("events");
             _searchProvider.View = this;
             GraphView.nodeCreationRequest = NodeCreationRequest;
 
@@ -111,114 +112,114 @@ namespace VaporEditor.GraphTools
             return false;
         }
 
-        private void AddEdges()
-        {
-            foreach (var root in EditorNodes)
-            {
-                var edges = root.GetNode().Edges;
-                foreach (var edge in edges)
-                {
-                    var child = EditorNodes.FirstOrDefault(x => edge == x.GetNode().GetGuid());
-                    if (child != null)
-                    {
-                        var e = child.Ports[edge.ConnectedPortIndex].ConnectTo(root.Ports[edge.PortIndex]);
-                        GraphView.AddElement(e);
-                    }
-                }
-            }
-        }
+        //private void AddEdges()
+        //{
+        //    foreach (var root in EditorNodes)
+        //    {
+        //        var edges = root.GetNode().Edges;
+        //        foreach (var edge in edges)
+        //        {
+        //            var child = EditorNodes.FirstOrDefault(iNode => edge.GuidMatches(iNode.GetNode().GetGuid()));
+        //            if (child != null)
+        //            {
+        //                var e = child.Ports[edge.OutPortIndex].ConnectTo(root.Ports[edge.InPortIndex]);
+        //                GraphView.AddElement(e);
+        //            }
+        //        }
+        //    }
+        //}
 
-        private void AddEdge(Edge edge)
-        {
-            var inNode = (IGraphToolsNode)edge.input.node;
-            int inPortIndex = inNode.Ports.IndexOf(edge.input);
+        //private void AddEdge(Edge edge)
+        //{
+        //    var inNode = (IGraphToolsNode)edge.input.node;
+        //    int inPortIndex = inNode.Ports.IndexOf(edge.input);
 
-            var outNode = (IGraphToolsNode)edge.output.node;
-            int outPortIndex = outNode.Ports.IndexOf(edge.output);
+        //    var outNode = (IGraphToolsNode)edge.output.node;
+        //    int outPortIndex = outNode.Ports.IndexOf(edge.output);
 
-            if (inNode != null && outNode != null)
-            {
-                var root = inNode.GetNode();
-                var child = outNode.GetNode();
-                root.Edges.Add(new EdgeConnection(inPortIndex, outPortIndex, child.GetGuid()));
-            }
+        //    if (inNode != null && outNode != null)
+        //    {
+        //        var root = inNode.GetNode();
+        //        var child = outNode.GetNode();
+        //        root.Edges.Add(new EdgeConnection(inPortIndex, outPortIndex, child.GetGuid()));
+        //    }
 
-            //var conn = new EffectGraphConnection(inNode.Node.Id, inPortIndex, outNode.Node.Id, outPortIndex);
+        //    //var conn = new EffectGraphConnection(inNode.Node.Id, inPortIndex, outNode.Node.Id, outPortIndex);
 
-            //Window.CurrentGraph.Connections.Add(conn);
+        //    //Window.CurrentGraph.Connections.Add(conn);
 
-            //ConnectionMap[edge] = conn;
-        }
+        //    //ConnectionMap[edge] = conn;
+        //}
 
-        private GraphViewChange GraphViewChanged(GraphViewChange graphViewChange)
-        {
-            _CreateEdges(graphViewChange);
-            _MoveElements(graphViewChange);
-            _RemoveElements(graphViewChange);
+        //private GraphViewChange GraphViewChanged(GraphViewChange graphViewChange)
+        //{
+        //    _CreateEdges(graphViewChange);
+        //    _MoveElements(graphViewChange);
+        //    _RemoveElements(graphViewChange);
 
-            //UpdateEdgeColors(nodesToUpdate);
+        //    //UpdateEdgeColors(nodesToUpdate);
 
-            Window.MarkDirty();
-            return graphViewChange;
+        //    Window.MarkDirty();
+        //    return graphViewChange;
 
-            void _CreateEdges(GraphViewChange graphViewChange)
-            {
-                if (graphViewChange.edgesToCreate != null)
-                {
-                    foreach (var edge in graphViewChange.edgesToCreate)
-                    {
-                        AddEdge(edge);
-                    }
-                    //graphViewChange.edgesToCreate.Clear();
-                }
-            }
+        //    void _CreateEdges(GraphViewChange graphViewChange)
+        //    {
+        //        if (graphViewChange.edgesToCreate != null)
+        //        {
+        //            foreach (var edge in graphViewChange.edgesToCreate)
+        //            {
+        //                AddEdge(edge);
+        //            }
+        //            //graphViewChange.edgesToCreate.Clear();
+        //        }
+        //    }
 
-            void _MoveElements(GraphViewChange graphViewChange)
-            {
-                if (graphViewChange.movedElements != null)
-                {
-                    foreach (var element in graphViewChange.movedElements)
-                    {
-                        if (element is IGraphToolsNode node)
-                        {
-                            node.GetNode().Position = element.parent.ChangeCoordinatesTo(GraphView.contentViewContainer, element.GetPosition());
-                        }
+        //    void _MoveElements(GraphViewChange graphViewChange)
+        //    {
+        //        if (graphViewChange.movedElements != null)
+        //        {
+        //            foreach (var element in graphViewChange.movedElements)
+        //            {
+        //                if (element is IGraphToolsNode node)
+        //                {
+        //                    node.GetNode().Position = element.parent.ChangeCoordinatesTo(GraphView.contentViewContainer, element.GetPosition());
+        //                }
 
-                        if (element is StickyNote stickyNote)
-                        {
-                            //SetStickyNotePosition(stickyNote);
-                        }
-                    }
-                }
-            }
+        //                if (element is StickyNote stickyNote)
+        //                {
+        //                    //SetStickyNotePosition(stickyNote);
+        //                }
+        //            }
+        //        }
+        //    }
 
-            void _RemoveElements(GraphViewChange graphViewChange)
-            {
-                if (graphViewChange.elementsToRemove != null)
-                {
-                    foreach (var edge in graphViewChange.elementsToRemove.OfType<Edge>())
-                    {
-                        if (edge.input != null && edge.output != null && edge.input.node is IGraphToolsNode inN && edge.output.node is IGraphToolsNode outN)
-                        {
-                            if (inN.GetNode() is NodeSo root && outN.GetNode() is NodeSo child)
-                            {
-                                var idx = root.Edges.FindIndex(x => x == child.GetGuid());
-                                if (idx != -1)
-                                {
-                                    root.Edges.RemoveAt(idx);
-                                }
-                            }
-                        }
-                    }
+        //    void _RemoveElements(GraphViewChange graphViewChange)
+        //    {
+        //        if (graphViewChange.elementsToRemove != null)
+        //        {
+        //            foreach (var edge in graphViewChange.elementsToRemove.OfType<Edge>())
+        //            {
+        //                if (edge.input != null && edge.output != null && edge.input.node is IGraphToolsNode inN && edge.output.node is IGraphToolsNode outN)
+        //                {
+        //                    if (inN.GetNode() is NodeSo root && outN.GetNode() is NodeSo child)
+        //                    {
+        //                        var idx = root.Edges.FindIndex(edge => edge.GuidMatches(child.GetGuid()));
+        //                        if (idx != -1)
+        //                        {
+        //                            root.Edges.RemoveAt(idx);
+        //                        }
+        //                    }
+        //                }
+        //            }
 
-                    foreach (var node in graphViewChange.elementsToRemove.OfType<IGraphToolsNode>())
-                    {
-                        Debug.Log("Removing Node" + node);
-                        EditorNodes.Remove(node);
-                        Nodes.Remove(node.GetNode());
-                    }
-                }
-            }
-        }
+        //            foreach (var node in graphViewChange.elementsToRemove.OfType<IGraphToolsNode>())
+        //            {
+        //                Debug.Log("Removing Node" + node);
+        //                EditorNodes.Remove(node);
+        //                Nodes.Remove(node.GetNode());
+        //            }
+        //        }
+        //    }
+        //}
     }
 }

@@ -5,13 +5,17 @@ using UnityEngine.Assertions;
 
 namespace Vapor.GraphTools
 {
-    [SearchableNode("Logic/Chance/Random Chance", "Random Chance")]
+    [SearchableNode("Logic/Chance/Random Chance", "Random Chance", "logic")]
     public class RandomChanceNodeSo : LogicNodeSo
     {
-        [NodeParam("Chance", 0, true, typeof(float))]
+        [PortIn("Chance", 0, true, typeof(float))]
         public NodeSo Chance;
 
-        public int ConnectedPort_Chance;
+        [PortOut("Out", 0, true, typeof(bool))]
+        public NodeSo Out;
+
+        public int InConnectedPort_Chance;
+        public int OutConnectedPort_Out;
 
         [NonSerialized]
         private bool _hasInit;
@@ -26,7 +30,7 @@ namespace Vapor.GraphTools
                 _hasInit = true;
             }
 
-            return UnityEngine.Random.Range(0, 1f) <= _chance.Evaluate(externalValues, ConnectedPort_Chance);
+            return UnityEngine.Random.Range(0, 1f) <= _chance.Evaluate(externalValues, InConnectedPort_Chance);
         }
     }
 }

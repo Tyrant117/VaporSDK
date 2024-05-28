@@ -7,8 +7,6 @@ namespace VaporEditor.GraphTools.Math
 {
     public class EditorMathEvaluateNode<T> : GraphToolsTokenNode<T, MathEvaluateNodeSo> where T : ScriptableObject
     {
-        private Port _inPort;
-
         public EditorMathEvaluateNode(GraphEditorView<T> view, MathEvaluateNodeSo node) : base(null, null)
         {
             View = view;
@@ -36,18 +34,18 @@ namespace VaporEditor.GraphTools.Math
 
         private void CreateInOutPort()
         {
-            _inPort = InstantiatePort(Orientation.Horizontal, Direction.Input, Port.Capacity.Single, typeof(float));
-            _inPort.portName = "In";
-            _inPort.tooltip = "The math evaluation";
-            _inPort.Q("connector").pickingMode = PickingMode.Position;
-            _inPort.Q<Label>().style.display = DisplayStyle.None;
-            Ports.Add(_inPort);
-            inputContainer.Add(_inPort);
+            var inPort = InstantiatePort(Orientation.Horizontal, Direction.Input, Port.Capacity.Single, typeof(float));
+            inPort.portName = "In";
+            inPort.tooltip = "The math evaluation";
+            inPort.Q("connector").pickingMode = PickingMode.Position;
+            inPort.Q<Label>().style.display = DisplayStyle.None;
+            InPorts.Add(inPort);
+            inputContainer.Add(inPort);
 
-            if (_inPort != null)
+            if (inPort != null)
             {
                 var pill = this.Q<Pill>("pill");
-                pill.left = _inPort;
+                pill.left = inPort;
             }
         }
     }

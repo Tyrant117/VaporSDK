@@ -2,16 +2,20 @@ using System;
 
 namespace Vapor.GraphTools.Math
 {
-    [SearchableNode("Math/Compound/Math Average", "Average"), NodeResult("Out", 2, typeof(float))]
+    [SearchableNode("Math/Compound/Math Average", "Average", "math")]
     public class MathAverageNodeSo : MathNodeSo
     {
-        [NodeParam("A", 0, true, typeof(float))]
+        [PortIn("A", 0, true, typeof(float))]
         public NodeSo A;
-        [NodeParam("B", 1, true, typeof(float))]
+        [PortIn("B", 1, true, typeof(float))]
         public NodeSo B;
 
-        public int ConnectedPort_A;
-        public int ConnectedPort_B;
+        [PortOut("Out", 0, true, typeof(float))]
+        public NodeSo Out;
+
+        public int InConnectedPort_A;
+        public int InConnectedPort_B;
+        public int OutConnectedPort_Out;
 
         [NonSerialized]
         private bool _hasInit;
@@ -29,7 +33,7 @@ namespace Vapor.GraphTools.Math
                 _hasInit = true;
             }
 
-            return (_a.Evaluate(externalValues, ConnectedPort_A) + _b.Evaluate(externalValues, ConnectedPort_B)) * 0.5f;
+            return (_a.Evaluate(externalValues, InConnectedPort_A) + _b.Evaluate(externalValues, InConnectedPort_B)) * 0.5f;
         }
     }
 }

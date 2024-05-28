@@ -6,7 +6,8 @@ namespace VaporEditor.GraphTools
 {
     public interface IGraphToolsNode
     {
-        List<Port> Ports { get; }
+        List<Port> InPorts { get; }
+        List<Port> OutPorts { get; }
 
         NodeSo GetNode();
     }

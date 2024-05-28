@@ -1,19 +1,18 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Assertions;
 
 namespace Vapor.GraphTools
 {
-    [SearchableNode("Math/Convert/Float To Bool", "Float to Bool")]
+    [SearchableNode("Math/Convert/Float To Bool", "Float to Bool", "math")]
     public class FloatToBoolNodeSo : LogicNodeSo
     {
-        [NodeParam("Float", 0, true, typeof(float))]
+        [PortIn("Float", 0, true, typeof(float))]
         public NodeSo Float;
 
-        public int ConnectedPort_Float;
+        [PortOut("Out", 0, true, typeof(float))]
+        public NodeSo Out;
+
+        public int InConnectedPort_Float;
+        public int OutConnectedPort_Out;
 
         [NonSerialized]
         private bool _hasInit;
@@ -28,7 +27,7 @@ namespace Vapor.GraphTools
                 _hasInit = true;
             }
 
-            return Convert.ToBoolean(_a.Evaluate(externalValues, ConnectedPort_Float));
+            return Convert.ToBoolean(_a.Evaluate(externalValues, InConnectedPort_Float));
         }
     }
 }

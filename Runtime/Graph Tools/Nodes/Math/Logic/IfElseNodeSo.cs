@@ -2,19 +2,23 @@ using System;
 
 namespace Vapor.GraphTools
 {
-    [SearchableNode("Math/Logic/If Else", "If Else")]
+    [SearchableNode("Math/Logic/If Else", "If Else", "math")]
     public class IfElseNodeSo : MathNodeSo
     {
-        [NodeParam("If", 0, true, typeof(bool))]
+        [PortIn("If", 0, true, typeof(bool))]
         public NodeSo If;
-        [NodeParam("True", 1, true, typeof(float))]
+        [PortIn("True", 1, true, typeof(float))]
         public NodeSo True;
-        [NodeParam("False", 2, true, typeof(float))]
+        [PortIn("False", 2, true, typeof(float))]
         public NodeSo False;
 
-        public int ConnectedPort_If;
-        public int ConnectedPort_True;
-        public int ConnectedPort_False;
+        [PortOut("Out", 0, true, typeof(float))]
+        public NodeSo Out;
+
+        public int InConnectedPort_If;
+        public int InConnectedPort_True;
+        public int InConnectedPort_False;
+        public int OutConnectedPort_Out;
 
         [NonSerialized]
         private bool _hasInit;
@@ -35,7 +39,7 @@ namespace Vapor.GraphTools
                 _hasInit = true;
             }
 
-            return _if.Evaluate(externalValues, ConnectedPort_If) ? _true.Evaluate(externalValues, ConnectedPort_True) : _false.Evaluate(externalValues, ConnectedPort_False);
+            return _if.Evaluate(externalValues, InConnectedPort_If) ? _true.Evaluate(externalValues, InConnectedPort_True) : _false.Evaluate(externalValues, InConnectedPort_False);
         }
     }
 }

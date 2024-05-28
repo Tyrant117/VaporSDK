@@ -3,16 +3,20 @@ using UnityEngine;
 
 namespace Vapor.GraphTools.Math
 {
-    [SearchableNode("Math/Basic/Power", "Power")]
+    [SearchableNode("Math/Basic/Power", "Power", "math")]
     public class PowerNodeSo : MathNodeSo
     {
-        [NodeParam("A", 0, true, typeof(float))]
+        [PortIn("A", 0, true, typeof(float))]
         public NodeSo A;
-        [NodeParam("B", 1, true, typeof(float))]
+        [PortIn("B", 1, true, typeof(float))]
         public NodeSo B;
 
-        public int ConnectedPort_A;
-        public int ConnectedPort_B;
+        [PortOut("Out", 0, true, typeof(float))]
+        public NodeSo Out;
+
+        public int InConnectedPort_A;
+        public int InConnectedPort_B;
+        public int OutConnectedPort_Out;
 
         [NonSerialized]
         private bool _hasInit;
@@ -30,7 +34,7 @@ namespace Vapor.GraphTools.Math
                 _hasInit = true;
             }
 
-            return Mathf.Pow(_a.Evaluate(externalValues, ConnectedPort_A), _b.Evaluate(externalValues, ConnectedPort_B));
+            return Mathf.Pow(_a.Evaluate(externalValues, InConnectedPort_A), _b.Evaluate(externalValues, InConnectedPort_B));
         }
     }
 }

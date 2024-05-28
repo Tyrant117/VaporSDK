@@ -1,14 +1,18 @@
-using System.Collections;
-using System.Collections.Generic;
+using System;
 using System.Runtime.CompilerServices;
-using UnityEngine;
-using Vapor.GraphTools.Math;
 
 namespace Vapor.GraphTools
 {
-    [SearchableNode("Value/Float Value", "Float")]
+    [SearchableNode("Value/Float Value", "Float", "values")]
     public class FloatValueNodeSo : ValueNodeSo<float>, IEvaluatorNode<float>
     {
+        [PortOut("", 0, true, typeof(float))]
+        public NodeSo Out;
+        public int OutConnectedPort_Out;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override Type GetValueType() => typeof(float);
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public float GetValue(int portIndex) => Value;
 

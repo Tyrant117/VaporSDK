@@ -5,16 +5,20 @@ using UnityEngine;
 
 namespace Vapor.GraphTools
 {
-    [SearchableNode("Events/Fire Passthrough Event", "Fire Event"), NodeResult("Out", 2, typeof(bool), typeof(int), typeof(float))]
+    [SearchableNode("Events/Fire Passthrough Event", "Fire Event", "events")]
     public class FirePassthroughEventNodeSo : NodeSo, IEvaluatorNode<bool>, IEvaluatorNode<int>, IEvaluatorNode<float>
     {
-        [NodeParam("In", 0, true, typeof(bool), typeof(int), typeof(float))]
+        [PortIn("In", 0, true, typeof(bool), typeof(int), typeof(float))]
         public NodeSo In;
-        [NodeParam("Event", 1, false, typeof(int))]
+        [PortIn("Event", 1, false, typeof(int))]
         public NodeSo Event;
 
-        public int ConnectedPort_In;
-        public int ConnectedPort_Event;
+        [PortOut("Out", 0, true, typeof(bool), typeof(int), typeof(float))]
+        public NodeSo Out;
+
+        public int InConnectedPort_In;
+        public int InConnectedPort_Event;
+        public int OutConnectedPort_Out;
 
         [NonSerialized]
         private bool _hasInit;
@@ -53,8 +57,8 @@ namespace Vapor.GraphTools
         {
             Init();
 
-            var val = _bool.Evaluate(getter, ConnectedPort_In);
-            getter.FireEvent(_event.Evaluate(getter, ConnectedPort_Event), _eventArgs.GetArgs(getter));
+            var val = _bool.Evaluate(getter, InConnectedPort_In);
+            getter.FireEvent(_event.Evaluate(getter, InConnectedPort_Event), _eventArgs.GetArgs(getter));
             return val;
         }
 
@@ -69,8 +73,8 @@ namespace Vapor.GraphTools
         {
             Init();
 
-            var val = _int.Evaluate(getter, ConnectedPort_In);
-            getter.FireEvent(_event.Evaluate(getter, ConnectedPort_Event), _eventArgs.GetArgs(getter));
+            var val = _int.Evaluate(getter, InConnectedPort_In);
+            getter.FireEvent(_event.Evaluate(getter, InConnectedPort_Event), _eventArgs.GetArgs(getter));
             return val;
         }
 
@@ -84,8 +88,8 @@ namespace Vapor.GraphTools
         {
             Init();
 
-            var val = _float.Evaluate(getter, ConnectedPort_In);
-            getter.FireEvent(_event.Evaluate(getter, ConnectedPort_Event), _eventArgs.GetArgs(getter));
+            var val = _float.Evaluate(getter, InConnectedPort_In);
+            getter.FireEvent(_event.Evaluate(getter, InConnectedPort_Event), _eventArgs.GetArgs(getter));
             return val;
         }
 

@@ -3,19 +3,23 @@ using UnityEngine;
 
 namespace Vapor.GraphTools.Math
 {
-    [SearchableNode("Math/Advanced/Normalize", "Normalize")]
+    [SearchableNode("Math/Advanced/Normalize", "Normalize", "math")]
     public class NormalizeNodeSo : MathNodeSo
     {
-        [NodeParam("A", 0, true, typeof(float))]
+        [PortIn("A", 0, true, typeof(float))]
         public NodeSo A;
-        [NodeParam("B", 1, true, typeof(float))]
+        [PortIn("B", 1, true, typeof(float))]
         public NodeSo B;
-        [NodeParam("Value", 2, true, typeof(float))]
+        [PortIn("Value", 2, true, typeof(float))]
         public NodeSo C;
 
-        public int ConnectedPort_A;
-        public int ConnectedPort_B;
-        public int ConnectedPort_C;
+        [PortOut("Out", 0, true, typeof(float))]
+        public NodeSo Out;
+
+        public int InConnectedPort_A;
+        public int InConnectedPort_B;
+        public int InConnectedPort_C;
+        public int OutConnectedPort_Out;
 
         [NonSerialized]
         private bool _hasInit;
@@ -37,7 +41,7 @@ namespace Vapor.GraphTools.Math
                 _hasInit = true;
             }
 
-            return Mathf.InverseLerp(_a.Evaluate(externalValues, ConnectedPort_A), _b.Evaluate(externalValues, ConnectedPort_B), _c.Evaluate(externalValues, ConnectedPort_C));
+            return Mathf.InverseLerp(_a.Evaluate(externalValues, InConnectedPort_A), _b.Evaluate(externalValues, InConnectedPort_B), _c.Evaluate(externalValues, InConnectedPort_C));
         }
     }
 }
