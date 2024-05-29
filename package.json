@@ -14,9 +14,8 @@
   "hideInEditor": false,
   "dependencies": {
     "com.unity.editorcoroutines": "1.0.0",
-    "com.unity.inputsystem": "1.7.0",
-    "com.unity.textmeshpro": "3.0.7",
+    "com.unity.inputsystem": "1.8.2",
     "com.unity.nuget.newtonsoft-json": "3.2.1",
-    "com.unity.addressables": "1.21.21"
+    "com.unity.addressables": "2.1.0"
   }
 }
