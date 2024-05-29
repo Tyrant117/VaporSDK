@@ -35,7 +35,7 @@ namespace Vapor.Observables
         public bool SaveValue { get; set; }
 
         // ***** Events ******
-        public event Action<Observable> Dirtied;
+        public event Action<Observable> Dirtied = delegate { };
 
         protected Observable(string name, bool saveValue)
         {
@@ -60,12 +60,12 @@ namespace Vapor.Observables
 
         protected void OnDirtied()
         {
-            Dirtied?.Invoke(this);
+            Dirtied.Invoke(this);
         }
 
         internal virtual void ClearCallbacks()
         {
-            Dirtied = null;
+            Dirtied = delegate { };
         }
         #endregion
 
@@ -185,12 +185,12 @@ namespace Vapor.Observables
 
                 var oldValue = _value;
                 _value = value;
-                ValueChanged?.Invoke(this, oldValue);
+                ValueChanged.Invoke(this, oldValue);
                 OnDirtied();
             }
         }
 
-        public event Action<Observable<T>, T> ValueChanged; // Value and Old Value
+        public event Action<Observable<T>, T> ValueChanged = delegate { }; // Value and Old Value
         
 
         public Observable(string name, bool saveValue) : base(name, saveValue)
@@ -234,7 +234,7 @@ namespace Vapor.Observables
         internal override void ClearCallbacks()
         {
             base.ClearCallbacks();
-            ValueChanged = null;
+            ValueChanged = delegate { };
         }
         #endregion
 
@@ -271,12 +271,17 @@ namespace Vapor.Observables
 
         public bool Equals(Observable<T> other)
         {
+            if(ReferenceEquals(this, other))
+            {
+                return true;
+            }
+
             return _value.Equals(other._value);
         }
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(Name, SaveValue, _value);
+            return HashCode.Combine(Name, SaveValue);
         }
 
         public override string ToString()

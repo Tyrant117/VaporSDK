@@ -6,6 +6,7 @@ using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
 using Vapor.GraphTools;
+using VaporEditor.Inspector;
 
 namespace VaporEditor.GraphTools
 {
@@ -16,6 +17,7 @@ namespace VaporEditor.GraphTools
 
         private List<(PortInAttribute portAtr, Type[] portTypes)> _inPortData;
         private List<(PortOutAttribute portAtr, Type[] portTypes)> _outPortData;
+        private List<FieldInfo> _nodeContentData;
 
         public NParamEditorToken(GraphEditorView<T> view, NodeSo node, EditorLabelVisualData visualData) : base(null, null)
         {
@@ -48,6 +50,7 @@ namespace VaporEditor.GraphTools
                 ico.style.marginBottom = 4;
             }
 
+            StyleNode();
             CreateTitle(node.Name);
 
             CreateFlowInPort();
@@ -64,6 +67,7 @@ namespace VaporEditor.GraphTools
             // Loop through each field and check if it has the MathNodeParamAttribute
             _inPortData = new();
             _outPortData = new();
+            _nodeContentData = new();
             foreach (FieldInfo field in fields)
             {
                 if (field.IsDefined(typeof(PortInAttribute)))
@@ -76,10 +80,22 @@ namespace VaporEditor.GraphTools
                     var atr = field.GetCustomAttribute<PortOutAttribute>();
                     _outPortData.Add((atr, atr.PortTypes));
                 }
+                else if (field.IsDefined(typeof(NodeContentAttribute)))
+                {
+                    _nodeContentData.Add(field);
+                }
             }
 
             _inPortData.Sort((l, r) => l.portAtr.PortIndex.CompareTo(r.portAtr.PortIndex));
             _outPortData.Sort((l, r) => l.portAtr.PortIndex.CompareTo(r.portAtr.PortIndex));
+        }
+
+        private void StyleNode()
+        {
+            var nodeType = Node.GetType();
+            var width = nodeType.GetCustomAttribute<NodeWidthAttribute>();
+            if (width != null)
+                style.minWidth = width.MinWidth;
         }
 
         private void CreateTitle(string title)
@@ -213,6 +229,20 @@ namespace VaporEditor.GraphTools
                 }
             }
             _outPortData.Clear();
+        }
+
+        protected virtual void CreateAdditionalContent(VisualElement content)
+        {
+            if (_nodeContentData.Count > 0)
+            {
+                var foldout = new StyledFoldout("Content");
+                foreach (var field in _nodeContentData)
+                {
+                    var ve = DrawerUtility.DrawVaporFieldFromType(Node, field);
+                    foldout.Add(ve);
+                }
+                content.Add(foldout);
+            }
         }
     }
 }

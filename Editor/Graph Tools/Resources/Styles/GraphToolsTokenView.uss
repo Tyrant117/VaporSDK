@@ -9,10 +9,10 @@
 
 #PropertyTokenView > #disabledOverlay {
     position: absolute;
-    left: 4;
-    right: 4;
-    top: 4;
-    bottom: 4;
+    left: 4px;
+    right: 4px;
+    top: 4px;
+    bottom: 4px;
     background-color: rgba(32, 32, 32, 0);
 }
 

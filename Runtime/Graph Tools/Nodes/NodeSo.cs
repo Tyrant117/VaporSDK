@@ -65,7 +65,7 @@ namespace Vapor.GraphTools
                     var node = nodesToLink.First(node => edge.GuidMatches(node.GetGuid()));
                     port.SetValue(this, node); // Set the port nodes value to this selected node.
                     var portIndex = GetType().GetField($"InConnectedPort_{port.Name}");
-                    Assert.IsNotNull(portIndex, $"There is no public field with the name InConnectedPort_{port.Name}, all fields marked with a PortInAttribute," +
+                    Assert.IsNotNull(portIndex, $"There is no public field with the name InConnectedPort_{port.Name} in {GetType()}, all fields marked with a PortInAttribute," +
                         $" must have an integer field with the name public int InConnectedPort_<PortInAttribute.FieldName>");
                     portIndex.SetValue(this, edge.OutPortIndex); // Set the port nodes connected port to the index that it matches in its child.
                 }
@@ -88,7 +88,7 @@ namespace Vapor.GraphTools
                     var node = nodesToLink.First(x => edge.GuidMatches(x.GetGuid()));
                     port.SetValue(this, node); // Set the port nodes value to this selected node.
                     var portIndex = GetType().GetField($"OutConnectedPort_{port.Name}");
-                    Assert.IsNotNull(portIndex, $"There is no public field with the name OutConnectedPort_{port.Name}, all fields marked with a PortOutAttribute," +
+                    Assert.IsNotNull(portIndex, $"There is no public field with the name OutConnectedPort_{port.Name} in {GetType()}, all fields marked with a PortOutAttribute," +
                         $" must have an integer field with the name public int OutConnectedPort_<PortOutAttribute.FieldName>");
                     portIndex.SetValue(this, edge.InPortIndex); // Set the port nodes connected port to the index that it matches in its child.
                 }

@@ -73,7 +73,7 @@ namespace Vapor.Observables
         /// <summary>
         /// This event is fired when the <see cref="ObservableField"/>s of the class change.
         /// </summary>
-        public event Action<ObservableClass, Observable> Dirtied;
+        public event Action<ObservableClass, Observable> Dirtied = delegate { };
 
         protected ObservableClass(string className)
         {
@@ -128,7 +128,7 @@ namespace Vapor.Observables
 
         internal virtual void MarkDirty(Observable field)
         {
-            Dirtied?.Invoke(this, field);
+            Dirtied.Invoke(this, field);
         }
         #endregion
 
