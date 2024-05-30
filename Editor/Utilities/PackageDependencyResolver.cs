@@ -16,6 +16,7 @@ namespace VaporEditor
         private static ListRequest s_ListRequest;
         private static AddAndRemoveRequest s_AddRemoveRequest;
         private static bool s_ResolveMissing;
+        private static bool s_ForceResolve;
         private static List<string> s_PackagesToLoad;
 
         [MenuItem("Assets/Create/Vapor/Package Manager/Create Dependency File", priority = VaporConfig.AssetMenuPriority, secondaryPriority = 1030)]
@@ -32,13 +33,16 @@ namespace VaporEditor
         [MenuItem("Vapor/Package Manager/Force Resolve Dependencies", priority = 2000, secondaryPriority = 1)]
         private static void ForceResolveDependencies()
         {
-            ResolveDependencies(true, new List<string>());
+            s_ResolveMissing = true;
+            s_ForceResolve = true;
+            CheckingMissingDependencies();
         }
 
         [MenuItem("Vapor/Package Manager/Find Missing Dependencies", priority = 2000, secondaryPriority = 2)]
         private static void FindMissingDependencies()
         {
             s_ResolveMissing = false;
+            s_ForceResolve = false;
             CheckingMissingDependencies();
         }
 
@@ -47,6 +51,7 @@ namespace VaporEditor
             if (!SessionState.GetBool(nameof(PackageDependencyResolver), false))
             {
                 s_ResolveMissing = true;
+                s_ForceResolve = false;
                 CheckingMissingDependencies();
                 SessionState.SetBool(nameof(PackageDependencyResolver), true);
             }
@@ -74,12 +79,15 @@ namespace VaporEditor
                 {
                     FilterDependencies(out List<string> installed, out List<(string, string)> filtered);
 
-                    foreach (var i in installed)
+                    if (!s_ForceResolve)
                     {
-                        var idx = filtered.FindIndex(x => x.Item1 == i);
-                        if (idx != -1)
+                        foreach (var i in installed)
                         {
-                            filtered.RemoveAt(idx);
+                            var idx = filtered.FindIndex(x => x.Item1 == i);
+                            if (idx != -1)
+                            {
+                                filtered.RemoveAt(idx);
+                            }
                         }
                     }
 
@@ -96,11 +104,12 @@ namespace VaporEditor
                     if (s_ResolveMissing)
                     {
                         s_ResolveMissing = false;
+                        s_ForceResolve = false;
                         await Task.Delay(1000);
                         if (result.Count > 0)
                         {
                             Debug.Log($"Resolving [{result.Count}] Missing Packages");
-                            ResolveDependencies(false, result);
+                            ResolveDependencies(result);
                         }
                     }
                 }
@@ -113,31 +122,8 @@ namespace VaporEditor
         #endregion
 
         #region - Resolve Dependencies -
-        private static void ResolveDependencies(bool force, List<string> collection)
+        private static void ResolveDependencies(List<string> collection)
         {
-            if (collection.Count == 0)
-            {
-                FilterDependencies(out List<string> installed, out List<(string, string)> filtered);
-
-                if (!force)
-                {
-                    foreach (var i in installed)
-                    {
-                        var idx = filtered.FindIndex(x => x.Item1 == i);
-                        if (idx != -1)
-                        {
-                            filtered.RemoveAt(idx);
-                        }
-                    }
-                }
-
-                foreach (var f in filtered)
-                {
-                    Debug.Log($"Found Missing Package: {f.Item2}");
-                    collection.Add(f.Item2);
-                }
-            }
-
             if (collection.Count > 0)
             {
                 s_PackagesToLoad = collection;
