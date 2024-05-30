@@ -6,6 +6,7 @@ using UnityEditor;
 using UnityEditor.PackageManager;
 using UnityEditor.PackageManager.Requests;
 using UnityEngine;
+using Vapor;
 
 namespace VaporEditor
 {
@@ -17,7 +18,7 @@ namespace VaporEditor
         private static bool s_ResolveMissing;
         private static List<string> s_PackagesToLoad;
 
-        [MenuItem("Assets/Create/Vapor/Package Manager/Create Dependency File")]
+        [MenuItem("Assets/Create/Vapor/Package Manager/Create Dependency File", priority = VaporConfig.AssetMenuPriority, secondaryPriority = 1030)]
         private static void CreateDependencyFile()
         {
             string json =

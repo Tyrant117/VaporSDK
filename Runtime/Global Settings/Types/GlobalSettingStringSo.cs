@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Vapor.GlobalSettings
 {
-    [CreateAssetMenu(fileName = "GlobalString", menuName = "Vapor/Global Settings/String", order = 10003)]
+    //[CreateAssetMenu(fileName = "GlobalString", menuName = "Vapor/Global Settings/String", order = VaporConfig.GlobalSettingsPriority + 4)]
     public class GlobalSettingStringSo : GlobalSettingSo
     {
         [SerializeField]

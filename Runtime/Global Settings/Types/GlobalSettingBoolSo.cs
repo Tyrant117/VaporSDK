@@ -5,7 +5,7 @@ using Vapor.Keys;
 
 namespace Vapor.GlobalSettings
 {
-    [CreateAssetMenu(fileName = "GlobalBool", menuName = "Vapor/Global Settings/Bool", order = 10000)]
+    //[CreateAssetMenu(fileName = "GlobalBool", menuName = "Vapor/Global Settings/Bool", order = VaporConfig.GlobalSettingsPriority)]
     public class GlobalSettingBoolSo : GlobalSettingSo<bool>
     {
 

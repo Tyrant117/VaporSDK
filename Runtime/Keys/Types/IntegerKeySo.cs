@@ -8,7 +8,7 @@ namespace Vapor.Keys
     /// A scriptable object implementation of the IKey interface that derives its display name from the <see cref="ScriptableObject.name"/>
     /// Has a value that must be set in the editor.
     /// </summary>
-    [CreateAssetMenu(menuName = "Vapor/Keys/Integer Key", fileName = "IntegerKey", order = 6)]
+    //[CreateAssetMenu(menuName = "Vapor/Keys/Integer Key", fileName = "IntegerKey", order = VaporConfig.KeyPriority + 2)]
     public class IntegerKeySo : VaporScriptableObject, IKey
     {
         [FoldoutGroup("Key", "Key Data"), SerializeField, RichTextTooltip("The unique for this object.")]

@@ -5,7 +5,7 @@ using Vapor.Keys;
 
 namespace Vapor.GlobalSettings
 {
-    [CreateAssetMenu(fileName = "GlobalFloat", menuName = "Vapor/Global Settings/Float", order = 10002)]
+    //[CreateAssetMenu(fileName = "GlobalFloat", menuName = "Vapor/Global Settings/Float", order = VaporConfig.GlobalSettingsPriority + 2)]
     public class GlobalSettingFloatSo : GlobalSettingSo<float>
     {
 
