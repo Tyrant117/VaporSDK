@@ -12,7 +12,7 @@ namespace VaporEditor.Keys
         public const string ConfigRelativePath = FolderRelativePath + "/Config";
 
         public const string KeyRootNamespace = "VaporKeyDefinitions";
-        public const string InternalAssemblyReferenceName = "VaporSDK.Keys";
+        public const string InternalAssemblyReferenceName = "VaporSDK";
 
         [InitializeOnLoadMethod]
         private static void SetupFolders()

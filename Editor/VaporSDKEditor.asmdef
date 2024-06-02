@@ -2,7 +2,9 @@
     "name": "VaporSDKEditor",
     "rootNamespace": "VaporEditor",
     "references": [
-        "GUID:50cb284694900174982da26fd2a77ac7"
+        "GUID:50cb284694900174982da26fd2a77ac7",
+        "GUID:4abe2effbf01aba4ebd592e1ea351bc0",
+        "GUID:7c8486679aa4fa64fa9ac048c2376062"
     ],
     "includePlatforms": [
         "Editor"
