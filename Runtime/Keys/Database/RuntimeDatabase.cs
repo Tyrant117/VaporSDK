@@ -27,60 +27,60 @@ namespace Vapor.Keys
             }
             else
             {
-                Console.WriteLine("Method not found.");
+                Debug.Log("Method not found.");
             }
         }
     }
 
     public class RuntimeDatabase<T> where T : Object
     {
-        private static Dictionary<int, T> _db;
-        public static T Get(int id) => _db[id];
-        public static bool TryGet(int id, out T value) => _db.TryGetValue(id, out value);
-        public static IEnumerable<T> All() => _db.Values;
+        private static Dictionary<int, T> s_Db;
+        public static T Get(int id) => s_Db[id];
+        public static bool TryGet(int id, out T value) => s_Db.TryGetValue(id, out value);
+        public static IEnumerable<T> All() => s_Db.Values;
 
         public static void InitDatabase(List<Object> keyValuePairs)
         {
             
-            _db ??= new Dictionary<int, T>();
-            _db.Clear();
+            s_Db ??= new Dictionary<int, T>();
+            s_Db.Clear();
 
             if (typeof(T).GetInterfaces().Any(t => t == typeof(IKey)))
             {
                 var converted = keyValuePairs.OfType<IKey>();
                 foreach (var data in converted)
                 {
-                    _db.Add(data.Key, (T)data);
+                    s_Db.Add(data.Key, (T)data);
                 }
             }
             else
             {
                 foreach (var data in keyValuePairs)
                 {
-                    _db.Add(data.name.GetStableHashU16(), (T)data);
+                    s_Db.Add(data.name.GetStableHashU16(), (T)data);
                 }
             }
-            Debug.Log($"RuntimeDatabase of type:{typeof(T).Name}. Init! Added: {_db.Count} items!");
+            Debug.Log($"RuntimeDatabase of type:{typeof(T).Name}. Init! Added: {s_Db.Count} items!");
         }
 
         public static void InitKeyDatabase<U>(KeyDatabaseSo<U> db) where U : ScriptableObject, IKey, T
         {
             Debug.Log($"RuntimeDatabase of type:{typeof(T).Name}. Init!");
-            _db.Clear();
+            s_Db.Clear();
             foreach (var data in db.Data)
             {
-                _db.Add(data.Key, data);
+                s_Db.Add(data.Key, data);
             }
         }
 
         public static void InitValueDatabase<U>(TypeDatabaseSo<U> db) where U : Object, T
         {
             Debug.Log($"RuntimeDatabase of type:{typeof(T).Name}. Init!");
-            _db.Clear();
+            s_Db.Clear();
 
             foreach (var data in db.Data)
             {
-                _db.Add(data.name.GetStableHashU16(), data);
+                s_Db.Add(data.name.GetStableHashU16(), data);
             }
         }
     }

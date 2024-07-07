@@ -47,6 +47,14 @@ namespace Vapor.StateMachine
 
         public bool IsEnabled { get; protected set; }
 
+        public IEnumerable<T> States<T>() where T : State
+        {
+            foreach (var state in _nameToStateBundle)
+            {
+                yield return (T)state.Value.State;
+            }
+        }
+
         protected (int state, bool hasState) _startState = (EmptyState, false);
         protected PendingState _pendingState = PendingState.Default;
 
@@ -454,7 +462,7 @@ namespace Vapor.StateMachine
 
         public T GetState<T>(int name) where T : State
         {
-            if (!_nameToStateBundle.TryGetValue(name.GetHashCode(), out StateBundle bundle) || bundle.State == null)
+            if (!_nameToStateBundle.TryGetValue(name, out StateBundle bundle) || bundle.State == null)
             {
                 if (_stateToStringMap.TryGetValue(name, out string nameString))
                 {
@@ -466,6 +474,25 @@ namespace Vapor.StateMachine
                 }
             }
             return bundle.State as T;
+        }
+
+        public bool TryGetState<T>(int name, out T state) where T : State
+        {
+            if (!_nameToStateBundle.TryGetValue(name, out StateBundle bundle) || bundle.State == null)
+            {
+                state = null;
+                return false;
+            }
+            else
+            {
+                state = (T)bundle.State;
+                return true;
+            }
+        }
+
+        public bool HasState(int name)
+        {
+            return _nameToStateBundle.ContainsKey(name);
         }
         #endregion
 
