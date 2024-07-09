@@ -31,12 +31,17 @@ namespace VaporEditor.Keys
             }
 
             string name = property.displayName;
-            if(fieldInfo == typeof(List<KeyDropdownValue>))
+            if (fieldInfo.FieldType == typeof(List<KeyDropdownValue>))
             {
                 var outerProp = property.serializedObject.FindProperty(fieldInfo.Name);
-                var list = (List<KeyDropdownValue>)outerProp.boxedValue;
-                int index = list.IndexOf((KeyDropdownValue)property.boxedValue);
-                name = $"Element {index}";
+                for (int i = 0; i < outerProp.arraySize; i++)
+                {
+                    if (property.propertyPath == outerProp.GetArrayElementAtIndex(i).propertyPath)
+                    {
+                        name = $"Element {i}";
+                        break;
+                    }
+                }
             }
 
             ConvertToTupleList(keys, values, GetKeysField(atr.AssemblyQualifiedType, atr.Resolver));
