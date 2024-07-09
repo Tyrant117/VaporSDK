@@ -29,8 +29,18 @@ namespace VaporEditor.Keys
                 return new Label($"{property.displayName} must have a fully qualified type. " +
                     $"\nMust resolve to a Tuple<{TooltipMarkup.LangWordMarkup("string")},{TooltipMarkup.StructMarkup(nameof(KeyDropdownValue))}>");
             }
-            ConvertToTupleList(keys, values, GetKeysField(atr.AssemblyQualifiedType, atr.Resolver[1..]));
-            var foldout = new StyledFoldoutProperty(property.displayName);
+
+            string name = property.displayName;
+            if(fieldInfo == typeof(List<KeyDropdownValue>))
+            {
+                var outerProp = property.serializedObject.FindProperty(fieldInfo.Name);
+                var list = (List<KeyDropdownValue>)outerProp.boxedValue;
+                int index = list.IndexOf((KeyDropdownValue)property.boxedValue);
+                name = $"Element {index}";
+            }
+
+            ConvertToTupleList(keys, values, GetKeysField(atr.AssemblyQualifiedType, atr.Resolver));
+            var foldout = new StyledFoldoutProperty(name);
             var tooltip = "";
             if (fieldInfo.IsDefined(typeof(RichTextTooltipAttribute), true))
             {

@@ -470,7 +470,7 @@ namespace Vapor.Keys
         private static void FormatAttributeName(StringBuilder sb, string namespaceName, string className)
         {
             sb.Append($"\t\tpublic const string AssemblyQualifiedClassName = \"{namespaceName}.{className}, {namespaceName}, version=1.0.0.0, Culture=neutral, PublicKeyToken=null\";\n");
-            sb.Append($"\t\tpublic const string FieldName = \"%DropdownValues\";\n");
+            sb.Append($"\t\tpublic const string FieldName = \"$DropdownValues\";\n");
         }
 
         private static void FormatEnum(StringBuilder sb, List<KeyValuePair> keys)
