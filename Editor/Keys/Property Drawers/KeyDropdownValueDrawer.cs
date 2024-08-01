@@ -24,27 +24,43 @@ namespace VaporEditor.Keys
             {
                 return new Label($"{property.displayName} must implement {TooltipMarkup.ClassMarkup(nameof(ValueDropdownAttribute))}");
             }
-            if(atr.AssemblyQualifiedType == null)
+            IList convert;
+            if (atr.AssemblyQualifiedType == null)
             {
-                return new Label($"{property.displayName} must have a fully qualified type. " +
-                    $"\nMust resolve to a Tuple<{TooltipMarkup.LangWordMarkup("string")},{TooltipMarkup.StructMarkup(nameof(KeyDropdownValue))}>");
+                var mi = ReflectionUtility.GetMember(fieldInfo.DeclaringType, atr.Resolver);
+                if (!ReflectionUtility.TryResolveMemberValue<IList>(null, mi, null, out convert))
+                {
+                    return new Label($"{property.displayName} must have a fully qualified type. " +
+                        $"\nMust resolve to a Tuple<{TooltipMarkup.LangWordMarkup("string")},{TooltipMarkup.StructMarkup(nameof(KeyDropdownValue))}>");
+                }
+            }else
+            {
+                convert = GetKeysField(atr.AssemblyQualifiedType, atr.Resolver);
             }
 
             string name = property.displayName;
+            float? fixedWidth = null;
             if (fieldInfo.FieldType == typeof(List<KeyDropdownValue>))
             {
-                var outerProp = property.serializedObject.FindProperty(fieldInfo.Name);
+                int index = property.propertyPath.IndexOf(".Array");
+
+                // If ".Array" is found, return the substring before it; otherwise, return the original string
+                var propName = index >= 0 ? property.propertyPath.Substring(0, index) : fieldInfo.Name;
+
+                var outerProp = property.serializedObject.FindProperty(propName);
                 for (int i = 0; i < outerProp.arraySize; i++)
                 {
                     if (property.propertyPath == outerProp.GetArrayElementAtIndex(i).propertyPath)
                     {
                         name = $"Element {i}";
+                        fixedWidth = 120f;
                         break;
                     }
                 }
+                
             }
 
-            ConvertToTupleList(keys, values, GetKeysField(atr.AssemblyQualifiedType, atr.Resolver));
+            ConvertToTupleList(keys, values, convert);
             var foldout = new StyledFoldoutProperty(name);
             var tooltip = "";
             if (fieldInfo.IsDefined(typeof(RichTextTooltipAttribute), true))
@@ -55,7 +71,8 @@ namespace VaporEditor.Keys
             if (atr.Searchable)
             {
                 var indexOfCurrent = values.IndexOf((KeyDropdownValue)property.boxedValue);
-                var dropdown = new SearchableDropdown<string>("", keys[indexOfCurrent])
+                string current = (indexOfCurrent < 0 || indexOfCurrent > keys.Count - 1) ? "None" : keys[indexOfCurrent];
+                var dropdown = new SearchableDropdown<string>("", current)
                 {
                     name = fieldInfo.Name,
                     userData = (property, values),
@@ -65,7 +82,14 @@ namespace VaporEditor.Keys
                         flexGrow = 1
                     }
                 };
-                dropdown.AddToClassList("unity-base-field__aligned");
+                if (fixedWidth.HasValue)
+                {
+                    dropdown.style.minWidth = fixedWidth.Value;
+                }
+                else
+                {
+                    dropdown.AddToClassList("unity-base-field__aligned");
+                }
                 dropdown.SetChoices(keys);
                 dropdown.ValueChanged += OnSearchableDropdownChanged; 
                 foldout.SetHeaderProperty(dropdown);
@@ -74,7 +98,8 @@ namespace VaporEditor.Keys
             {
                 Debug.Log((KeyDropdownValue)property.boxedValue);
                 var indexOfCurrent = values.IndexOf((KeyDropdownValue)property.boxedValue);
-                var dropdown = new DropdownField("", keys, indexOfCurrent)
+                int defaultInex = (indexOfCurrent < 0 || indexOfCurrent > keys.Count - 1) ? 0 : indexOfCurrent;
+                var dropdown = new DropdownField("", keys, defaultInex)
                 {
                     name = fieldInfo.Name,
                     tooltip = tooltip,
@@ -84,7 +109,14 @@ namespace VaporEditor.Keys
                         flexGrow = 1
                     }
                 };
-                dropdown.AddToClassList("unity-base-field__aligned");
+                if (fixedWidth.HasValue)
+                {
+                    dropdown.style.minWidth = fixedWidth.Value;
+                }
+                else
+                {
+                    dropdown.AddToClassList("unity-base-field__aligned");
+                }
                 dropdown.RegisterValueChangedCallback(OnDropdownChanged);
                 foldout.SetHeaderProperty(dropdown);
             }

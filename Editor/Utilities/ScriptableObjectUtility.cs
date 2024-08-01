@@ -36,7 +36,7 @@ namespace VaporEditor
         /// <typeparam name="T">The type of asset to create</typeparam>
         /// <param name="prependFolderName">If true, prepend the selected asset folder name to the asset name</param>
         /// <param name="trimName">If true, remove instances of the "Asset", "Attributes", "Container" strings from the name</param>
-        public static void Create<T>(bool prependFolderName = false, bool trimName = true) where T : ScriptableObject
+        public static string Create<T>(bool prependFolderName = false, bool trimName = true, Action<ScriptableObject> processAsset = null) where T : ScriptableObject
         {
             string className = typeof(T).Name;
             string assetName = className;
@@ -55,22 +55,24 @@ namespace VaporEditor
                 assetName = (string.IsNullOrEmpty(assetName) ? folderName : string.Format("{0}_{1}", folderName, assetName));
             }
 
-            Create(className, assetName, folder);
+            return Create(className, assetName, folder, processAsset);
         }
 
-        private static void Create(string className, string assetName, string folder)
+        private static string Create(string className, string assetName, string folder, Action<ScriptableObject> processAsset)
         {
             var asset = ScriptableObject.CreateInstance(className);
             if (asset == null)
             {
                 Debug.LogError("failed to create instance of " + className);
-                return;
+                return string.Empty;
             }
 
             asset.name = assetName ?? className;
+            processAsset?.Invoke(asset);
 
             string assetPath = AssetDatabase.GenerateUniqueAssetPath($"{folder}/{asset.name}.asset");
             ProjectWindowUtil.CreateAsset(asset, assetPath);
+            return assetPath;
         }
 
         private static string GetSelectedAssetFolder()

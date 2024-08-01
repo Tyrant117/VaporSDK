@@ -12,8 +12,9 @@ namespace Vapor.Events
     /// </summary>
     public static class EventKeyUtility
     {
-        private static Type _eventKeyType;
-        private static Type _providerKeyType;        
+        private const string s_NameOfEventKeysType = "EventKeys";
+        private const string s_NameOfProviderKeysType = "ProviderKeys";
+
         /// <summary>
         /// Gets a list of all <see cref="EventKeySo"/> in the project. Will return null if not in the UNITY_EDITOR
         /// </summary>
@@ -30,19 +31,7 @@ namespace Vapor.Events
         /// <returns>Returns either the EventKeyKeys.DropdownValues or a list with the "None" value if the EventKeyKeys does not exist.</returns>
         public static List<(string, KeyDropdownValue)> GetAllEventKeyValues()
         {
-            if (_eventKeyType != null)
-            {
-                return (List<(string, KeyDropdownValue)>)_eventKeyType.GetField("DropdownValues", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-            }
-            
-            var assembly = Assembly.Load("VaporKeyDefinitions");
-            _eventKeyType = assembly.GetType("VaporKeyDefinitions.EventKeys");
-            if (_eventKeyType == null)
-            {
-                return new List<(string, KeyDropdownValue)>() { ("None", new KeyDropdownValue()) };
-            }
-
-            return (List<(string, KeyDropdownValue)>)_eventKeyType.GetField("DropdownValues", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            return KeyUtility.GetAllKeysOfNamedType(s_NameOfEventKeysType);
         }
 
         /// <summary>
@@ -61,19 +50,7 @@ namespace Vapor.Events
         /// <returns>Returns either the ProviderKeyKeys.DropdownValues or a list with the "None" value if the ProviderKeyKeys does not exist.</returns>
         public static List<(string, KeyDropdownValue)> GetAllProviderKeyValues()
         {
-            if (_providerKeyType != null)
-            {
-                return (List<(string, KeyDropdownValue)>)_providerKeyType.GetField("DropdownValues", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-            }
-            
-            var assembly = Assembly.Load("VaporKeyDefinitions");
-            _providerKeyType = assembly.GetType("VaporKeyDefinitions.ProviderKeys");
-            if (_providerKeyType == null)
-            {
-                return new List<(string, KeyDropdownValue)>() { ("None", new KeyDropdownValue()) };
-            }
-
-            return (List<(string, KeyDropdownValue)>)_providerKeyType.GetField("DropdownValues", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            return KeyUtility.GetAllKeysOfNamedType(s_NameOfProviderKeysType);
         }        
     }
 }

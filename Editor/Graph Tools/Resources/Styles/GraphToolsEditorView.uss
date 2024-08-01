@@ -7,16 +7,16 @@
 
 }
 
-#GraphEditorView > #content {
+#GraphEditorView > #contentViewContainer {
     flex: 1;
-    flex-direction: row;
+    /* flex-direction: row; */
 }
 
-#GraphEditorView > #content > #GraphView {
+#GraphEditorView > #contentViewContainer > .graphView {
     flex: 1;
 }
 
-#GraphEditorView > #content > #inspector {
+#GraphEditorView > #contentViewContainer > #inspector {
     width: 400px;
 }
 

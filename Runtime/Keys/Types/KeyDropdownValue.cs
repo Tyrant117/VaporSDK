@@ -43,7 +43,7 @@ namespace Vapor.Keys
         /// <summary>
         /// If true, this is a "None" key.
         /// </summary>
-        public bool IsNone => Key == 0;
+        public readonly bool IsNone => Key == 0;
 
         /// <summary>
         /// Creates a new KeyDropdownValue.
@@ -86,24 +86,15 @@ namespace Vapor.Keys
 #endif
         }
 
-        public override string ToString()
-        {
-            return $"Key: {Key} belonging to {Guid}";
-        }
+        public override readonly string ToString() => $"Key: {Key} belonging to {Guid}";
 
-        public override bool Equals(object obj)
+        public override readonly bool Equals(object obj)
         {
             return obj is KeyDropdownValue other && Equals(other);
         }
 
-        public bool Equals(KeyDropdownValue other)
-        {
-            return Guid == other.Guid && Key == other.Key;
-        }
+        public readonly bool Equals(KeyDropdownValue other) => Guid == other.Guid && Key == other.Key;
 
-        public override int GetHashCode()
-        {
-            return HashCode.Combine(Guid, Key);
-        }
+        public override readonly int GetHashCode() => HashCode.Combine(Guid, Key);
     }
 }

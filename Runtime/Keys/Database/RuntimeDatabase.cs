@@ -27,7 +27,7 @@ namespace Vapor.Keys
             }
             else
             {
-                Debug.Log("Method not found.");
+                Debug.LogError("[RuntimeDatabaseUtility] Method not found.");
             }
         }
     }

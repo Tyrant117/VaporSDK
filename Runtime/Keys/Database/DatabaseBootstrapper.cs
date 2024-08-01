@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 
 namespace Vapor.Keys
 {
-    public class DatabaseBootstrapper : MonoBehaviour
+    public static class DatabaseBootstrapper
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Init()
