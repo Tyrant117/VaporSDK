@@ -1,0 +1,17 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:vi="Vapor.Inspector" editor-extension-mode="True">
+    <ui:VisualElement name="content" picking-mode="Ignore">
+        <ui:VisualElement name="header" picking-mode="Ignore">
+            <ui:VisualElement name="labelContainer" picking-mode="Ignore">
+                <ui:Label name="titleLabel" />
+                <ui:Label name="subTitleLabel" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:ScrollView name="scrollView" class="unity-scroll-view unity-scroll-view--scroll unity-scroll-view--vertical" />
+        <ui:VisualElement name="contentContainer" picking-mode="Ignore" />
+        <ui:TabView name="GraphInspectorView">
+            <ui:Tab label="Node Settings" name="NodeSettingsContainer" />
+            <ui:Tab label="Graph Settings" name="GraphSettingsContainer" />
+        </ui:TabView>
+    </ui:VisualElement>
+    <vi:ResizableElement />
+</ui:UXML>

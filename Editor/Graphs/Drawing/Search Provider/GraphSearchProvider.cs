@@ -9,7 +9,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using Vapor.Graphs;
 using Vapor.Keys;
-using Node = Vapor.Graphs.Node;
+using NodeModel = Vapor.Graphs.NodeModel;
 using Object = UnityEngine.Object;
 
 namespace VaporEditor.Graphs
@@ -17,11 +17,11 @@ namespace VaporEditor.Graphs
     public struct SearchContextElement
     {
         public Type NodeType { get; private set; }
-        public string MenuName { get; private set; }
+        public string[] MenuName { get; private set; }
         public object UserData { get; private set; }
 
 
-        public SearchContextElement(Type nodeType, string title, object userData = null)
+        public SearchContextElement(Type nodeType, string[] title, object userData = null)
         {
             NodeType = nodeType;
             MenuName = title;
@@ -62,22 +62,21 @@ namespace VaporEditor.Graphs
             var groups = new List<string>();
             foreach (var e in Elements)
             {
-                var split = e.MenuName.Split('/');
                 var groupName = new StringBuilder();
-                for (int i = 0; i < split.Length - 1; i++)
+                for (int i = 0; i < e.MenuName.Length - 1; i++)
                 {
-                    groupName.Append(split[i]);
+                    groupName.Append(e.MenuName[i]);
                     if (!groups.Contains(groupName.ToString()))
                     {
-                        tree.Add(new SearchTreeGroupEntry(new GUIContent(split[i]), i + 1));
+                        tree.Add(new SearchTreeGroupEntry(new GUIContent(e.MenuName[i]), i + 1));
                         groups.Add(groupName.ToString());
                     }
                     groupName.Append("/");
                 }
 
-                var entry = new SearchTreeEntry(new GUIContent(split[^1]))
+                var entry = new SearchTreeEntry(new GUIContent(e.MenuName[^1]))
                 {
-                    level = split.Length,
+                    level = e.MenuName.Length,
                     userData = e,
                 };
                 tree.Add(entry);
@@ -92,8 +91,8 @@ namespace VaporEditor.Graphs
         /// <param name="node"></param>
         private void FilterNewNode(Type nodeType, SearchableNodeAttribute attribute)
         {
-            if (string.IsNullOrEmpty(attribute.MenuName)) { return; }
-            if (nodeType.IsSubclassOf(typeof(Node)))
+            if (attribute.MenuName.Length == 0) { return; }
+            if (nodeType.IsSubclassOf(typeof(NodeModel)))
             {
                 if (attribute.TypeCollection != null)
                 {
@@ -105,7 +104,11 @@ namespace VaporEditor.Graphs
                             foreach (var item in collection)
                             {
                                 ValueTuple<string, Type> containerTarget = new(AssetDatabase.GetAssetPath(item), item.GetType());
-                                Elements.Add(new SearchContextElement(nodeType, $"{attribute.MenuName}/{item.name}", containerTarget));
+
+                                string[] menu = new string[attribute.MenuName.Length + 1];
+                                Array.Copy(attribute.MenuName, menu, attribute.MenuName.Length);
+                                menu[^1] = item.name;
+                                Elements.Add(new SearchContextElement(nodeType, menu, containerTarget));
                             }
                         }
                     }
@@ -115,7 +118,11 @@ namespace VaporEditor.Graphs
                         foreach (var item in collection)
                         {
                             ValueTuple<string, Type> containerTarget = new(AssetDatabase.GetAssetPath(item), item.GetType());
-                            Elements.Add(new SearchContextElement(nodeType, $"{attribute.MenuName}/{item.name}", containerTarget));
+
+                            string[] menu = new string[attribute.MenuName.Length + 1];
+                            Array.Copy(attribute.MenuName, menu, attribute.MenuName.Length);
+                            menu[^1] = item.name;
+                            Elements.Add(new SearchContextElement(nodeType, menu, containerTarget));
                         }
                     }
                 }
@@ -139,33 +146,26 @@ namespace VaporEditor.Graphs
         private void SortElements()
         {
             // Sort
-            Elements.Sort((e1, e2) =>
+            Elements.Sort((entry1, entry2) =>
             {
-                var s1 = e1.MenuName.Split('/');
-                var s2 = e2.MenuName.Split('/');
-                for (int i = 0; i < s1.Length; i++)
+                for (var i = 0; i < entry1.MenuName.Length; i++)
                 {
-                    if (i >= s2.Length)
-                    {
+                    if (i >= entry2.MenuName.Length)
                         return 1;
-                    }
-                    else
+                    var value = entry1.MenuName[i].CompareTo(entry2.MenuName[i]);
+                    if (value != 0)
                     {
-                        var value = s1[i].CompareTo(s2[i]);
-                        if (value != 0)
+                        // Make sure that leaves go before nodes
+                        if (entry1.MenuName.Length != entry2.MenuName.Length && (i == entry1.MenuName.Length - 1 || i == entry2.MenuName.Length - 1))
                         {
-                            if (s1.Length != s2.Length && (i == s1.Length - 1 || i == s2.Length - 1))
-                            {
-                                return s1.Length < s2.Length ? 1 : -1;
-                            }
-                            else
-                            {
-                                return value;
-                            }
+                            //once nodes are sorted, sort slot entries by slot order instead of alphebetically
+                            var alphaOrder = entry1.MenuName.Length < entry2.MenuName.Length ? -1 : 1;
+                            return alphaOrder.CompareTo(0);
                         }
+
+                        return value;
                     }
                 }
-
                 return 0;
             });
         }
@@ -173,17 +173,18 @@ namespace VaporEditor.Graphs
         public bool OnSelectEntry(SearchTreeEntry SearchTreeEntry, SearchWindowContext context)
         {
             var mousePos = View.ChangeCoordinatesTo(View, context.screenMousePosition - View.Window.position.position);
-            var graphMousePos = View.contentViewContainer.WorldToLocal(mousePos);
+            var graphMousePos = View.GraphView.contentViewContainer.WorldToLocal(mousePos);
 
             var element = (SearchContextElement)SearchTreeEntry.userData;
 
-            if (element.NodeType.IsSubclassOf(typeof(Node)))
+            if (element.NodeType.IsSubclassOf(typeof(NodeModel)))
             {
                 var n = Activator.CreateInstance(element.NodeType);
-                if (n is Node node)
+                if (n is NodeModel node)
                 {
                     node.Position = new Rect(graphMousePos, Vector2.zero);
-                    node.Guid = Node.CreateGuid();
+                    node.Guid = NodeModel.CreateGuid();
+                    node.NodeType = node.GetType().AssemblyQualifiedName;
                     if (element.UserData != null)
                     {
                         if (element.UserData is ValueTuple<string, Type> assetContainer)

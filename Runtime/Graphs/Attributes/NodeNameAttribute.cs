@@ -1,6 +1,6 @@
 using System;
 
-namespace Vapor
+namespace Vapor.Graphs
 {
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
     public class NodeNameAttribute : Attribute

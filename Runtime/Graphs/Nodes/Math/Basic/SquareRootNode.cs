@@ -3,32 +3,45 @@ using UnityEngine;
 
 namespace Vapor.Graphs
 {
+    public class SquareRootNode : INode, IReturnNode<double>
+    {
+        public uint Id { get; }
+
+        public readonly IReturnNode<double> A;
+
+        private readonly int _aPort;
+
+        public SquareRootNode(string guid, NodePortTuple a)
+        {
+            Id = guid.GetStableHashU32();
+            A = (IReturnNode<double>)a.Node;
+            _aPort = a.Port;
+        }
+
+        public double GetValue(IGraphOwner owner, int portIndex = 0)
+        {
+            return Math.Sqrt(A.GetValue(owner, _aPort));
+        }
+    }
+
     [SearchableNode("Math/Basic/Square Root", "Square Root", "math")]
-    public class SquareRootNode : MathNode
+    public class SquareRootNodeModel : NodeModel
     {
         [PortIn("A", 0, true, typeof(double))]
-        public Node A;
+        public NodeReference A;
 
         [PortOut("Out", 0, true, typeof(double))]
-        public Node Out;
+        public NodeReference Out;
 
-        public int InConnectedPort_A;
-        public int OutConnectedPort_Out;
-
-        [NonSerialized]
-        private bool _hasInit;
-        [NonSerialized]
-        private IEvaluatorNode<double, IExternalValueSource> _a;
-
-        public override double Evaluate(IExternalValueSource arg)
+        public override INode Build(GraphModel graph)
         {
-            if (!_hasInit)
+            if (NodeRef != null)
             {
-                _a = (IEvaluatorNode<double, IExternalValueSource>)A;
-                _hasInit = true;
+                return NodeRef;
             }
 
-            return Math.Sqrt(_a.Evaluate(arg));
+            NodeRef = new SquareRootNode(Guid, new(graph.Get(A).Build(graph), A.PortIndex));
+            return NodeRef;
         }
     }
 }

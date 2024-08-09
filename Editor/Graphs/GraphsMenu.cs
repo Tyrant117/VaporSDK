@@ -1,4 +1,6 @@
+using Newtonsoft.Json;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEditor.Callbacks;
@@ -39,14 +41,21 @@ namespace VaporEditor.Graphs
         [MenuItem("Assets/Create/Vapor/Graphs/Create Math Graph", priority = VaporConfig.AssetMenuPriority, secondaryPriority = 500)]
         private static void CreateMathGraph()
         {
-            MathGraph graph = new();
-            var json = JsonUtility.ToJson(graph);
+            MathGraphModel graph = new();
+            var json = JsonConvert.SerializeObject(graph, new JsonSerializerSettings()
+            { 
+                ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
+                ContractResolver = new FieldsOnlyContractResolver(),
+                Converters = new List<JsonConverter> { new RectConverter() },
+                TypeNameHandling = TypeNameHandling.Auto,
+                Formatting = Formatting.Indented
+            });
             var path = ScriptableObjectUtility.Create<GraphSo>(processAsset: (x) =>
             {
                 var so = (GraphSo)x;
-                so.GraphType = typeof(MathGraph).AssemblyQualifiedName;
+                so.ModelType = typeof(MathGraphModel).AssemblyQualifiedName;
                 so.SearchIncludeFlags.Add("math");
-                so.JsonGraph = json;
+                so.ModelJson = json;
             });
 
             //ProjectWindowUtil.CreateAssetWithContent("MathGraph.graph", json, Resources.Load<Texture2D>("chart-line"));

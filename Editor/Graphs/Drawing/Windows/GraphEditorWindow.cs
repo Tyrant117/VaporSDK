@@ -1,4 +1,6 @@
+using Newtonsoft.Json;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEditor.UIElements;
@@ -11,7 +13,8 @@ namespace VaporEditor.Graphs
 {
     public class GraphEditorWindow : EditorWindow
     {
-        public string SelectedGuid { get; internal set; }
+        public string SelectedGuid { get; set; }
+
         private GraphObject _graphObject;
         public GraphObject GraphObject
         {
@@ -19,7 +22,10 @@ namespace VaporEditor.Graphs
             set
             {
                 if (_graphObject != null)
+                {
                     DestroyImmediate(_graphObject);
+                }
+
                 _graphObject = value;
             }
         }
@@ -40,19 +46,14 @@ namespace VaporEditor.Graphs
 
                 if (_graphEditorView != null)
                 {
-                    //_graphEditorView.saveRequested += () => SaveAsset();
-                    //_graphEditorView.saveAsRequested += SaveAs;
-                    //_graphEditorView.convertToSubgraphRequested += ToSubGraph;
-                    //_graphEditorView.showInProjectRequested += PingAsset;
-                    //_graphEditorView.isCheckedOut += IsGraphAssetCheckedOut;
-                    //_graphEditorView.checkOut += CheckoutAsset;
+                    _graphEditorView.SaveRequested += () => SaveAsset();
+                    _graphEditorView.ShowInProjectRequested += PingAsset;
                     _graphEditorView.RegisterCallbackOnce<GeometryChangedEvent>(OnGeometryChanged);
                     _frameAllAfterLayout = true;
                     rootVisualElement.Add(_graphEditorView);
                 }
             }
         }
-
 
         private string _lastSerializedFileContents;
         [NonSerialized]
@@ -85,19 +86,16 @@ namespace VaporEditor.Graphs
             SelectedGuid = assetGuid;
             string graphName = Path.GetFileNameWithoutExtension(path);
 
-            _lastSerializedFileContents = asset.JsonGraph;// File.ReadAllText(path);
-            var graph = JsonUtility.FromJson<Graph>(_lastSerializedFileContents);
+            _lastSerializedFileContents = asset.ModelJson;
             GraphObject = CreateInstance<GraphObject>();
             GraphObject.hideFlags = HideFlags.HideAndDontSave;
-            GraphObject.Setup(graph);
+            GraphObject.Setup(_lastSerializedFileContents, Type.GetType(asset.ModelType));
             GraphObject.Validate();
 
-            GraphEditorView = new (asset.SearchIncludeFlags)
+            GraphEditorView = new(this, GraphObject, graphName, asset.SearchIncludeFlags)
             {
                 viewDataKey = SelectedGuid,
             };
-
-            //CreateEditorView(asset, graphName);
 
             UpdateTitle();
 
@@ -154,8 +152,7 @@ namespace VaporEditor.Graphs
 
             if (_frameAllAfterLayout)
             {
-                GraphEditorView?.FrameAll();
-                //GraphEditorView?.GraphView?.FrameAll();
+                GraphEditorView?.GraphView?.FrameAll();
             }
 
             _frameAllAfterLayout = false;
@@ -187,9 +184,17 @@ namespace VaporEditor.Graphs
                     SelectedGuid = null;
                     Initialize(guid);
                 }
+
+                if (GraphObject == null)
+                {
+                    Close();
+                    return;
+                }
             }
             catch(Exception e)
             {
+                _graphEditorView = null;
+                GraphObject = null;
                 Debug.LogException(e);
                 throw;
             }
@@ -200,6 +205,39 @@ namespace VaporEditor.Graphs
         {
             var assetPath = AssetDatabase.GUIDToAssetPath(SelectedGuid);
             return File.Exists(assetPath);
+        }
+
+        public bool SaveAsset()
+        {
+            bool saved = false;
+            if (SelectedGuid != null && GraphObject != null)
+            {
+                Debug.Log("Save Called");
+                var mainAsset = AssetDatabase.LoadAssetAtPath<GraphSo>(AssetDatabase.GUIDToAssetPath(SelectedGuid));
+
+                mainAsset.ModelJson = GraphObject.Serialize();
+
+                EditorUtility.SetDirty(mainAsset);
+                AssetDatabase.SaveAssetIfDirty(mainAsset);
+
+                EditorUtility.ClearDirty(GraphObject);
+                hasUnsavedChanges = false;
+                saved = true;
+            }
+
+            UpdateTitle();
+
+            return saved;
+        }
+
+        public void PingAsset()
+        {
+            if (SelectedGuid != null)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(SelectedGuid);
+                var asset = AssetDatabase.LoadAssetAtPath<Object>(path);
+                EditorGUIUtility.PingObject(asset);
+            }
         }
 
         private string GetSaveChangesMessage()

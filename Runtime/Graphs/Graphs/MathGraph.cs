@@ -2,26 +2,54 @@ using UnityEngine;
 
 namespace Vapor.Graphs
 {
-    [System.Serializable]
-    public class MathGraph : Graph, IEvaluatorNode<double, IExternalValueSource>
+    public class MathGraph : IGraph, IEvaluatorNode<double, IExternalValueSource>
     {
-        private bool _isInit;
-        private MathRootNode _root;
+        public uint Id { get; }
 
-        public MathGraph()
+        public readonly IEvaluatorNode<double, IExternalValueSource> Root;
+
+        public MathGraph(INode root)
         {
-            AssemblyQualifiedType = GetType().AssemblyQualifiedName;
+            Root = (IEvaluatorNode<double, IExternalValueSource>)root;
+        }        
+
+        public double Evaluate(GraphModel graph, IExternalValueSource arg)
+        {
+            return Root.Evaluate(graph, arg);
+        }
+    }
+
+    [System.Serializable]
+    public class MathGraphModel : GraphModel
+    {
+        public MathGraphModel()
+        {
+            AssemblyQualifiedType = GetType();
         }
 
-        public double Evaluate(IExternalValueSource arg)
+        public override IGraph Build(bool refresh = false)
         {
-            if(!_isInit)
+            if (refresh)
             {
-                _root = (MathRootNode)Root;
-                _isInit = true;
+                Root.Refresh();
+                foreach (var c in Children)
+                {
+                    c.Refresh();
+                }
             }
 
-            return _root.Evaluate(arg);
+            var root = Root.Build(this);
+            return new MathGraph(root);
+        }
+
+        public override NodeModel GenerateDefaultRootNode()
+        {
+            var root = new MathEvaluateNodeModel
+            {
+                Guid = NodeModel.CreateGuid(),
+                NodeType = typeof(MathEvaluateNodeModel).AssemblyQualifiedName
+            };
+            return root;
         }
     }
 }

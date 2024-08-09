@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Vapor
+namespace Vapor.Graphs
 {
     public interface IExternalValueSource
     {

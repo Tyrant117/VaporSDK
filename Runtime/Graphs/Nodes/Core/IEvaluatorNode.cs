@@ -1,9 +1,9 @@
 using UnityEngine;
 
-namespace Vapor
+namespace Vapor.Graphs
 {
     public interface IEvaluatorNode<T, U>
     {
-        T Evaluate(U arg);
+        T Evaluate(GraphModel graph, U arg);
     }
 }
