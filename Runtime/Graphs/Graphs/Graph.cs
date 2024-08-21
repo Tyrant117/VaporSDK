@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using UnityEngine;
+using UnityEngine.UIElements;
 using Vapor.Inspector;
 
 namespace Vapor.Graphs
@@ -21,25 +23,29 @@ namespace Vapor.Graphs
     public class GraphModel
     {
         public Type AssemblyQualifiedType;
-        public NodeModel Root;
+        public NodeModel Entry;
+        public NodeModel Exit;
         public List<NodeModel> Children;
 
         public virtual IGraph Build(bool refresh = false)
         {
             if (refresh)
             {
-                Root.Refresh();
+                Exit.Refresh();
                 foreach (var c in Children)
                 {
                     c.Refresh();
                 }
             }
 
-            var root = Root.Build(this);
+            var root = Exit.Build(this);
             return new Graph(root);
         }
 
-        public virtual NodeModel GenerateDefaultRootNode() { return null; }
+        public virtual NodeModel GenerateDefaultEntryNode() { return null; }
+        public virtual NodeModel GenerateDefaultExitNode() { return null; }
+
+        public virtual object ElementToDraw(out FieldInfo[] fields) { fields = null;  return null; }
 
         internal NodeModel Get(NodeReference a)
         {

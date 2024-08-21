@@ -6,12 +6,12 @@ namespace Vapor.Graphs
     public struct NodeReference : IEquatable<NodeReference>
     {
         public string Guid;
-        public int PortIndex;
+        public string PortName;
 
-        public NodeReference(string guid, int portIndex)
+        public NodeReference(string guid, string portName)
         {
             Guid = guid;
-            PortIndex = portIndex;
+            PortName = portName;
         }
 
         public readonly bool Equals(NodeReference other) => Guid == other.Guid;
@@ -20,6 +20,6 @@ namespace Vapor.Graphs
 
         public override readonly int GetHashCode() => HashCode.Combine(Guid);
 
-        public override readonly string ToString() => $"{Guid} : {PortIndex}";
+        public override readonly string ToString() => $"{Guid} : {PortName}";
     }
 }

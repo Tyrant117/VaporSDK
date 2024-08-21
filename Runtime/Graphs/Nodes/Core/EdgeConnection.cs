@@ -3,16 +3,16 @@ using System;
 namespace Vapor.Graphs
 {
     [Serializable]
-    public class EdgeConnection
+    public class EdgeConnection : IEquatable<EdgeConnection>
     {
-        public int InPortIndex;
-        public int OutPortIndex;
+        public string InPortName;
+        public string OutPortName;
         public string Guid;
 
-        public EdgeConnection(int inPortIndex, int outPortIndex, string guid)
+        public EdgeConnection(string inPortName, string outPortName, string guid)
         {
-            InPortIndex = inPortIndex;
-            OutPortIndex = outPortIndex;
+            InPortName = inPortName;
+            OutPortName = outPortName;
             Guid = guid;
         }
 
@@ -29,12 +29,12 @@ namespace Vapor.Graphs
                 return true;
 
             return Guid == other.Guid &&
-                   OutPortIndex == other.OutPortIndex;
+                   OutPortName == other.OutPortName;
         }
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(Guid, OutPortIndex);
+            return HashCode.Combine(Guid, OutPortName);
         }
     }
 }

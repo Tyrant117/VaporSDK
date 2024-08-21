@@ -11,25 +11,26 @@ namespace VaporEditor.Graphs
         private U _node;
         public U Node { get => _node; protected set => _node = value; }
 
-        public List<Port> InPorts { get; set; } = new();
-        public List<Port> OutPorts { get; set; } = new();
+        public Dictionary<string, Port> InPorts { get; set; } = new();
+        public Dictionary<string, Port> OutPorts { get; set; } = new();
 
         public GraphEditorView View { get; protected set; }
 
-        public event Action<int> ConnectedPort;
-        public event Action<int> DisconnectedPort;
+        public event Action<string> ConnectedPort;
+        public event Action<string> DisconnectedPort;
 
         public NodeModel GetNode() => Node;
 
-        public void OnConnectedInputEdge(int index)
+        public void OnConnectedInputEdge(string portName)
         {
-            ConnectedPort?.Invoke(index);
+            Debug.Log($"Connected {portName}");
+            ConnectedPort?.Invoke(portName);
         }
 
-        public void OnDisconnectedInputEdge(int index)
+        public void OnDisconnectedInputEdge(string portName)
         {
-            Debug.Log($"Disconnected {index}");
-            DisconnectedPort?.Invoke(index);
+            Debug.Log($"Disconnected {portName}");
+            DisconnectedPort?.Invoke(portName);
         }
     }
 }

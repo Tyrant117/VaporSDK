@@ -13,7 +13,7 @@ namespace Vapor.Graphs
             Value = value;
         }
 
-        public double GetValue(IGraphOwner owner, int portIndex) => Value;
+        public double GetValue(IGraphOwner owner, string portName = "") => Value;
     }
 
     [Serializable, SearchableNode("Value Types/Double", "Double"), NodeIsToken]

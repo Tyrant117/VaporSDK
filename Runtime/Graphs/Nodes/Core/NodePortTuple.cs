@@ -5,12 +5,12 @@ namespace Vapor.Graphs
     public readonly struct NodePortTuple
     {
         public readonly INode Node;
-        public readonly int Port;
+        public readonly string PortName;
 
-        public NodePortTuple(INode node, int port)
+        public NodePortTuple(INode node, string portName)
         {
             Node = node;
-            Port = port;
+            PortName = portName;
         }
     }
 }

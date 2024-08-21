@@ -9,20 +9,20 @@ namespace Vapor.Graphs
         public readonly IReturnNode<double> A;
         public readonly IReturnNode<double> B;
 
-        private readonly int _aPort;
-        private readonly int _bPort;
+        private readonly string _aPort;
+        private readonly string _bPort;
 
         public MultiplyNode(string guid, NodePortTuple a, NodePortTuple b)
         {
             Id = guid.GetStableHashU32();
             A = (IReturnNode<double>)a.Node;
             B = (IReturnNode<double>)b.Node;
-            _aPort = a.Port;
-            _bPort = b.Port;
+            _aPort = a.PortName;
+            _bPort = b.PortName;
 
         }
 
-        public double GetValue(IGraphOwner owner, int portIndex = 0)
+        public double GetValue(IGraphOwner owner, string portName = "")
         {
             return A.GetValue(owner, _aPort) * B.GetValue(owner, _bPort);
         }
@@ -46,7 +46,7 @@ namespace Vapor.Graphs
                 return NodeRef;
             }
 
-            NodeRef = new MultiplyNode(Guid, new(graph.Get(A).Build(graph), A.PortIndex), new(graph.Get(B).Build(graph), B.PortIndex));
+            NodeRef = new MultiplyNode(Guid, new(graph.Get(A).Build(graph), A.PortName), new(graph.Get(B).Build(graph), B.PortName));
             return NodeRef;
         }
     }

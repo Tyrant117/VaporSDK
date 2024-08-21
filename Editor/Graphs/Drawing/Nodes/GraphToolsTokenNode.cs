@@ -8,8 +8,8 @@ namespace VaporEditor.Graphs
         private U _node;
         public U Node { get => _node; protected set => _node = value; }
 
-        public List<Port> InPorts { get; set; } = new();
-        public List<Port> OutPorts { get; set; } = new();
+        public Dictionary<string, Port> InPorts { get; set; } = new();
+        public Dictionary<string, Port> OutPorts { get; set; } = new();
 
         public GraphEditorView View { get; protected set; }
 
@@ -19,12 +19,12 @@ namespace VaporEditor.Graphs
 
         public Vapor.Graphs.NodeModel GetNode() => Node;
 
-        public void OnConnectedInputEdge(int index)
+        public void OnConnectedInputEdge(string portName)
         {
 
         }
 
-        public void OnDisconnectedInputEdge(int index)
+        public void OnDisconnectedInputEdge(string portName)
         {
 
         }

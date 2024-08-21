@@ -160,7 +160,7 @@ namespace VaporEditor.Graphs
                 port.portName = portAtr.Name;
                 port.tooltip = "The flow input";
                 port.styleSheets.Add(_portColors);
-                InPorts.Add(port);
+                InPorts.Add(portAtr.PortIndex.ToString(), port);
                 inVe.Add(port);
 
                 if(_portContentData.TryGetValue(portAtr.PortIndex, out var field))
@@ -172,7 +172,7 @@ namespace VaporEditor.Graphs
             if (inGroup)
             {
                 inputContainer.Add(inVe);
-                if (InPorts[0] != null)
+                if (InPorts.Count > 0)
                 {
                     var pill = this.Q<Pill>("pill");
                     pill.left = inVe;
@@ -180,10 +180,10 @@ namespace VaporEditor.Graphs
             }
             else
             {
-                if (InPorts[0] != null)
+                if (InPorts.Count > 0)
                 {
                     var pill = this.Q<Pill>("pill");
-                    pill.left = InPorts[0];
+                    pill.left = InPorts[_inPortData[0].portAtr.PortIndex.ToString()];
                 }
             }
             //Debug.Log($"InPorts: {InPorts.Count}");
@@ -225,13 +225,13 @@ namespace VaporEditor.Graphs
                 port.portName = portAtr.Name;
                 port.tooltip = "The flow output";
                 port.styleSheets.Add(_portColors);
-                OutPorts.Add(port);
+                OutPorts.Add(portAtr.PortIndex.ToString(), port);
                 outVe.Add(port);
             }
             if (inGroup)
             {
                 outputContainer.Add(outVe);
-                if (OutPorts[0] != null)
+                if (OutPorts.Count > 0)
                 {
                     var pill = this.Q<Pill>("pill");
                     pill.right = outVe;
@@ -239,10 +239,10 @@ namespace VaporEditor.Graphs
             }
             else
             {
-                if (OutPorts[0] != null)
+                if (OutPorts.Count > 0)
                 {
                     var pill = this.Q<Pill>("pill");
-                    pill.right = OutPorts[0];
+                    pill.right = OutPorts[_outPortData[0].portAtr.PortIndex.ToString()];
                 }
             }
             //Debug.Log($"OutPorts: {OutPorts.Count}");

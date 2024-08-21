@@ -9,16 +9,16 @@ namespace Vapor.Graphs
 
         public readonly IReturnNode<double> A;
 
-        private readonly int _aPort;
+        private readonly string _aPort;
 
         public SquareRootNode(string guid, NodePortTuple a)
         {
             Id = guid.GetStableHashU32();
             A = (IReturnNode<double>)a.Node;
-            _aPort = a.Port;
+            _aPort = a.PortName;
         }
 
-        public double GetValue(IGraphOwner owner, int portIndex = 0)
+        public double GetValue(IGraphOwner owner, string portName = "")
         {
             return Math.Sqrt(A.GetValue(owner, _aPort));
         }
@@ -40,7 +40,7 @@ namespace Vapor.Graphs
                 return NodeRef;
             }
 
-            NodeRef = new SquareRootNode(Guid, new(graph.Get(A).Build(graph), A.PortIndex));
+            NodeRef = new SquareRootNode(Guid, new(graph.Get(A).Build(graph), A.PortName));
             return NodeRef;
         }
     }

@@ -32,8 +32,10 @@ namespace VaporEditor.Graphs
 
             CreateAdditionalContent(mainContainer.Q("contents"));
 
-            CreateFlowInPort();
-            CreateFlowOutPort();
+            //CreateFlowInPort();
+            //CreateFlowOutPort();
+            CreateFlowInPorts();
+            CreateFlowOutPorts();
 
             RefreshExpandedState();
         }
@@ -126,7 +128,7 @@ namespace VaporEditor.Graphs
                 port.portName = portAtr.Name;
                 port.tooltip = "The flow input";
                 port.styleSheets.Add(s_PortColors);
-                InPorts.Add(port);
+                InPorts.Add(portAtr.Name, port);
                 inputContainer.Add(port);
 
                 if (_portContentData.TryGetValue(portAtr.PortIndex, out var field))
@@ -135,7 +137,7 @@ namespace VaporEditor.Graphs
                     inputContainer.Add(ve);
                     ConnectedPort += (p) =>
                     {                        
-                        if (p != portAtr.PortIndex)
+                        if (p != portAtr.PortIndex.ToString())
                         {
                             return;
                         }
@@ -143,7 +145,7 @@ namespace VaporEditor.Graphs
                     };
                     DisconnectedPort += (p) =>
                     {
-                        if (p != portAtr.PortIndex)
+                        if (p != portAtr.PortIndex.ToString())
                         {
                             return;
                         }
@@ -182,7 +184,98 @@ namespace VaporEditor.Graphs
                 port.portName = portAtr.Name;
                 port.tooltip = "The flow output";
                 port.styleSheets.Add(s_PortColors);
-                OutPorts.Add(port);
+                OutPorts.Add(portAtr.Name, port);
+                outputContainer.Add(port);
+            }
+            _outPortData.Clear();
+        }
+
+        private void CreateFlowInPorts()
+        {
+            InPorts = new(Node.InSlots.Count);
+            foreach (var slot in Node.InSlots.Values)
+            {
+                var type = slot.Type;
+                //if (portTypes.Length > 1)
+                //{
+                //    type = typeof(object);
+                //}
+                var capacity = slot.AllowMultiple ? Port.Capacity.Multi : Port.Capacity.Single;
+                var port = InstantiatePort(Orientation.Horizontal, Direction.Input, capacity, type);
+                //if (portTypes.Length > 1)
+                //{
+                //    var set = new HashSet<Type>();
+                //    for (int i = 0; i < portTypes.Length; i++)
+                //    {
+                //        set.Add(portTypes[i]);
+                //    }
+                //    port.userData = set;
+                //}
+                if (slot.IsOptional)
+                {
+                    port.AddToClassList("optionalPort");
+                }
+                port.userData = slot;
+                port.portName = slot.DisplayName;
+                port.tooltip = "The flow input";
+                port.styleSheets.Add(s_PortColors);
+                InPorts.Add(slot.UniqueName, port);
+                inputContainer.Add(port);
+
+                if (slot.HasContent)
+                {
+                    var ve = DrawerUtility.DrawVaporFieldFromType(slot, slot.ContentType, slot.GetContentFieldInfo(), true);
+                    inputContainer.Add(ve);
+                    ConnectedPort += (p) =>
+                    {
+                        if (p != slot.UniqueName)
+                        {
+                            return;
+                        }
+                        ve.Hide();
+                    };
+                    DisconnectedPort += (p) =>
+                    {
+                        if (p != slot.UniqueName)
+                        {
+                            return;
+                        }
+                        ve.Show();
+                    };
+                }
+            }
+        }
+
+        private void CreateFlowOutPorts()
+        {
+            OutPorts = new(Node.OutSlots.Count);
+            foreach (var slot in Node.OutSlots.Values)
+            {
+                var type = slot.Type;
+                //if (portTypes.Length > 1)
+                //{
+                //    type = typeof(object);
+                //}
+                var capacity = slot.AllowMultiple ? Port.Capacity.Multi : Port.Capacity.Single;
+                var port = InstantiatePort(Orientation.Horizontal, Direction.Output, capacity, type);
+                //if (portTypes.Length > 1)
+                //{
+                //    var set = new HashSet<Type>();
+                //    for (int i = 0; i < portTypes.Length; i++)
+                //    {
+                //        set.Add(portTypes[i]);
+                //    }
+                //    port.userData = set;
+                //}
+                if (slot.IsOptional)
+                {
+                    port.AddToClassList("optionalPort");
+                }
+                port.userData = slot;
+                port.portName = slot.DisplayName;
+                port.tooltip = "The flow output";
+                port.styleSheets.Add(s_PortColors);
+                OutPorts.Add(slot.UniqueName, port);
                 outputContainer.Add(port);
             }
             _outPortData.Clear();

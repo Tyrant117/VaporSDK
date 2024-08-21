@@ -6,12 +6,12 @@ namespace VaporEditor.Graphs
 {
     public interface IGraphEditorNode
     {
-        List<Port> InPorts { get; }
-        List<Port> OutPorts { get; }
+        Dictionary<string, Port> InPorts { get; }
+        Dictionary<string, Port> OutPorts { get; }
 
         NodeModel GetNode();
 
-        void OnConnectedInputEdge(int index);
-        void OnDisconnectedInputEdge(int index);
+        void OnConnectedInputEdge(string portName);
+        void OnDisconnectedInputEdge(string portName);
     }
 }

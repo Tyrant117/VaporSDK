@@ -13,7 +13,7 @@ using VaporEditor.Inspector;
 namespace VaporEditor.Keys
 {
     [CustomPropertyDrawer(typeof(KeyDropdownValue))]
-    public class KeyDropdownValueDrawer : PropertyDrawer
+    public class KeyDropdownValueDrawer : VaporPropertyDrawer
     {
         public override VisualElement CreatePropertyGUI(SerializedProperty property)
         {
@@ -149,7 +149,143 @@ namespace VaporEditor.Keys
             foldout.Add(keyBox);
             return foldout;
         }
-        
+
+        public override VisualElement CreateVaporPropertyGUI(InspectorTreeProperty property)
+        {
+            string displayName = property.DisplayName;
+            List<string> keys = new();
+            List<KeyDropdownValue> values = new();
+            property.TryGetAttribute<ValueDropdownAttribute>(out var atr);
+            if (atr == null)
+            {
+                return new Label($"{displayName} must implement {TooltipMarkup.ClassMarkup(nameof(ValueDropdownAttribute))}");
+            }
+            IList convert;
+            if (atr.AssemblyQualifiedType == null)
+            {
+                var mi = ReflectionUtility.GetMember(property.GetParentObject().GetType(), atr.Resolver);
+                if (!ReflectionUtility.TryResolveMemberValue<IList>(null, mi, null, out convert))
+                {
+                    return new Label($"{displayName} must have a fully qualified type. " +
+                        $"\nMust resolve to a Tuple<{TooltipMarkup.LangWordMarkup("string")},{TooltipMarkup.StructMarkup(nameof(KeyDropdownValue))}>");
+                }
+            }
+            else
+            {
+                convert = GetKeysField(atr.AssemblyQualifiedType, atr.Resolver);
+            }
+
+            string name = displayName;
+            float? fixedWidth = null;
+            if (property.PropertyType == typeof(List<KeyDropdownValue>))
+            {
+                int index = property.PropertyPath.IndexOf(".Array");
+
+                // If ".Array" is found, return the substring before it; otherwise, return the original string
+                var propName = index >= 0 ? property.PropertyPath.Substring(0, index) : property.FieldInfo.Name;
+
+                var outerProp = property.InspectorObject.FindProperty(propName);
+                for (int i = 0; i < outerProp.ArraySize; i++)
+                {
+                    if (property.PropertyPath == outerProp.ArrayData[i].PropertyPath)
+                    {
+                        name = $"Element {i}";
+                        fixedWidth = 120f;
+                        break;
+                    }
+                }
+
+            }
+
+            ConvertToTupleList(keys, values, convert);
+            var foldout = new StyledFoldoutProperty(name);
+            var tooltip = "";
+            if (property.TryGetAttribute<RichTextTooltipAttribute>(out var rtAtr))
+            {
+                tooltip = rtAtr.Tooltip;
+            }
+            if (atr.Searchable)
+            {
+                var indexOfCurrent = values.IndexOf(property.GetValue<KeyDropdownValue>());
+                string current = (indexOfCurrent < 0 || indexOfCurrent > keys.Count - 1) ? "None" : keys[indexOfCurrent];
+                var dropdown = new SearchableDropdown<string>("", current)
+                {
+                    name = property.PropertyName,
+                    userData = (property, values),
+                    tooltip = tooltip,
+                    style =
+                    {
+                        flexGrow = 1
+                    }
+                };
+                if (fixedWidth.HasValue)
+                {
+                    dropdown.style.minWidth = fixedWidth.Value;
+                }
+                else
+                {
+                    dropdown.AddToClassList("unity-base-field__aligned");
+                }
+                dropdown.SetChoices(keys);
+                dropdown.ValueChanged += OnSearchableDropdownChanged;
+                foldout.SetHeaderProperty(dropdown);
+            }
+            else
+            {
+                Debug.Log(property.GetValue<KeyDropdownValue>());
+                var indexOfCurrent = values.IndexOf(property.GetValue<KeyDropdownValue>());
+                int defaultInex = (indexOfCurrent < 0 || indexOfCurrent > keys.Count - 1) ? 0 : indexOfCurrent;
+                var dropdown = new DropdownField("", keys, defaultInex)
+                {
+                    name = property.PropertyName,
+                    tooltip = tooltip,
+                    userData = (property, values),
+                    style =
+                    {
+                        flexGrow = 1
+                    }
+                };
+                if (fixedWidth.HasValue)
+                {
+                    dropdown.style.minWidth = fixedWidth.Value;
+                }
+                else
+                {
+                    dropdown.AddToClassList("unity-base-field__aligned");
+                }
+                dropdown.RegisterValueChangedCallback(OnDropdownChanged);
+                foldout.SetHeaderProperty(dropdown);
+            }
+
+            var guidBox = new StyledHorizontalGroup();
+            var guidField = new TreePropertyField(property.FindPropertyRelative("Guid"))
+            {
+                style = { flexGrow = 1 }
+            };
+            guidBox.Add(guidField);
+            guidField.SetEnabled(false);
+            guidBox.Add(new Button(() => OnSelectClicked(property))
+            {
+                text = "Select"
+            });
+
+            var keyBox = new StyledHorizontalGroup();
+            var keyField = new TreePropertyField(property.FindPropertyRelative("Key"))
+            {
+                style = { flexGrow = 1 }
+            };
+            keyField.SetEnabled(false);
+            keyBox.Add(keyField);
+            keyBox.Add(new Button(() => OnRemapClicked(property))
+            {
+                text = "Re-Map",
+            });
+
+            foldout.Add(guidBox);
+            foldout.Add(keyBox);
+            return foldout;
+        }
+
         private static void OnSelectClicked(SerializedProperty property)
         {
             if (property is { boxedValue: KeyDropdownValue key })
@@ -164,6 +300,16 @@ namespace VaporEditor.Keys
             {
                 key.Remap();
             }
+        }
+
+        private static void OnSelectClicked(InspectorTreeProperty property)
+        {
+            property.GetValue<KeyDropdownValue>().Select();
+        }
+
+        private static void OnRemapClicked(InspectorTreeProperty property)
+        {
+            property.GetValue<KeyDropdownValue>().Remap();
         }
 
         private static void OnSearchableDropdownChanged(VisualElement visualElement, string oldValue, string newValue)
@@ -234,5 +380,7 @@ namespace VaporEditor.Keys
 
             return null;
         }
+
+        
     }
 }

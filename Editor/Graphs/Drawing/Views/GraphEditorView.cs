@@ -306,13 +306,18 @@ namespace VaporEditor.Graphs
         #region - Setup Nodes -
         private void AddNodes()
         {
-            Debug.Log($"Adding Nodes: {GraphObject.Graph.Children.Count}");
-            if (GraphObject.Graph.Root.IsValid)
+            if (GraphObject.Graph.Entry.IsValid)
             {
-                Debug.Log("Added Root");
-                NParamNodeDrawerHelper.AddNodes(GraphObject.Graph.Root, this, EditorNodes, null);
+                Debug.Log("Added Entry Node");
+                NParamNodeDrawerHelper.AddNodes(GraphObject.Graph.Entry, this, EditorNodes, null);
+            }
+            if (GraphObject.Graph.Exit.IsValid)
+            {
+                Debug.Log("Added Exit Node");
+                NParamNodeDrawerHelper.AddNodes(GraphObject.Graph.Exit, this, EditorNodes, null);
             }
 
+            Debug.Log($"Adding Child Nodes: {GraphObject.Graph.Children.Count}");
             foreach (var node in GraphObject.Graph.Children)
             {
                 NParamNodeDrawerHelper.AddNodes(node, this, EditorNodes, null);
@@ -321,18 +326,20 @@ namespace VaporEditor.Graphs
 
         private void AddEdges()
         {
-            foreach (var root in EditorNodes)
+            foreach (var inputNode in EditorNodes)
             {
-                var edges = root.GetNode().InEdges;
+                var edges = inputNode.GetNode().InEdges;
                 foreach (var edge in edges)
                 {
-                    var child = EditorNodes.FirstOrDefault(iNode => edge.GuidMatches(iNode.GetNode().Guid));
-                    if (child != null)
+                    var outputNode = EditorNodes.FirstOrDefault(iNode => edge.GuidMatches(iNode.GetNode().Guid));
+                    if (outputNode != null)
                     {
                         //Debug.Log($"childOutPorts: {child.OutPorts.Count} Idx {edge.OutPortIndex} [Connect] rootInPorts: {root.InPorts.Count} Idx {edge.InPortIndex}");
-                        var e = child.OutPorts[edge.OutPortIndex].ConnectTo(root.InPorts[edge.InPortIndex]);
+                        //int outIndex = outputNode.GetNode().OutSlots.Values.ToList().FindIndex(x => x.UniqueName == edge.OutPortName);
+                        //int inIndex = inputNode.GetNode().InSlots.Values.ToList().FindIndex(x => x.UniqueName == edge.InPortName);
+                        var e = outputNode.OutPorts[edge.OutPortName].ConnectTo(inputNode.InPorts[edge.InPortName]);
 
-                        root.OnConnectedInputEdge(edge.InPortIndex);
+                        inputNode.OnConnectedInputEdge(edge.OutPortName);
                         GraphView.AddElement(e);
                     }
                 }
@@ -389,24 +396,25 @@ namespace VaporEditor.Graphs
                 {
                     foreach (var edge in graphViewChange.elementsToRemove.OfType<Edge>())
                     {
-                        if (edge.input != null && edge.output != null && edge.input.node is IGraphEditorNode inN && edge.output.node is IGraphEditorNode outN)
+                        if (edge.input != null && edge.output != null && edge.input.node is IGraphEditorNode rightN && edge.output.node is IGraphEditorNode leftN)
                         {
-                            if (inN.GetNode() is NodeModel parent && outN.GetNode() is NodeModel child)
+                            if (rightN.GetNode() is NodeModel rightNode && leftN.GetNode() is NodeModel leftNode)
                             {
                                 // Remove the InEdge link from the parent.
-                                var idx = parent.InEdges.FindIndex(edge => edge.GuidMatches(child.Guid));                                
+                                var idx = rightNode.InEdges.FindIndex(edgeCon => edgeCon.GuidMatches(leftNode.Guid));                                
                                 if (idx != -1)
                                 {
-                                    int inPortIndex = inN.InPorts.IndexOf(edge.input);
-                                    inN.OnDisconnectedInputEdge(inPortIndex);
-                                    parent.InEdges.RemoveAt(idx);
+                                    //int inPortIndex = rightN.InPorts.IndexOf(edge.input);
+                                    var rightSlot = (PortSlot)edge.input.userData;
+                                    rightN.OnDisconnectedInputEdge(rightSlot.UniqueName);
+                                    rightNode.InEdges.RemoveAt(idx);
                                 }
 
                                 // Remove the OutEdge Link From The Child
-                                idx = child.OutEdges.FindIndex(edge => edge.GuidMatches(parent.Guid));
+                                idx = leftNode.OutEdges.FindIndex(edge => edge.GuidMatches(rightNode.Guid));
                                 if (idx != -1)
                                 {
-                                    child.OutEdges.RemoveAt(idx);
+                                    leftNode.OutEdges.RemoveAt(idx);
                                 }
                             }
                         }
@@ -430,20 +438,28 @@ namespace VaporEditor.Graphs
 
         private void AddEdge(Edge edge)
         {
-            var inNode = (IGraphEditorNode)edge.input.node;
-            int inPortIndex = inNode.InPorts.IndexOf(edge.input);
-
-            var outNode = (IGraphEditorNode)edge.output.node;
-            int outPortIndex = outNode.OutPorts.IndexOf(edge.output);
+            var inNode = (IGraphEditorNode)edge.input.node; // Right Node
+            var outNode = (IGraphEditorNode)edge.output.node; // Left Node
 
             if (inNode != null && outNode != null)
             {
-                inNode.OnConnectedInputEdge(inPortIndex);
-
+                //(string outPortName, string inPortName) edgeCon = ((string, string))edge.userData;
                 var inNodeSo = inNode.GetNode();
+                PortSlot inSlot = (PortSlot)edge.input.userData;
                 var outNodeSo = outNode.GetNode();
-                inNodeSo.InEdges.Add(new EdgeConnection(inPortIndex, outPortIndex, outNodeSo.Guid));
-                outNodeSo.OutEdges.Add(new EdgeConnection(inPortIndex, outPortIndex, inNodeSo.Guid));
+                PortSlot outSlot = (PortSlot)edge.output.userData;
+
+                //int inPortIndex = inNode.InPorts.Values.ToList().IndexOf(edge.input);
+                //string inPortName = inNodeSo.InSlots.Values.ToArray()[inPortIndex].UniqueName;
+
+                //int outPortIndex = outNode.OutPorts.Values.ToList().IndexOf(edge.output);
+                //string outPortName = outNodeSo.OutSlots.Values.ToArray()[outPortIndex].UniqueName;
+
+
+                inNode.OnConnectedInputEdge(inSlot.UniqueName);
+
+                inNodeSo.InEdges.Add(new EdgeConnection(inSlot.UniqueName, outSlot.UniqueName, outNodeSo.Guid));
+                outNodeSo.OutEdges.Add(new EdgeConnection(inSlot.UniqueName, outSlot.UniqueName, inNodeSo.Guid));
             }
         }
         #endregion        

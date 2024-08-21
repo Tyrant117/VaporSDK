@@ -41,9 +41,13 @@ namespace VaporEditor.Graphs
         public void Validate()
         {
             Graph.Children ??= new List<NodeModel>();
-            if (Graph.Root == null)
+            if (Graph.Entry == null)
             {
-                Graph.Root = Graph.GenerateDefaultRootNode();
+                Graph.Entry = Graph.GenerateDefaultEntryNode();
+            }
+            if (Graph.Exit == null)
+            {
+                Graph.Exit = Graph.GenerateDefaultExitNode();
             }
             //else
             //{
@@ -67,7 +71,8 @@ namespace VaporEditor.Graphs
         {
             List<NodeModel> links = new()
             {
-                Graph.Root
+                Graph.Entry,
+                Graph.Exit
             };
             links.AddRange(Graph.Children);
 

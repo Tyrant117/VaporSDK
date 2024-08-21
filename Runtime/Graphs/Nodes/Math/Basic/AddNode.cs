@@ -10,19 +10,19 @@ namespace Vapor.Graphs
         public readonly IReturnNode<double> A;
         public readonly IReturnNode<double> B;
 
-        private readonly int _aPort;
-        private readonly int _bPort;
+        private readonly string _aPort;
+        private readonly string _bPort;
 
         public AddNode(string guid, NodePortTuple a, NodePortTuple b)
         {
             Id = guid.GetStableHashU32();
             A = (IReturnNode<double>)a.Node;
-            _aPort = a.Port;
+            _aPort = a.PortName;
             B = (IReturnNode<double>)b.Node;
-            _bPort = b.Port;
+            _bPort = b.PortName;
         }
 
-        public double GetValue(IGraphOwner owner, int portIndex)
+        public double GetValue(IGraphOwner owner, string portName = "")
         {
             return A.GetValue(owner, _aPort) + B.GetValue(owner, _bPort);
         }
@@ -35,26 +35,17 @@ namespace Vapor.Graphs
         private const string k_B = "b";
         private const string k_Result = "result";
 
-        [PortIn("A", 0, false, typeof(double))]
-        public NodeReference A;
-        [PortContent(0)]
-        public double AVal;
-        [PortIn("B", 1, false, typeof(double))]
-        public NodeReference B;
-        [PortContent(1)]
-        public double BVal;
-
         public override void BuildSlots()
         {
             base.BuildSlots();
-            InSlots.Add(new PortSlot(k_A, "A", PortDirection.In, typeof(double))
-                .WithContent(typeof(double), 0));
-            InSlots.Add(new PortSlot(k_B, "B", PortDirection.In, typeof(double))
-                .WithContent(typeof(double), 0));
+            InSlots.TryAdd(k_A, new PortSlot(k_A, "A", PortDirection.In, typeof(double))
+                .WithContent<double>(0));
+            InSlots.TryAdd(k_B, new PortSlot(k_B, "B", PortDirection.In, typeof(double))
+                .WithContent<double>(0));
 
-            OutSlots.Add(new PortSlot(k_Result, "Result", PortDirection.Out, typeof(double))
-                .CanAllowMultiple()
-                .IsOptional());
+            OutSlots.TryAdd(k_Result, new PortSlot(k_Result, "Result", PortDirection.Out, typeof(double))
+                .SetAllowMultiple()
+                .SetIsOptional());
         }
 
         public override INode Build(GraphModel graph)
@@ -64,8 +55,11 @@ namespace Vapor.Graphs
                 return NodeRef;
             }
 
-            NodePortTuple a = A.Guid.EmptyOrNull() ? new(new DoubleNode(Guid, AVal), 0) : new(graph.Get(A).Build(graph), A.PortIndex);
-            NodePortTuple b = B.Guid.EmptyOrNull() ? new(new DoubleNode(Guid, BVal), 0) : new(graph.Get(B).Build(graph), B.PortIndex);
+            var sa = InSlots[k_A];
+            var sb = InSlots[k_B];
+
+            NodePortTuple a = sa.Reference.Guid.EmptyOrNull() ? new(new DoubleNode(Guid, (double)sa.Content), string.Empty) : new(graph.Get(sa.Reference).Build(graph), sa.Reference.PortName);
+            NodePortTuple b = sb.Reference.Guid.EmptyOrNull() ? new(new DoubleNode(Guid, (double)sb.Content), string.Empty) : new(graph.Get(sb.Reference).Build(graph), sb.Reference.PortName);
             NodeRef = new AddNode(Guid, a, b);
             return NodeRef;
         }

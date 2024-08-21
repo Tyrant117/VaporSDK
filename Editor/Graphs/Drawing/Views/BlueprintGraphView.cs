@@ -4,6 +4,7 @@ using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
 using Vapor.Inspector;
+using VaporEditor.Inspector;
 
 namespace VaporEditor.Graphs
 {
@@ -40,11 +41,11 @@ namespace VaporEditor.Graphs
             {
                 if (startPort.direction == Direction.Input)
                 {
-                    allPorts.AddRange(node.OutPorts);
+                    allPorts.AddRange(node.OutPorts.Values);
                 }
                 else
                 {
-                    allPorts.AddRange(node.InPorts);
+                    allPorts.AddRange(node.InPorts.Values);
                 }
             }
 
@@ -73,7 +74,32 @@ namespace VaporEditor.Graphs
         #region - Inspector -
         public VisualElement DrawElement()
         {
-            return new VisualElement();
+            var element = GraphObject.Graph.ElementToDraw(out var fields);
+
+            var ve = new VisualElement();
+            foreach (var field in fields)
+            {
+                Debug.Log(IsList(field.FieldType));
+                if (IsList(field.FieldType))
+                {
+                    Debug.Log("Drawing Array");
+                    ve.Add(new IntegerField());
+                    ve.Add(new ListView((System.Collections.IList)field.GetValue(element)));
+                }
+                else
+                {
+                    Debug.Log("Drawing Single");
+                    ve.Add(DrawerUtility.DrawVaporFieldFromType(element, field, true));
+                }
+            }
+
+            return ve;
+        }
+
+        private static bool IsList(Type type)
+        {
+            // Check if the type is a generic type and if it matches List<T>
+            return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>);
         }
         #endregion
     }
