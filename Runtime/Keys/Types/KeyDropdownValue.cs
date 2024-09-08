@@ -26,7 +26,7 @@ namespace Vapor.Keys
     /// </code>
     /// </example>
     /// </summary>
-    [Serializable]
+    [Serializable, IgnoreChildNodes]
     public struct KeyDropdownValue : IEquatable<KeyDropdownValue>
     {
         public static implicit operator int(KeyDropdownValue kdv) => kdv.Key;

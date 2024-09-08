@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Assertions;
@@ -8,7 +9,7 @@ namespace Vapor.Events
 {
     public abstract class ProvidedMonoBehaviour : VaporBehaviour
     {
-        [BoxGroup("Provided Key", order: -10000), SerializeField, ValueDropdown("$GetAllProviderKeyValues", searchable: true), IgnoreCustomDrawer]
+        [BoxGroup("Provided Key", order: -10000), SerializeField, ValueDropdown("@GetAllProviderKeyValues"), IgnoreCustomDrawer]
         protected KeyDropdownValue Key;
         
         protected virtual void OnEnable()
@@ -42,7 +43,7 @@ namespace Vapor.Events
             return (T)this;
         }
 
-        public static List<(string, KeyDropdownValue)> GetAllProviderKeyValues()
+        public static IEnumerable GetAllProviderKeyValues()
         {
             return EventKeyUtility.GetAllProviderKeyValues();
         }

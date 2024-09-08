@@ -50,6 +50,20 @@ namespace Vapor.Events
                 callback.Invoke((T)_cached);
             }
         }
+
+        public async Awaitable<T> RequestAsync<T>() where T : TResult
+        {
+            while (_cached == null)
+            {
+                if (OnRequestRaised != null)
+                {
+                    _cached = OnRequestRaised.Invoke();
+                }
+                await Awaitable.NextFrameAsync();
+            }
+
+            return (T)_cached;
+        }
     }
 
     public class CachedProviderData<T1, TResult> : IProviderData where TResult : class

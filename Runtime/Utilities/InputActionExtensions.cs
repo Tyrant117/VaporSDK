@@ -8,60 +8,135 @@ namespace Vapor
     public static class InputActionExtensions
     {
 #if ENABLE_INPUT_SYSTEM
-        public static InputAction WithPerformed(this InputAction action, Action callback)
+        public static InputAction WithPerformed(this InputAction action, Action callback, out Action unsubscribeToken)
         {
-            action.performed += _ => callback.Invoke();
+            // Define the delegate instances
+            void OnPerformed(InputAction.CallbackContext context) => callback.Invoke();
+
+            action.performed += OnPerformed;
+
+            unsubscribeToken = () =>
+            {
+                action.performed -= OnPerformed;
+            };
             return action;
         }
 
-        public static InputAction WithPerformed<T>(this InputAction action, Action<T> callback, T value)
+        public static InputAction WithPerformed<T>(this InputAction action, Action<T> callback, T value, out Action unsubscribeToken)
         {
-            action.performed += _ => callback.Invoke(value);
+            // Define the delegate instances
+            void OnPerformed(InputAction.CallbackContext context) => callback.Invoke(value);
+
+            action.performed += OnPerformed;
+
+            unsubscribeToken = () =>
+            {
+                action.performed -= OnPerformed;
+            };
             return action;
         }
 
-        public static InputAction WithPerformedRead<T>(this InputAction action, Action<T> callback) where T : struct
+        public static InputAction WithPerformedRead<T>(this InputAction action, Action<T> callback, out Action unsubscribeToken) where T : struct
         {
-            action.performed += context => callback.Invoke(context.ReadValue<T>());
+            // Define the delegate instances
+            void OnPerformed(InputAction.CallbackContext context) => callback.Invoke(context.ReadValue<T>());
+
+            action.performed += OnPerformed;
+
+            unsubscribeToken = () =>
+            {
+                action.performed -= OnPerformed;
+            };
             return action;
         }
 
-        public static InputAction WithCanceled(this InputAction action, Action callback)
+        public static InputAction WithCanceled(this InputAction action, Action callback, out Action unsubscribeToken)
         {
-            action.canceled += _ => callback.Invoke();
+            void OnCanceled(InputAction.CallbackContext context) => callback.Invoke();
+
+            action.canceled += OnCanceled;
+
+            unsubscribeToken = () =>
+            {
+                action.canceled -= OnCanceled;
+            };
             return action;
         }
 
-        public static InputAction WithCanceled<T>(this InputAction action, Action<T> callback, T value)
+        public static InputAction WithCanceled<T>(this InputAction action, Action<T> callback, T value, out Action unsubscribeToken)
         {
-            action.canceled += _ => callback.Invoke(value);
+            void OnCanceled(InputAction.CallbackContext context) => callback.Invoke(value);
+
+            action.canceled += OnCanceled;
+
+            unsubscribeToken = () =>
+            {
+                action.canceled -= OnCanceled;
+            };
             return action;
         }
 
-        public static InputAction WithCanceledRead<T>(this InputAction action, Action<T> callback) where T : struct
+        public static InputAction WithCanceledRead<T>(this InputAction action, Action<T> callback, out Action unsubscribeToken) where T : struct
         {
-            action.canceled += context => callback.Invoke(context.ReadValue<T>());
+            void OnCanceled(InputAction.CallbackContext context) => callback.Invoke(context.ReadValue<T>());
+
+            action.canceled += OnCanceled;
+
+            unsubscribeToken = () =>
+            {
+                action.canceled -= OnCanceled;
+            };
             return action;
         }
 
-        public static InputAction WithPerformedAndCanceled(this InputAction action, Action callback)
+        public static InputAction WithPerformedAndCanceled(this InputAction action, Action callback, out Action unsubscribeToken)
         {
-            action.performed += _ => callback.Invoke();
-            action.canceled += _ => callback.Invoke();
+            // Define the delegate instances
+            void OnPerformed(InputAction.CallbackContext context) => callback.Invoke();
+            void OnCanceled(InputAction.CallbackContext context) => callback.Invoke();
+
+            action.performed += OnPerformed;
+            action.canceled += OnCanceled;
+
+            unsubscribeToken = () =>
+            {
+                action.performed -= OnPerformed;
+                action.canceled -= OnCanceled;
+            };
             return action;
         }
 
-        public static InputAction WithPerformedAndCanceled<T>(this InputAction action, Action<T> callback, T performed, T canceled)
+        public static InputAction WithPerformedAndCanceled<T>(this InputAction action, Action<T> callback, T performed, T canceled, out Action unsubscribeToken)
         {
-            action.performed += _ => callback.Invoke(performed);
-            action.canceled += _ => callback.Invoke(canceled);
+            // Define the delegate instances
+            void OnPerformed(InputAction.CallbackContext context) => callback.Invoke(performed);
+            void OnCanceled(InputAction.CallbackContext context) => callback.Invoke(canceled);
+
+            action.performed += OnPerformed;
+            action.canceled += OnCanceled;
+
+            unsubscribeToken = () =>
+            {
+                action.performed -= OnPerformed;
+                action.canceled -= OnCanceled;
+            };
             return action;
         }
 
-        public static InputAction WithPerformedAndCanceledRead<T>(this InputAction action, Action<T> callback) where T : struct
+        public static InputAction WithPerformedAndCanceledRead<T>(this InputAction action, Action<T> callback, out Action unsubscribeToken) where T : struct
         {
-            action.performed += context => callback.Invoke(context.ReadValue<T>());
-            action.canceled += context => callback.Invoke(context.ReadValue<T>());
+            // Define the delegate instances
+            void OnPerformed(InputAction.CallbackContext context) => callback.Invoke(context.ReadValue<T>());
+            void OnCanceled(InputAction.CallbackContext context) => callback.Invoke(context.ReadValue<T>());
+
+            action.performed += OnPerformed;
+            action.canceled += OnCanceled;
+
+            unsubscribeToken = () =>
+            {
+                action.performed -= OnPerformed;
+                action.canceled -= OnCanceled;
+            };
             return action;
         }
 #endif

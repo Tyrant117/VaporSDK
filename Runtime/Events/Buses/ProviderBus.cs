@@ -73,12 +73,12 @@ namespace Vapor.Events
             {
                 return (T)handler;
             }
-            
+
             EventLogging.Log($"[Provider Bus] Adding Provider: [{providerKey.name}] of Type: {typeof(T)}");
             ProviderMap.Add(eventID, Activator.CreateInstance<T>());
             return (T)ProviderMap[eventID];
         }
-        
+
         /// <summary>
         /// Directly attempts to get the component associated with a <see cref="CachedProviderData{TResult}"/>
         /// </summary>
@@ -125,5 +125,23 @@ namespace Vapor.Events
         /// <typeparam name="T">The type to return. Must inherit from <see cref="Component"/></typeparam>
         /// <returns>An enumerator that should be used in a <see cref="MonoBehaviour.StartCoroutine(IEnumerator)"/></returns>
         public static IEnumerator GetComponentRoutine<T>(ProviderKeySo providerKey, Action<T> callback) where T : Component => Get<CachedProviderData<Component>>(providerKey).RequestRoutine(callback);
+
+        public static async Awaitable<T> GetComponentAsync<T>(int providerId) where T : Component
+        {
+            var c = await Get<CachedProviderData<Component>>(providerId).RequestAsync<T>();
+            return c;
+        }
+
+        public static async Awaitable<T> GetComponentAsync<T>(string providerName) where T : Component
+        {
+            var c = await Get<CachedProviderData<Component>>(providerName).RequestAsync<T>();
+            return c;
+        }
+
+        public static async Awaitable<T> GetComponentAsync<T>(ProviderKeySo providerKey) where T : Component
+        {
+            var c = await Get<CachedProviderData<Component>>(providerKey).RequestAsync<T>();
+            return c;
+        }
     }
 }
