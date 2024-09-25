@@ -7,6 +7,7 @@ namespace Vapor.Keys
     public abstract class TypeDatabaseSo<T> : ScriptableObject where T : Object
     {
         public string KeyName = $"{typeof(T).Name}Keys";
+        public string KeyCategory = $"{typeof(T).Name}Keys";
         public string LabelFilter;
         public List<T> Data = new();
 
@@ -52,7 +53,7 @@ namespace Vapor.Keys
                 kvpList.Add(new KeyGenerator.KeyValuePair(refVal.name, key, guid));
             }
 
-            KeyGenerator.FormatKeyFiles(KeyGenerator.RelativeKeyPath, KeyGenerator.NamespaceName, KeyName, kvpList);
+            KeyGenerator.FormatKeyFiles(KeyGenerator.RelativeKeyPath, KeyGenerator.NamespaceName, KeyName, KeyCategory, kvpList);
 #endif
         }
     }

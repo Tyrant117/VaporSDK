@@ -10,14 +10,17 @@ namespace Vapor.Keys
         /// The unique key.
         /// </summary>
         int Key { get; }
+
         /// <summary>
         /// Method that refreshes the value of the key before a rebuild.
         /// </summary>
         void ForceRefreshKey();
+
         /// <summary>
         /// The display name of the key shown in dropdowns.
         /// </summary>
         string DisplayName { get; }
+
         /// <summary>
         /// If true, the key will be excluded when rebuilding.
         /// </summary>

@@ -1,4 +1,5 @@
 using System;
+using UnityEditorInternal;
 using UnityEngine;
 using Vapor;
 using Vapor.Inspector;
@@ -31,7 +32,7 @@ namespace Vapor.Keys
             scriptName = scriptName.Replace("SO", "");
             scriptName = scriptName.Replace("So", "");
             scriptName = scriptName.Replace("Key", "");
-            KeyGenerator.GenerateKeys(type, $"{scriptName}Keys", true);
+            KeyGenerator.GenerateKeys(type, $"{scriptName}Keys");
             GenerateAdditionalKeys();
         }
 
@@ -49,7 +50,7 @@ namespace Vapor.Keys
             scriptName = scriptName.Replace("SO", "");
             scriptName = scriptName.Replace("So", "");
             scriptName = scriptName.Replace("Key", "");
-            KeyGenerator.GenerateKeys(typeof(T), $"{scriptName}Keys", true);
+            KeyGenerator.GenerateKeys(typeof(T), $"{scriptName}Keys");
         }
     }
 }

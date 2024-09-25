@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Vapor.Keys;
 
@@ -7,7 +8,7 @@ namespace Vapor.GlobalSettings
     {
         public static List<(string, KeyDropdownValue)> GetAllGlobalSettingKeyValues()
         {
-            return KeyUtility.GetAllKeysOfNamedType(GlobalSettingsConfig.KeyName);
+            return KeyUtility.GetAllKeysFromCategory(GlobalSettingsConfig.CATEGORY_NAME);
         }
     }
 }

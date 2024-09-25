@@ -1,7 +1,9 @@
 using System;
-using System.Diagnostics;
 using UnityEngine;
 using Vapor.Inspector;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace Vapor.Keys
 {
@@ -61,28 +63,29 @@ namespace Vapor.Keys
         /// </summary>
         public static KeyDropdownValue None => new (string.Empty, 0);
 
-        [Conditional("UNITY_EDITOR")]
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
         public void Select()
         {
 #if UNITY_EDITOR
             if (Guid == string.Empty) return;
             
             var refVal = UnityEditor.AssetDatabase.LoadAssetAtPath<ScriptableObject>(UnityEditor.AssetDatabase.GUIDToAssetPath(Guid));
-            UnityEditor.Selection.activeObject = refVal;
+            EditorGUIUtility.PingObject(refVal);
+            Selection.SetActiveObjectWithContext(refVal, null);
 #endif
         }
 
-        [Conditional("UNITY_EDITOR")]
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
         public void Remap()
         {
 #if UNITY_EDITOR
             if (Guid == string.Empty) return;
-            var refVal = UnityEditor.AssetDatabase.LoadAssetAtPath<ScriptableObject>(UnityEditor.AssetDatabase.GUIDToAssetPath(Guid));
+            var refVal = AssetDatabase.LoadAssetAtPath<ScriptableObject>(UnityEditor.AssetDatabase.GUIDToAssetPath(Guid));
             
             if (refVal is not IKey rfk) return;
             rfk.ForceRefreshKey();
             Key = rfk.Key;
-            UnityEditor.EditorUtility.SetDirty(refVal);
+            EditorUtility.SetDirty(refVal);
 #endif
         }
 

@@ -41,7 +41,7 @@ namespace Vapor.Keys
 
         public static void InitDatabase(List<Object> keyValuePairs)
         {
-            
+
             s_Db ??= new Dictionary<int, T>();
             s_Db.Clear();
 
@@ -50,6 +50,10 @@ namespace Vapor.Keys
                 var converted = keyValuePairs.OfType<IKey>();
                 foreach (var data in converted)
                 {
+                    if (data is IDatabaseInitialize dbInit)
+                    {
+                        dbInit.InitializedInDatabase();
+                    }
                     s_Db.Add(data.Key, (T)data);
                 }
             }
@@ -57,6 +61,10 @@ namespace Vapor.Keys
             {
                 foreach (var data in keyValuePairs)
                 {
+                    if (data is IDatabaseInitialize dbInit)
+                    {
+                        dbInit.InitializedInDatabase();
+                    }
                     s_Db.Add(data.name.GetStableHashU16(), (T)data);
                 }
             }

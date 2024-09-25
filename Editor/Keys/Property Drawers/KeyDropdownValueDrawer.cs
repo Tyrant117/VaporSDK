@@ -15,6 +15,9 @@ namespace VaporEditor.Keys
     [CustomPropertyDrawer(typeof(KeyDropdownValue))]
     public class KeyDropdownValueDrawer : VaporPropertyDrawer
     {
+        public InspectorTreeProperty Property { get; private set; }
+        public TreePropertyField Field { get; private set; }
+
         public override VisualElement CreatePropertyGUI(SerializedProperty property)
         {
             List<string> keys = new();
@@ -24,18 +27,22 @@ namespace VaporEditor.Keys
             {
                 return new Label($"{property.displayName} must implement {TooltipMarkup.ClassMarkup(nameof(ValueDropdownAttribute))}");
             }
-            IList convert;
-            if (atr.AssemblyQualifiedType == null)
+            IList convert = null;
+            switch (atr.Filter)
             {
-                var mi = ReflectionUtility.GetMember(fieldInfo.DeclaringType, atr.Resolver);
-                if (!ReflectionUtility.TryResolveMemberValue<IList>(null, mi, null, out convert))
-                {
-                    return new Label($"{property.displayName} must have a fully qualified type. " +
-                        $"\nMust resolve to a Tuple<{TooltipMarkup.LangWordMarkup("string")},{TooltipMarkup.StructMarkup(nameof(KeyDropdownValue))}>");
-                }
-            }else
-            {
-                convert = GetKeysField(atr.AssemblyQualifiedType, atr.Resolver);
+                case 0:
+                    var mi = ReflectionUtility.GetMember(Property.ParentType, atr.Resolver);
+                    if (!ReflectionUtility.TryResolveMemberValue<IList>(Property.GetParentObject(), mi, null, out convert))
+                    {
+                        Debug.LogError($"Could Not Resolve IEnumerable at Property: {Property.InspectorObject.Type.Name} Resolver: {atr.Resolver}");
+                    }
+                    break;
+                case 1:
+                    convert = KeyUtility.GetAllKeysFromCategory(atr.Resolver);
+                    break;
+                case 2:
+                    convert = KeyUtility.GetAllKeysFromTypeName(atr.Resolver);
+                    break;
             }
 
             string name = property.displayName;
@@ -150,141 +157,91 @@ namespace VaporEditor.Keys
             return foldout;
         }
 
-        public override VisualElement CreateVaporPropertyGUI(InspectorTreeProperty property)
+        public override VisualElement CreateVaporPropertyGUI(TreePropertyField field)
         {
-            string displayName = property.DisplayName;
+            Field = field;
+            Property = field.Property;
+            string displayName = Property.DisplayName;
             List<string> keys = new();
-            List<KeyDropdownValue> values = new();
-            property.TryGetAttribute<ValueDropdownAttribute>(out var atr);
-            if (atr == null)
+            List<object> values = new();
+
+            Property.TryGetAttribute<ValueDropdownAttribute>(out var dropdownAttribute);
+            switch (dropdownAttribute.Filter)
             {
-                return new Label($"{displayName} must implement {TooltipMarkup.ClassMarkup(nameof(ValueDropdownAttribute))}");
-            }
-            IList convert;
-            if (atr.AssemblyQualifiedType == null)
+                case 0:
+                    var mi = ReflectionUtility.GetMember(Property.ParentType, dropdownAttribute.Resolver);
+                    if (ReflectionUtility.TryResolveMemberValue<IEnumerable>(Property.GetParentObject(), mi, null, out var convert))
+                    {
+                        SplitTupleToDropdown(keys, values, convert);
+                    }
+                    else
+                    {
+                        Debug.LogError($"Could Not Resolve IEnumerable at Property: {Property.InspectorObject.Type.Name} Resolver: {dropdownAttribute.Resolver}");
+                    }
+                    break;
+                case 1:
+                    SplitTupleToDropdown(keys, values, KeyUtility.GetAllKeysFromCategory(dropdownAttribute.Resolver));
+                    break;
+                case 2:
+                    SplitTupleToDropdown(keys, values, KeyUtility.GetAllKeysFromTypeName(dropdownAttribute.Resolver));
+                    break;
+            }                
+
+            //Debug.Log($"Building Property: {Property.PropertyName} | IsArray: {Property.IsArray} | Options: {keys.Count}");
+            if (Property.IsArray)
             {
-                var mi = ReflectionUtility.GetMember(property.GetParentObject().GetType(), atr.Resolver);
-                if (!ReflectionUtility.TryResolveMemberValue<IList>(null, mi, null, out convert))
+                var comboBox = new ComboBox(displayName, -1, keys, values, true);
+                List<int> selectedIdx = new();
+                foreach (var elem in Property.ArrayData)
                 {
-                    return new Label($"{displayName} must have a fully qualified type. " +
-                        $"\nMust resolve to a Tuple<{TooltipMarkup.LangWordMarkup("string")},{TooltipMarkup.StructMarkup(nameof(KeyDropdownValue))}>");
+                    int idx = values.IndexOf(elem.GetValue());
+                    if (idx != -1)
+                    {
+                        selectedIdx.Add(idx);
+                    }
                 }
+                List<string> selectedNames = new(selectedIdx.Count);
+                foreach (var idx in selectedIdx)
+                {
+                    selectedNames.Add(keys[idx]);
+                }
+
+                comboBox.Select(selectedNames);
+                comboBox.SelectionChanged += Field.OnComboBoxSelectionChanged;
+                return comboBox;
             }
             else
             {
-                convert = GetKeysField(atr.AssemblyQualifiedType, atr.Resolver);
-            }
+                var horizontal = new StyledHorizontalGroup();
+                var current = Property.GetValue();
+                var cIdx = Mathf.Max(0, values.IndexOf(current));
+                var comboBox = new ComboBox(displayName, cIdx, keys, values, false);
 
-            string name = displayName;
-            float? fixedWidth = null;
-            if (property.PropertyType == typeof(List<KeyDropdownValue>))
-            {
-                int index = property.PropertyPath.IndexOf(".Array");
+                comboBox.SelectionChanged += Field.OnComboBoxSelectionChanged;
+                horizontal.Add(comboBox);
 
-                // If ".Array" is found, return the substring before it; otherwise, return the original string
-                var propName = index >= 0 ? property.PropertyPath.Substring(0, index) : property.FieldInfo.Name;
-
-                var outerProp = property.InspectorObject.FindProperty(propName);
-                for (int i = 0; i < outerProp.ArraySize; i++)
-                {
-                    if (property.PropertyPath == outerProp.ArrayData[i].PropertyPath)
-                    {
-                        name = $"Element {i}";
-                        fixedWidth = 120f;
-                        break;
-                    }
-                }
-
-            }
-
-            ConvertToTupleList(keys, values, convert);
-            var foldout = new StyledFoldoutProperty(name);
-            var tooltip = "";
-            if (property.TryGetAttribute<RichTextTooltipAttribute>(out var rtAtr))
-            {
-                tooltip = rtAtr.Tooltip;
-            }
-            if (atr.Searchable)
-            {
-                var indexOfCurrent = values.IndexOf(property.GetValue<KeyDropdownValue>());
-                string current = (indexOfCurrent < 0 || indexOfCurrent > keys.Count - 1) ? "None" : keys[indexOfCurrent];
-                var dropdown = new SearchableDropdown<string>("", current)
-                {
-                    name = property.PropertyName,
-                    userData = (property, values),
-                    tooltip = tooltip,
-                    style =
-                    {
-                        flexGrow = 1
-                    }
+                var select = new Button(() => OnSelectClicked(Property));
+                var image = new Image
+                {                    
+                    image = EditorGUIUtility.IconContent("d_scenepicking_pickable_hover").image,
+                    scaleMode = ScaleMode.ScaleToFit,
                 };
-                if (fixedWidth.HasValue)
+                select.Add(image);
+
+                horizontal.Add(select);
+
+                var remap = new Button(() => OnRemapClicked(Property));
+                var image2 = new Image
                 {
-                    dropdown.style.minWidth = fixedWidth.Value;
-                }
-                else
-                {
-                    dropdown.AddToClassList("unity-base-field__aligned");
-                }
-                dropdown.SetChoices(keys);
-                dropdown.ValueChanged += OnSearchableDropdownChanged;
-                foldout.SetHeaderProperty(dropdown);
-            }
-            else
-            {
-                Debug.Log(property.GetValue<KeyDropdownValue>());
-                var indexOfCurrent = values.IndexOf(property.GetValue<KeyDropdownValue>());
-                int defaultInex = (indexOfCurrent < 0 || indexOfCurrent > keys.Count - 1) ? 0 : indexOfCurrent;
-                var dropdown = new DropdownField("", keys, defaultInex)
-                {
-                    name = property.PropertyName,
-                    tooltip = tooltip,
-                    userData = (property, values),
-                    style =
-                    {
-                        flexGrow = 1
-                    }
+                    image = EditorGUIUtility.IconContent("d_Refresh").image,
+                    scaleMode = ScaleMode.ScaleToFit,
                 };
-                if (fixedWidth.HasValue)
-                {
-                    dropdown.style.minWidth = fixedWidth.Value;
-                }
-                else
-                {
-                    dropdown.AddToClassList("unity-base-field__aligned");
-                }
-                dropdown.RegisterValueChangedCallback(OnDropdownChanged);
-                foldout.SetHeaderProperty(dropdown);
+                remap.Add(image2);
+
+                horizontal.Add(remap);
+                return horizontal;
             }
-
-            var guidBox = new StyledHorizontalGroup();
-            var guidField = new TreePropertyField(property.FindPropertyRelative("Guid"))
-            {
-                style = { flexGrow = 1 }
-            };
-            guidBox.Add(guidField);
-            guidField.SetEnabled(false);
-            guidBox.Add(new Button(() => OnSelectClicked(property))
-            {
-                text = "Select"
-            });
-
-            var keyBox = new StyledHorizontalGroup();
-            var keyField = new TreePropertyField(property.FindPropertyRelative("Key"))
-            {
-                style = { flexGrow = 1 }
-            };
-            keyField.SetEnabled(false);
-            keyBox.Add(keyField);
-            keyBox.Add(new Button(() => OnRemapClicked(property))
-            {
-                text = "Re-Map",
-            });
-
-            foldout.Add(guidBox);
-            foldout.Add(keyBox);
-            return foldout;
-        }
+        }        
 
         private static void OnSelectClicked(SerializedProperty property)
         {
@@ -333,6 +290,36 @@ namespace VaporEditor.Keys
                 Debug.Log("Applied " + newVal);
                 tuple.Item1.boxedValue = newVal;
                 tuple.Item1.serializedObject.ApplyModifiedProperties();
+            }
+        }
+
+        private static void SplitTupleToDropdown(List<string> keys, List<object> values, IEnumerable toConvert)
+        {
+            if (toConvert == null)
+            {
+                return;
+            }
+
+            foreach (var obj in toConvert)
+            {
+                var item1 = (string)obj.GetType().GetField("Item1", BindingFlags.Instance | BindingFlags.Public)
+                    ?.GetValue(obj);
+                var item2 = obj.GetType().GetField("Item2", BindingFlags.Instance | BindingFlags.Public)
+                    ?.GetValue(obj);
+
+                if (item1 == null || item2 == null)
+                {
+                    item1 = obj.ToString();
+                    item2 = obj;
+
+                    if (item1 == null || item2 == null)
+                    {
+                        continue;
+                    }
+                }
+
+                keys.Add(item1);
+                values.Add(item2);
             }
         }
 

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using Vapor.GameplayTag;
 using Vapor.Inspector;
@@ -6,11 +7,11 @@ using Vapor.Keys;
 
 namespace Vapor.GameplayTag
 {
-    [System.Serializable, DrawWithVapor(UIGroupType.Foldout)]
+    [System.Serializable, DrawWithVapor(UIGroupType.Vertical)]
     public class GameplayTagContainer : IGameplayTagContainer
     {
-        [SerializeField, ValueDropdown("$GetAllTagValues", searchable: true)]
-        private List<KeyDropdownValue> _tags;
+        [SerializeField, ValueDropdown("@GetAllTagValues", searchable: true)]
+        private List<KeyDropdownValue> _tags = new();
 
         private bool _isInit;
         private HashSet<int> _validTags;
@@ -21,12 +22,28 @@ namespace Vapor.GameplayTag
 
             return _validTags.Contains(tagId) || RecurseParentForValidTag(tagId);
         }
+        public bool HasTag(string tagName)
+        {
+#if UNITY_EDITOR
+            return _tags.Any(k => k.Guid == tagName) || RecurseParentForValidTag(tagName);
+#else
+            return HasTag(tagName.GetStableHashU16());
+#endif
+        }
 
         public bool HasTagExact(int tagId)
         {
             Init();
 
             return _validTags.Contains(tagId);
+        }
+        public bool HasTagExact(string tagName)
+        {
+#if UNITY_EDITOR
+            return _tags.Any(k => k.Guid == tagName);
+#else
+            return HasTagExact(tagName.GetStableHashU16());
+#endif
         }
 
         public bool HasAny(params int[] tags)
@@ -46,6 +63,30 @@ namespace Vapor.GameplayTag
             }
             return false;
         }
+        public bool HasAny(params string[] tagNames)
+        {
+#if UNITY_EDITOR
+            foreach (var t in tagNames)
+            {
+                if (_tags.Any(k => k.Guid == t))
+                {
+                    return true;
+                }
+                else if (RecurseParentForValidTag(t))
+                {
+                    return true;
+                }
+            }
+            return false;
+#else
+            int[] convert = new int[tagNames.Length];
+            for (int i = 0; i < tagNames.Length; i++)
+            {
+                convert[i] = tagNames[i].GetStableHashU16();
+            }
+            return HasAny(convert);
+#endif
+        }
         public bool HasAny(IEnumerable<int> tags)
         {
             Init();
@@ -62,6 +103,30 @@ namespace Vapor.GameplayTag
                 }
             }
             return false;
+        }
+        public bool HasAny(IEnumerable<string> tagNames)
+        {
+#if UNITY_EDITOR
+            foreach (var t in tagNames)
+            {
+                if (_tags.Any(k => k.Guid == t))
+                {
+                    return true;
+                }
+                else if (RecurseParentForValidTag(t))
+                {
+                    return true;
+                }
+            }
+            return false;
+#else
+            List<int> convert = new();
+            foreach (var tag in tagNames)
+            {
+                convert.Add(tag.GetStableHashU16());
+            }
+            return HasAny(convert);
+#endif
         }
         public bool HasAny(GameplayTagContainer tagContainer)
         {
@@ -81,6 +146,26 @@ namespace Vapor.GameplayTag
             }
             return false;
         }
+        public bool HasAnyExact(params string[] tagNames)
+        {
+#if UNITY_EDITOR
+            foreach (var t in tagNames)
+            {
+                if (_tags.Any(k => k.Guid == t))
+                {
+                    return true;
+                }
+            }
+            return false;
+#else
+            int[] convert = new int[tagNames.Length];
+            for (int i = 0; i < tagNames.Length; i++)
+            {
+                convert[i] = tagNames[i].GetStableHashU16();
+            }
+            return HasAnyExact(convert);
+#endif
+        }
         public bool HasAnyExact(IEnumerable<int> tags)
         {
             Init();
@@ -93,6 +178,26 @@ namespace Vapor.GameplayTag
                 }
             }
             return false;
+        }
+        public bool HasAnyExact(IEnumerable<string> tagNames)
+        {
+#if UNITY_EDITOR
+            foreach (var t in tagNames)
+            {
+                if (_tags.Any(k => k.Guid == t))
+                {
+                    return true;
+                }
+            }
+            return false;
+#else
+            List<int> convert = new();
+            foreach (var tag in tagNames)
+            {
+                convert.Add(tag.GetStableHashU16());
+            }
+            return HasAnyExact(convert);
+#endif
         }
         public bool HasAnyExact(GameplayTagContainer tagContainer)
         {
@@ -112,6 +217,26 @@ namespace Vapor.GameplayTag
             }
             return true;
         }
+        public bool HasAll(params string[] tagNames)
+        {
+#if UNITY_EDITOR
+            foreach (var t in tagNames)
+            {
+                if (!_tags.Any(k => k.Guid == t) && !RecurseParentForValidTag(t))
+                {
+                    return false;
+                }
+            }
+            return true;
+#else
+            int[] convert = new int[tagNames.Length];
+            for (int i = 0; i < tagNames.Length; i++)
+            {
+                convert[i] = tagNames[i].GetStableHashU16();
+            }
+            return HasAll(convert);
+#endif
+        }
         public bool HasAll(IEnumerable<int> tags)
         {
             Init();
@@ -124,6 +249,26 @@ namespace Vapor.GameplayTag
                 }
             }
             return true;
+        }
+        public bool HasAll(IEnumerable<string> tagNames)
+        {
+#if UNITY_EDITOR
+            foreach (var t in tagNames)
+            {
+                if (!_tags.Any(k => k.Guid == t) && !RecurseParentForValidTag(t))
+                {
+                    return false;
+                }
+            }
+            return true;
+#else
+            List<int> convert = new();
+            foreach (var tag in tagNames)
+            {
+                convert.Add(tag.GetStableHashU16());
+            }
+            return HasAll(convert);
+#endif
         }
         public bool HasAll(GameplayTagContainer tagContainer)
         {
@@ -143,6 +288,26 @@ namespace Vapor.GameplayTag
             }
             return true;
         }
+        public bool HasAllExact(params string[] tagNames)
+        {
+#if UNITY_EDITOR
+            foreach (var t in tagNames)
+            {
+                if (!_tags.Any(k => k.Guid == t))
+                {
+                    return false;
+                }
+            }
+            return true;
+#else
+            int[] convert = new int[tagNames.Length];
+            for (int i = 0; i < tagNames.Length; i++)
+            {
+                convert[i] = tagNames[i].GetStableHashU16();
+            }
+            return HasAllExact(convert);
+#endif
+        }
         public bool HasAllExact(IEnumerable<int> tags)
         {
             Init();
@@ -155,6 +320,26 @@ namespace Vapor.GameplayTag
                 }
             }
             return true;
+        }
+        public bool HasAllExact(IEnumerable<string> tagNames)
+        {
+#if UNITY_EDITOR
+            foreach (var t in tagNames)
+            {
+                if (!_tags.Any(k => k.Guid == t))
+                {
+                    return false;
+                }
+            }
+            return true;
+#else
+            List<int> convert = new();
+            foreach (var tag in tagNames)
+            {
+                convert.Add(tag.GetStableHashU16());
+            }
+            return HasAllExact(convert);
+#endif
         }
         public bool HasAllExact(GameplayTagContainer tagContainer)
         {
@@ -196,6 +381,27 @@ namespace Vapor.GameplayTag
                         return true;
                     }
                     parentTagId = RuntimeDatabase<GameplayTagSo>.Get(tagId).Parent;
+                }
+                return false;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        private bool RecurseParentForValidTag(string childTag)
+        {
+            var split = childTag.Split('.');
+            if (split.Length > 1)
+            {
+                for (int i = split.Length-1; i >= 0; i--)
+                {
+                    var last = split[i];
+                    if (_tags.Any(k => k.Guid == last))
+                    {
+                        return true;
+                    }
                 }
                 return false;
             }

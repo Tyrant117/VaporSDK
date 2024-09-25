@@ -19,7 +19,7 @@ namespace VaporEditor.Keys
         }
 
         private const string ConfigPath = "Assets/Vapor/Keys/Config";
-        private const string KeyPath = "Vapor/Keys/Keys";
+        private const string KeyPath = "Assets/Vapor/Keys/Keys";
 
         private ListView _list;
         private readonly List<BackingContext> _enums = new();
@@ -136,6 +136,7 @@ namespace VaporEditor.Keys
 
             //configBox.Add(configHeader);
             configBox.Add(new TextField("Class Name") { name = "class-name-text"});
+            configBox.Add(new TextField("Category") { name = "category-name-text" });
             configBox.Add(new Toggle("Create None") { name = "create-none-toggle", value = true });
             var customOrderToggle = new Toggle("Custom Order") { name = "custom-order-toggle" };           
             customOrderToggle.RegisterValueChangedCallback(OnCustomOrderToggled);
@@ -203,6 +204,7 @@ namespace VaporEditor.Keys
         private void OnCreate()
         {
             var definitionName = rootVisualElement.Q<TextField>("class-name-text").value;
+            var category = rootVisualElement.Q<TextField>("category-name-text").value;
             var createNone = rootVisualElement.Q<Toggle>("create-none-toggle").value;
             var customOrder = rootVisualElement.Q<Toggle>("custom-order-toggle").value;
             var startingValue = rootVisualElement.Q<IntegerField>("starting-value-int").value;
@@ -251,7 +253,7 @@ namespace VaporEditor.Keys
                 }
             }
 
-            KeyGenerator.FormatKeyFiles(KeyPath, "VaporKeyDefinitions", definitionName, kvp);
+            KeyGenerator.FormatKeyFiles(KeyPath, "VaporKeyDefinitions", definitionName, category, kvp);
 
             var jsonDef = new JsonConfigDefinition()
             {

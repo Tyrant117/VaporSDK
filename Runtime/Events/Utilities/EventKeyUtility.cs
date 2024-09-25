@@ -12,8 +12,8 @@ namespace Vapor.Events
     /// </summary>
     public static class EventKeyUtility
     {
-        private const string s_NameOfEventKeysType = "EventKeys";
-        private const string s_NameOfProviderKeysType = "ProviderKeys";
+        public const string EVENTS_CATEGORY_NAME = "EventKeys";
+        public const string PROVIDERS_CATEGORY_NAME = "ProviderKeys";
 
         /// <summary>
         /// Gets a list of all <see cref="EventKeySo"/> in the project. Will return null if not in the UNITY_EDITOR
@@ -31,7 +31,7 @@ namespace Vapor.Events
         /// <returns>Returns either the EventKeyKeys.DropdownValues or a list with the "None" value if the EventKeyKeys does not exist.</returns>
         public static List<(string, KeyDropdownValue)> GetAllEventKeyValues()
         {
-            return KeyUtility.GetAllKeysOfNamedType(s_NameOfEventKeysType);
+            return KeyUtility.GetAllKeysFromCategory(EVENTS_CATEGORY_NAME);
         }
 
         /// <summary>
@@ -50,7 +50,7 @@ namespace Vapor.Events
         /// <returns>Returns either the ProviderKeyKeys.DropdownValues or a list with the "None" value if the ProviderKeyKeys does not exist.</returns>
         public static List<(string, KeyDropdownValue)> GetAllProviderKeyValues()
         {
-            return KeyUtility.GetAllKeysOfNamedType(s_NameOfProviderKeysType);
+            return KeyUtility.GetAllKeysFromCategory(PROVIDERS_CATEGORY_NAME);
         }        
     }
 }

@@ -10,6 +10,8 @@ using System.Linq;
 using System.Reflection;
 using Vapor;
 using Object = UnityEngine.Object;
+using Vapor.Inspector;
+using Newtonsoft.Json.Linq;
 
 namespace Vapor.Keys
 {
@@ -18,11 +20,18 @@ namespace Vapor.Keys
     /// </summary>
     public static class KeyGenerator
     {
-        public const string AbsoluteConfigPath = "Assets/Vapor/Keys/Config";
-        public const string RelativeConfigPath = "Vapor/Keys/Config";
-        public const string AbsoluteKeyPath = "Assets/Vapor/Keys/Definitions";
-        public const string RelativeKeyPath = "Vapor/Keys/Definitions";
-        public const string NamespaceName = "VaporKeyDefinitions";              
+        public const string KeyFolderName = "Vapor Key Definitions";
+        public const string RelativeKeyPath = "Assets/Vapor/Keys/Definitions";
+        public const string RelativeConfigPath = "Assets/Vapor/Keys/Config";
+        public const string NamespaceName = "VaporKeyDefinitions";
+
+        public const string RELATIVE_PATH = "RELATIVE_PATH";
+        public const string ASSEMBLY_QUALIFIED_CLASS_NAME = "ASSEMBLY_QUALIFIED_CLASS_NAME";
+        public const string KEYS_CATEGORY_NAME = "KEY_CATEGORY";
+
+        public const string KEYS_FIELD_NAME = "DropdownValues";
+
+        public static string FullFolderPath => Application.dataPath + "/Vapor/Keys/Definitions";
 
         #region - Keys -
         /// <summary>
@@ -38,7 +47,7 @@ namespace Vapor.Keys
             public KeyValuePair(string name, int key, string guid)
             {
                 DisplayName = name;
-                VariableName = Regex.Replace(name, " ", "");
+                VariableName = Regex.Replace(name, " ", "").Replace(".", "_");
                 Guid = guid;
                 Key = key;
             }
@@ -46,7 +55,7 @@ namespace Vapor.Keys
             public KeyValuePair(IKey key)
             {
                 DisplayName = key.DisplayName;
-                VariableName = Regex.Replace(key.DisplayName, " ", "");
+                VariableName = Regex.Replace(key.DisplayName, " ", "").Replace(".", "_");
                 key.ForceRefreshKey();
                 Guid = string.Empty;
 #if UNITY_EDITOR
@@ -80,17 +89,33 @@ namespace Vapor.Keys
 #if UNITY_EDITOR
 
         #region  Modify Keys
-        public static void GenerateKeys(Type typeFilter, string scriptName, bool includeNone)
+        public static void GenerateKeys(Type typeFilter, string scriptName)
         {
             var guids = AssetDatabase.FindAssets($"t:{typeFilter.Name}");
             HashSet<int> takenKeys = new();
-            List<KeyValuePair> formattedKeys = new();
+            Dictionary<string, List<KeyValuePair>> formattedKeys = new();
+            List<string> namespaces = new();
 
-            if (includeNone)
+            var options = typeFilter.GetCustomAttribute<KeyOptionsAttribute>();
+            bool hasOptions = options != null;
+
+
+            if (hasOptions && options.IncludeNone)
             {
                 takenKeys.Add(0);
-                formattedKeys.Add(new KeyValuePair("None", 0, string.Empty));
+                List<KeyValuePair> list = new();
+                formattedKeys.Add(RelativeKeyPath, list);
+                namespaces.Add(NamespaceName);
+                list.Add(new KeyValuePair("None", 0, string.Empty));
             }
+            else
+            {
+                takenKeys.Add(0);
+                List<KeyValuePair> list = new();
+                formattedKeys.Add(RelativeKeyPath, list);
+                namespaces.Add(NamespaceName);
+                list.Add(new KeyValuePair("None", 0, string.Empty));
+            }                        
 
             var sb = new StringBuilder();
             foreach (var item in GetAllAssetsFromGUIDs<Object>(guids))
@@ -108,27 +133,45 @@ namespace Vapor.Keys
                 else
                 {
                     EditorUtility.SetDirty(item);
+
                     takenKeys.Add(key.Key);
                     var guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(item));
-                    formattedKeys.Add(new KeyValuePair(item.name, key.Key, guid));
+                    guid = hasOptions ? options.UseNameAsGuid ? key.DisplayName : guid : guid;
+                    var path = ConvertFullPathToRelative(FindNearestDirectory(item));
+                    if (!formattedKeys.TryGetValue(path, out var list))
+                    {
+                        list = new();
+                        formattedKeys.Add(path, list);
+                        namespaces.Add(FindNearestAssemblyDefinition(item) + $".{NamespaceName}");
+                    }
+                    list.Add(new KeyValuePair(item.name, key.Key, guid));
                 }
             }
 
-            Debug.Log(sb.ToString());
-            FormatKeyFiles(RelativeKeyPath, NamespaceName, scriptName, formattedKeys);
+            int idx = 0;
+            foreach (var fkvp in formattedKeys)
+            {
+                FormatKeyFiles(fkvp.Key, namespaces[idx], scriptName, hasOptions ? options.Category : null, fkvp.Value);
+                idx++;
+            }
+
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
         }
 
-        public static void GenerateKeys(string searchFilter, string scriptName, bool includeNone)
+        public static void GenerateKeys(string searchFilter, string scriptName, bool includeNone, string category)
         {
             HashSet<int> takenKeys = new();
-            List<KeyValuePair> formattedKeys = new();
+            Dictionary<string, List<KeyValuePair>> formattedKeys = new();
+            List<string> namespaces = new();
 
-            if(includeNone)
+            if (includeNone)
             {
-               takenKeys.Add(0);
-               formattedKeys.Add(new KeyValuePair("None", 0, string.Empty));     
+                takenKeys.Add(0);
+                List<KeyValuePair> list = new();
+                formattedKeys.Add(RelativeKeyPath, list);
+                namespaces.Add(NamespaceName);
+                list.Add(new KeyValuePair("None", 0, string.Empty));
             }
 
             List<string> guids = new();
@@ -138,6 +181,9 @@ namespace Vapor.Keys
                 var refVal = AssetDatabase.LoadAssetAtPath<Object>(AssetDatabase.GUIDToAssetPath(guid));
                 if (refVal == null) { continue; }
                 if (refVal is IKey refKey && (refKey.IsDeprecated || !refKey.ValidKey())) { continue; }
+
+                var options = refVal.GetType().GetCustomAttribute<KeyOptionsAttribute>();
+                bool hasOptions = options != null;
 
                 var key = refVal.name.GetStableHashU16();
                 if (!takenKeys.Add(key))
@@ -149,16 +195,37 @@ namespace Vapor.Keys
                     if (refVal != null)
                     {
                         var soGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(refVal));
-                        formattedKeys.Add(new KeyValuePair(refVal.name, key, soGuid));
+                        soGuid = hasOptions ? options.UseNameAsGuid ? refVal.name : soGuid : soGuid;
+                        var path = ConvertFullPathToRelative(FindNearestDirectory(refVal));
+                        if (!formattedKeys.TryGetValue(path, out var list))
+                        {
+                            list = new();
+                            formattedKeys.Add(path, list);
+                            namespaces.Add(FindNearestAssemblyDefinition(refVal) + $".{NamespaceName}");
+                        }
+                        list.Add(new KeyValuePair(refVal.name, key, soGuid));
                     }
                     else
                     {
-                        formattedKeys.Add(new KeyValuePair(refVal.name, key, string.Empty));
+                        if (!formattedKeys.TryGetValue(RelativeKeyPath, out var list))
+                        {
+                            list = new();
+                            formattedKeys.Add(RelativeKeyPath, list);
+                            namespaces.Add(NamespaceName);
+                        }
+
+                        list.Add(new KeyValuePair(refVal.name, key, refVal.name));
                     }
                 }
             }
 
-            FormatKeyFiles(RelativeKeyPath, NamespaceName, scriptName, formattedKeys);
+            int idx = 0;
+            foreach (var fkvp in formattedKeys)
+            {
+                FormatKeyFiles(fkvp.Key, namespaces[idx], scriptName, category, fkvp.Value);
+                idx++;
+            }
+
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
         }
@@ -173,13 +240,29 @@ namespace Vapor.Keys
         public static void GenerateKeys<T>(IEnumerable<string> guids, string scriptName, bool includeNone) where T : ScriptableObject, IKey
         {
             HashSet<int> takenKeys = new();
-            List<KeyValuePair> formattedKeys = new();
+            Dictionary<string, List<KeyValuePair>> formattedKeys = new();
+            List<string> namespaces = new();
 
-            if(includeNone)
+            var options = typeof(T).GetCustomAttribute<KeyOptionsAttribute>();
+            bool hasOptions = options != null;
+
+            if (hasOptions && options.IncludeNone)
             {
-               takenKeys.Add(0);
-               formattedKeys.Add(new KeyValuePair("None", 0, string.Empty));     
+                takenKeys.Add(0);
+                List<KeyValuePair> list = new();
+                formattedKeys.Add(RelativeKeyPath, list);
+                namespaces.Add(NamespaceName);
+                list.Add(new KeyValuePair("None", 0, string.Empty));
             }
+            else
+            {
+                takenKeys.Add(0);
+                List<KeyValuePair> list = new();
+                formattedKeys.Add(RelativeKeyPath, list);
+                namespaces.Add(NamespaceName);
+                list.Add(new KeyValuePair("None", 0, string.Empty));
+            }
+            
 
             foreach (var item in GetAllAssetsFromGUIDs<T>(guids))
             {
@@ -197,11 +280,25 @@ namespace Vapor.Keys
                     EditorUtility.SetDirty(item);
                     takenKeys.Add(item.Key);
                     var guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(item));
-                    formattedKeys.Add(new KeyValuePair(item.name, item.Key, guid));
+                    var path = ConvertFullPathToRelative(FindNearestDirectory(item));
+                    guid = hasOptions ? options.UseNameAsGuid ? item.DisplayName : guid : guid;
+                    if (!formattedKeys.TryGetValue(path, out var list))
+                    {
+                        list = new();
+                        formattedKeys.Add(path, list);
+                        namespaces.Add(FindNearestAssemblyDefinition(item) + $".{NamespaceName}");
+                    }
+                    list.Add(new KeyValuePair(item.name, item.Key, guid));
                 }
             }
 
-            FormatKeyFiles(RelativeKeyPath, NamespaceName, scriptName, formattedKeys);
+            int idx = 0;
+            foreach (var fkvp in formattedKeys)
+            {
+                FormatKeyFiles(fkvp.Key, namespaces[idx], scriptName, hasOptions ? options.Category : null, fkvp.Value);
+                idx++;
+            }
+
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
         }
@@ -230,8 +327,9 @@ namespace Vapor.Keys
 
         private static void InternalAddKey(Type type, KeyValuePair newKvp)
         {
-            var relativePath = (string)type.GetField("RELATIVE_PATH", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-            var values = (List<(string, KeyDropdownValue)>)type.GetField("DropdownValues", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            var relativePath = (string)type.GetField(RELATIVE_PATH, BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            var category = (string)type.GetField(KEYS_CATEGORY_NAME, BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            var values = (List<(string, KeyDropdownValue)>)type.GetField(KEYS_FIELD_NAME, BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
             if(values == null) return;
             
             List<KeyValuePair> keyValuePairs = new();
@@ -248,7 +346,7 @@ namespace Vapor.Keys
 
             keyValuePairs.Add(newKvp);
 
-            FormatKeyFiles(relativePath, type.Namespace, type.Name, keyValuePairs);
+            FormatKeyFiles(relativePath, type.Namespace, type.Name, category, keyValuePairs);
         }
 
         /// <summary>
@@ -284,10 +382,11 @@ namespace Vapor.Keys
 
         private static void InternalAddKeys(Type type, List<KeyValuePair> newKeyValuePairs)
         {
-            var relativePath = (string)type.GetField("RELATIVE_PATH", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-            var values = (List<(string, KeyDropdownValue)>)type.GetField("DropdownValues", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-            if(values == null) return;
-            
+            var relativePath = (string)type.GetField(RELATIVE_PATH, BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            var category = (string)type.GetField(KEYS_CATEGORY_NAME, BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            var values = (List<(string, KeyDropdownValue)>)type.GetField(KEYS_FIELD_NAME, BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            if (values == null) return;
+
             List<KeyValuePair> keyValuePairs = new();
             foreach (var value in values)
             {
@@ -298,7 +397,7 @@ namespace Vapor.Keys
                 }
                 keyValuePairs.Add(new(value.Item1, value.Item2.Key, string.Empty));
                 continue;
-                
+
                 bool _Match(KeyValuePair x) => x.Key == value.Item2.Key;
             }
             foreach (var newKvp in newKeyValuePairs)
@@ -306,7 +405,7 @@ namespace Vapor.Keys
                 keyValuePairs.Add(newKvp);
             }
 
-            FormatKeyFiles(relativePath, type.Namespace, type.Name, keyValuePairs);
+            FormatKeyFiles(relativePath, type.Namespace, type.Name, category, keyValuePairs);
         }
         
         /// <summary>
@@ -333,8 +432,9 @@ namespace Vapor.Keys
 
         private static void InternalRemoveKey(Type type, KeyValuePair keyToRemove)
         {
-            var relativePath = (string)type.GetField("RELATIVE_PATH", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-            var values = (List<(string, KeyDropdownValue)>)type.GetField("DropdownValues", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            var relativePath = (string)type.GetField(RELATIVE_PATH, BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            var category = (string)type.GetField(KEYS_CATEGORY_NAME, BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            var values = (List<(string, KeyDropdownValue)>)type.GetField(KEYS_FIELD_NAME, BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
             if(values == null) return;
             
             List<KeyValuePair> kvps = new();
@@ -346,7 +446,7 @@ namespace Vapor.Keys
                 }
             }
 
-            FormatKeyFiles(relativePath, type.Namespace, type.Name, kvps);
+            FormatKeyFiles(relativePath, type.Namespace, type.Name, category, kvps);
         }
         
         /// <summary>
@@ -381,13 +481,14 @@ namespace Vapor.Keys
 
         private static void InternalRemoveKeys(Type type, List<KeyValuePair> keyValuePairsToRemove)
         {
-            var relativePath = (string)type.GetField("RELATIVE_PATH", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-            var values = (List<(string, KeyDropdownValue)>)type.GetField("DropdownValues", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            var relativePath = (string)type.GetField(RELATIVE_PATH, BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            var category = (string)type.GetField(KEYS_CATEGORY_NAME, BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            var values = (List<(string, KeyDropdownValue)>)type.GetField(KEYS_FIELD_NAME, BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
             if(values == null) return;
             
             var keyValuePairs = (from value in values where !keyValuePairsToRemove.Exists(x => x.Key == value.Item2.Key) select new KeyValuePair(value.Item1, value.Item2.Key, value.Item2.Guid)).ToList();
 
-            FormatKeyFiles(relativePath, type.Namespace, type.Name, keyValuePairs);
+            FormatKeyFiles(relativePath, type.Namespace, type.Name, category, keyValuePairs);
         }
 
         /// <summary>
@@ -409,20 +510,132 @@ namespace Vapor.Keys
                 yield return AssetDatabase.LoadAssetAtPath<T>(AssetDatabase.GUIDToAssetPath(guid));
             }
         }
+
+        private static string FindNearestDirectory(Object obj)
+        {
+            string path = AssetDatabase.GetAssetPath(obj);
+
+            // Get the parent directory
+            string currentDirectory = System.IO.Path.GetDirectoryName(path);
+
+            Debug.Log(currentDirectory);
+
+            // Move up to the parent directory
+            currentDirectory = System.IO.Directory.GetParent(currentDirectory)?.FullName;
+            string parentFolder = System.IO.Path.GetFileName(currentDirectory);
+            Debug.Log(parentFolder);
+            while (!(parentFolder.Equals("Assets") || parentFolder.Equals("Packages")))
+            {
+                // Get all directories in the current path
+                string[] directories = System.IO.Directory.GetDirectories(currentDirectory);
+
+                foreach (var dir in directories)
+                {
+                    var dirName = System.IO.Path.GetFileName(dir);
+                    Debug.Log(dirName);
+                    if (dirName.Equals(KeyFolderName))
+                    {
+                        var dirFixed = dir.Replace("\\", "/");
+                        return dirFixed;
+                    }
+                }
+                currentDirectory = System.IO.Directory.GetParent(currentDirectory)?.FullName;
+                parentFolder = System.IO.Path.GetFileName(currentDirectory);
+            }
+
+            return FullFolderPath;
+        }
+
+        private static string FindNearestAssemblyDefinition(Object obj)
+        {
+            string path = AssetDatabase.GetAssetPath(obj);
+            path = System.IO.Path.GetDirectoryName(path);
+
+            // Loop until reaching the root of the project
+            while (!path.EmptyOrNull())
+            {
+                // Search for .asmdef files in the current directory
+                string[] asmdefFiles = System.IO.Directory.GetFiles(path, "*.asmdef");
+
+                if (asmdefFiles.Length > 0)
+                {
+                    // Load the first found .asmdef file
+                    var asmPath = ConvertFullPathToRelative(System.IO.Path.GetFullPath(asmdefFiles[0]));
+                    var assemblyDefinition = AssetDatabase.LoadAssetAtPath<TextAsset>(asmPath);
+                    if (assemblyDefinition != null)
+                    {
+                        // Return the default namespace
+                        string json = assemblyDefinition.text;
+                        JObject jsonObject = JObject.Parse(json);
+                        return jsonObject["rootNamespace"].ToString();
+                    }
+                    else
+                    {
+                        Debug.LogError($"Couldnt Parse Path: {asmdefFiles[0]} -> {asmPath}");
+                    }
+                }
+
+                // Move up to the parent directory
+                path = System.IO.Directory.GetParent(path)?.FullName;
+            }
+
+            // No assembly definition found
+            return null;
+        }
+
+        public static string ConvertRelativeToFullPath(string relativePath)
+        {
+            // Check if the relative path starts with "Assets/"
+            if (relativePath.StartsWith("Assets/"))
+            {
+                // Combine with Application.dataPath
+                return System.IO.Path.Combine(Application.dataPath, relativePath["Assets/".Length..]).Replace('\\', '/');
+            }
+            // Check if the relative path starts with "Packages/"
+            else if (relativePath.StartsWith("Packages/"))
+            {
+                return FileUtil.GetPhysicalPath(relativePath);
+            }
+
+            throw new System.ArgumentException($"Invalid relative path: {relativePath}");
+        }
+
+        public static string ConvertFullPathToRelative(string fullPath)
+        {
+            // Normalize path to use forward slashes
+            fullPath = fullPath.Replace("\\", "/");
+
+            // Get the project's Assets path
+            string assetsPath = Application.dataPath.Replace('\\', '/');
+            string packagesPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "Packages")).Replace('\\', '/');
+
+            // Check if the absolute path starts with the Assets path
+            if (fullPath.StartsWith(assetsPath))
+            {
+                return FileUtil.GetProjectRelativePath(fullPath);
+            }
+            // Check if the absolute path starts with the Packages path
+            else if (fullPath.StartsWith(packagesPath))
+            {
+                return FileUtil.GetLogicalPath(fullPath);
+            }
+
+            throw new System.ArgumentException($"Invalid full path: {fullPath}");
+        }
 #endif
 
         #region Format Keys
         /// <summary>
         /// Formats a list of <see cref="KeyValuePair"/> into a custom enum class.
         /// </summary>
-        /// <param name="gameDataFilepath">The relative path to the save folder excluding the Assets folder.</param>
+        /// <param name="relativeFilePath">The relative path to the save folder including the /Assets or /Packages folders.</param>
         /// <param name="namespaceName">The namespace that the resulting class should be in</param>
         /// <param name="scriptName">The name of resulting class</param>
         /// <param name="keys">The keys to be used</param>
-        public static void FormatKeyFiles(string gameDataFilepath, string namespaceName, string scriptName, List<KeyValuePair> keys)
+        public static void FormatKeyFiles(string relativeFilePath, string namespaceName, string scriptName, string category, List<KeyValuePair> keys)
         {
-            var gameDataProjectFilePath = $"/{gameDataFilepath}/{scriptName}.cs";
-            var filepath = Application.dataPath + gameDataProjectFilePath;
+            var filePath = $"{ConvertRelativeToFullPath(relativeFilePath)}/{scriptName}.cs".Replace("\\", "/");
+            var relativePath = relativeFilePath.Replace("\\", "/");            
 
             StringBuilder sb = new();
 
@@ -433,12 +646,14 @@ namespace Vapor.Keys
 
             sb.Append($"namespace {namespaceName}\n");
             sb.Append("{\n");
-            sb.Append($"\tpublic class {scriptName}\n");
+            sb.Append($"\tpublic class {scriptName} : IKeysProvider\n");
             sb.Append("\t{\n");
 
 
-            FormatFilePath(sb, $"{gameDataFilepath}");
-            FormatAttributeName(sb, namespaceName,$"{scriptName}");
+            FormatFilePath(sb, relativePath);
+            FormatAttributeName(sb, namespaceName, $"{scriptName}");
+
+            FormatCategory(sb, category.EmptyOrNull() ? scriptName : category);
 
             FormatEnum(sb, keys);
 
@@ -459,18 +674,23 @@ namespace Vapor.Keys
             sb.Append("\t}\n");
             sb.Append("}");
 
-            System.IO.File.WriteAllText(filepath, sb.ToString());
+            System.IO.File.WriteAllText(filePath, sb.ToString());
         }
 
         private static void FormatFilePath(StringBuilder sb, string relativePath)
         {
-            sb.Append($"\t\tpublic const string RELATIVE_PATH = \"{relativePath}\";\n");
+            sb.Append($"\t\tpublic const string {RELATIVE_PATH} = \"{relativePath}\";\n");
         }
 
         private static void FormatAttributeName(StringBuilder sb, string namespaceName, string className)
         {
-            sb.Append($"\t\tpublic const string AssemblyQualifiedClassName = \"{namespaceName}.{className}, {namespaceName}, version=1.0.0.0, Culture=neutral, PublicKeyToken=null\";\n");
-            sb.Append($"\t\tpublic const string FieldName = \"$DropdownValues\";\n");
+            sb.Append($"\t\tpublic const string {ASSEMBLY_QUALIFIED_CLASS_NAME} = \"{namespaceName}.{className}, {namespaceName}, version=1.0.0.0, Culture=neutral, PublicKeyToken=null\";\n");
+            sb.Append($"\t\tpublic const string FIELD_NAME = \"@{KEYS_FIELD_NAME}\";\n");
+        }
+
+        private static void FormatCategory(StringBuilder sb, string category)
+        {
+            sb.Append($"\t\tpublic const string {KEYS_CATEGORY_NAME} = \"{category}\";\n\n");
         }
 
         private static void FormatEnum(StringBuilder sb, List<KeyValuePair> keys)
@@ -516,7 +736,7 @@ namespace Vapor.Keys
 
         private static void FormatDropDown(StringBuilder sb, List<KeyValuePair> keys)
         {
-            sb.Append($"\t\tpublic static List<(string, KeyDropdownValue)> DropdownValues = new()\n");
+            sb.Append($"\t\tpublic static List<(string, KeyDropdownValue)> {KEYS_FIELD_NAME} = new()\n");
             sb.Append("\t\t{\n");
             for (int i = 0; i < keys.Count; i++)
             {
@@ -542,7 +762,7 @@ namespace Vapor.Keys
             sb.Append($"\t\tpublic static string Lookup(int id)\n");
             sb.Append("\t\t{\n");
 
-            sb.Append($"\t\t\treturn DropdownValues.Find((x) => x.Item2.Key == id).Item1;\n");
+            sb.Append($"\t\t\treturn {KEYS_FIELD_NAME}.Find((x) => x.Item2.Key == id).Item1;\n");
 
             sb.Append("\t\t}\n");
         }
@@ -552,7 +772,7 @@ namespace Vapor.Keys
             sb.Append($"\t\tpublic static KeyDropdownValue Get(int id)\n");
             sb.Append("\t\t{\n");
 
-            sb.Append($"\t\t\treturn DropdownValues.Find((x) => x.Item2.Key == id).Item2;\n");
+            sb.Append($"\t\t\treturn {KEYS_FIELD_NAME}.Find((x) => x.Item2.Key == id).Item2;\n");
 
             sb.Append("\t\t}\n");
         }

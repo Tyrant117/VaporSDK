@@ -6,17 +6,27 @@ using UnityEngine.Assertions;
 
 namespace Vapor.Observables
 {
+    public static class ObservableSerializerUtility
+    {
+        public static readonly JsonSerializerSettings s_JsonSerializerSettings = new()
+        {
+            Formatting = Formatting.Indented,
+            ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
+            TypeNameHandling = TypeNameHandling.Auto,
+        };
+    }
+
     [Serializable]
     public struct SavedObservable
     {
-        public string Name;
-        public string ValueType;
-        public object Value;
+        public string Name { get; set; }
+        public Type ValueType { get; set; }
+        public object Value { get; set; }
 
         public SavedObservable(string name, Type valueType, object value)
         {
             Name = name;
-            ValueType = valueType.AssemblyQualifiedName;
+            ValueType = valueType;
             Value = value;
         }
     }
@@ -29,17 +39,24 @@ namespace Vapor.Observables
         /// The Id of the field.
         /// </summary>
         public string Name { get; set; }
+
+        /// <summary>
+        /// The Id of the field.
+        /// </summary>
+        public ushort Id { get; set; }
+
         /// <summary>
         /// If true, the this value will be saved.
         /// </summary>
         public bool SaveValue { get; set; }
 
         // ***** Events ******
-        public event Action<Observable> Dirtied = delegate { };
+        public event Action<Observable> Dirtied;
 
         protected Observable(string name, bool saveValue)
         {
             Name = name;
+            Id = Name.GetStableHashU16();
             SaveValue = saveValue;
         }
 
@@ -60,12 +77,12 @@ namespace Vapor.Observables
 
         protected void OnDirtied()
         {
-            Dirtied.Invoke(this);
+            Dirtied?.Invoke(this);
         }
 
         internal virtual void ClearCallbacks()
         {
-            Dirtied = delegate { };
+            Dirtied = null;
         }
         #endregion
 
@@ -75,13 +92,18 @@ namespace Vapor.Observables
 
         public static Observable Load(string json)
         {
-            var load = JsonConvert.DeserializeObject<SavedObservable>(json);
-            return Load(load);
+            var load = JsonConvert.DeserializeObject<SavedObservable>(json, ObservableSerializerUtility.s_JsonSerializerSettings);
+            var valueType = load.ValueType;// Type.GetType(load.ValueType);
+            Type loadType = typeof(Observable<>).MakeGenericType(valueType);
+            var result = Activator.CreateInstance(loadType, new object[] { load.Name, true }) as Observable;
+            result.SetValueBoxed(Convert.ChangeType(load.Value, valueType));
+            return result;
+            //return Load(load);
         }
 
         public static Observable Load(SavedObservable load)
         {
-            var valueType = Type.GetType(load.ValueType);
+            var valueType = load.ValueType;// Type.GetType(load.ValueType);
             Type loadType = typeof(Observable<>).MakeGenericType(valueType);
             var result = Activator.CreateInstance(loadType, new object[] { load.Name, true }) as Observable;
             //result.Name = load.Name;
@@ -185,12 +207,12 @@ namespace Vapor.Observables
 
                 var oldValue = _value;
                 _value = value;
-                ValueChanged.Invoke(this, oldValue);
+                ValueChanged?.Invoke(this, oldValue);
                 OnDirtied();
             }
         }
 
-        public event Action<Observable<T>, T> ValueChanged = delegate { }; // Value and Old Value
+        public event Action<Observable<T>, T> ValueChanged; // Value and Old Value
         
 
         public Observable(string name, bool saveValue) : base(name, saveValue)
@@ -234,15 +256,16 @@ namespace Vapor.Observables
         internal override void ClearCallbacks()
         {
             base.ClearCallbacks();
-            ValueChanged = delegate { };
+            ValueChanged = null;
         }
         #endregion
 
         #region - Saving and Loading -
         public override string SaveAsJson()
         {
-            var save = Save();
-            return JsonConvert.SerializeObject(save);
+            //var save = Save();
+            var save = new SavedObservable(Name, typeof(T), _value);
+            return JsonConvert.SerializeObject(save, ObservableSerializerUtility.s_JsonSerializerSettings);
         }
 
         public override SavedObservable Save()

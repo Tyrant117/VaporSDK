@@ -54,16 +54,6 @@ namespace Vapor.VisualScripting
             return this;
         }
 
-        //public PortSlot WithContent(Type contentType, object defaultValue)
-        //{
-        //    Assert.IsNotNull(contentType, "Content Type Cannot Be Null");
-        //    IsOptional = true;
-        //    HasContent = true;
-        //    ContentType = contentType;
-        //    Content = defaultValue;
-        //    return this;
-        //}
-
         public FieldInfo GetContentFieldInfo()
         {
             if (_contentFieldInfo != null)

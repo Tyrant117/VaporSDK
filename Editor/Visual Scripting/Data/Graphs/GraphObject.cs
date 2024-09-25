@@ -9,6 +9,10 @@ using Vapor.Inspector;
 
 namespace VaporEditor.VisualScripting
 {
+    /// <summary>
+    /// The backing object for the graph.
+    /// All changes made to the graph should be reflected here and then drawn to the proper view.
+    /// </summary>
     public class GraphObject : ScriptableObject, ISourceDataStore<GraphModel>
     {
         public Type GraphType;
@@ -69,8 +73,6 @@ namespace VaporEditor.VisualScripting
         {
 
         }
-
-
 
         #region Nodes
         public void AddNode(NodeModel node)

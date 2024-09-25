@@ -28,4 +28,10 @@ public static class GlobalSettingsMenu
     {
         ScriptableObjectUtility.Create<GlobalSettingStringSo>();
     }
+
+    [MenuItem("Assets/Create/Vapor/Global Settings/ULong", priority = VaporConfig.AssetMenuPriority, secondaryPriority = 19)]
+    private static void CreateGlobalSettingULong()
+    {
+        ScriptableObjectUtility.Create<GlobalSettingULongSo>();
+    }
 }

@@ -8,7 +8,7 @@ namespace Vapor.GameplayTag
 {
     public static class GameplayTagUtility
     {
-        private const string s_NameOfType = "GameplayTagKeys";
+        public const string CATEGORY_NAME = "GameplayTags";
 
         /// <summary>
         /// Gets a list of all keys defined in the GameplayTagKeys script if it exists in the project.
@@ -16,7 +16,7 @@ namespace Vapor.GameplayTag
         /// <returns>Returns either the GameplayTagKeys.Values or a list with the "None" value if the GameplayTagKeys does not exist.</returns>
         public static List<(string, int)> GetAllGameplayTagsValues()
         {
-            var kdvL = KeyUtility.GetAllKeysOfNamedType(s_NameOfType);
+            var kdvL = KeyUtility.GetAllKeysFromCategory(CATEGORY_NAME);
             List<(string, int)> result = new(kdvL.Count);
             foreach (var kvp in kdvL)
             {
@@ -31,7 +31,7 @@ namespace Vapor.GameplayTag
         /// <returns>Returns either the GameplayTagKeys.DropdownValues or a list with the "None" value if the GameplayTagKeys does not exist.</returns>
         public static List<(string, KeyDropdownValue)> GetAllGameplayTagsKeyValues()
         {
-            return KeyUtility.GetAllKeysOfNamedType(s_NameOfType);
+            return KeyUtility.GetAllKeysFromCategory(CATEGORY_NAME);
         }
     }
 }

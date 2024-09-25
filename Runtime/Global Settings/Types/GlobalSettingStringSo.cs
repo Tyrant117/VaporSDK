@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Vapor.Inspector;
 
 namespace Vapor.GlobalSettings
 {
@@ -11,14 +12,15 @@ namespace Vapor.GlobalSettings
         [SerializeField]
         protected string StartingValue;
 
-        private string _value;
+        [NonSerialized]
+        private string _value = null;
         public string Value
         {
             get
             {
-                if (_value == null)
+                if (_value.EmptyOrNull())
                 {
-                    var defaultVal = GetJsonStringValue(string.Empty);
+                    var defaultVal = GetJsonStringValue(StartingValue);
                     _value = defaultVal;
                 }
                 return _value;
@@ -28,7 +30,6 @@ namespace Vapor.GlobalSettings
                 string old = _value;
                 _value = value;
                 ValueChanged?.Invoke(_value, old);
-                Debug.Log("Global Set");
                 SetJsonStringValue(_value);
             }
         }

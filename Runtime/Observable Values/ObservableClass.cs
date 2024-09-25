@@ -56,28 +56,37 @@ namespace Vapor.Observables
         public string Name { get; set; }
 
         /// <summary>
+        /// A unique id for this instance of the class.
+        /// </summary>
+        public ushort Id { get; set; }
+
+        /// <summary>
         /// Gets a field based on the ID and casts it to a type that inherits from <see cref="ObservableField"/>. There is no checking, will throw errors on invalid id.
         /// </summary>
         /// <param name="fieldID">The id of the field to retrieve</param>
         /// <typeparam name="T">The type to cast the field to</typeparam>
         /// <returns>The <see cref="ObservableField"/> of type T</returns>
-        public T GetField<T>(string fieldName) where T : Observable => (T)Fields[fieldName];
+        public T GetField<T>(string fieldName) where T : Observable => (T)Fields[fieldName.GetStableHashU16()];
+        public T GetField<T>(ushort fieldId) where T : Observable => (T)Fields[fieldId];
 
         public T GetFieldValue<T>(string fieldName) where T : struct => GetField<Observable<T>>(fieldName).Value;
+        public T GetFieldValue<T>(ushort fieldId) where T : struct => GetField<Observable<T>>(fieldId).Value;
 
         public void SetFieldValue<T>(string fieldName, T value) where T : struct => GetField<Observable<T>>(fieldName).Value = value;
+        public void SetFieldValue<T>(ushort fieldId, T value) where T : struct => GetField<Observable<T>>(fieldId).Value = value;
 
-        protected readonly Dictionary<string, Observable> Fields = new();
+        protected readonly Dictionary<ushort, Observable> Fields = new();
         protected bool IsLoaded = false;
 
         /// <summary>
         /// This event is fired when the <see cref="ObservableField"/>s of the class change.
         /// </summary>
-        public event Action<ObservableClass, Observable> Dirtied = delegate { };
+        public event Action<ObservableClass, Observable> Dirtied;
 
         protected ObservableClass(string className)
         {
             Name = className;
+            Id = Name.GetStableHashU16();
             SetupFields();
         }
 
@@ -87,26 +96,42 @@ namespace Vapor.Observables
         /// </summary>
         protected abstract void SetupFields();
 
+        public Observable<T> GetOrAddField<T>(string fieldName, bool saveValue, T value, Action<Observable<T>, T> callback = null) where T : struct
+        {
+            var id = fieldName.GetStableHashU16();
+            if (!Fields.ContainsKey(id))
+            {
+                return AddField(fieldName, saveValue, value, callback);
+            }
+            else
+            {
+                var field = (Observable<T>)Fields[id];
+                field.WithChanged(callback);
+                return field;
+            }
+        }
+
         public Observable<T> AddField<T>(string fieldName, bool saveValue, T value, Action<Observable<T>, T> callback = null) where T : struct
         {
-            if (!Fields.ContainsKey(fieldName))
+            var id = fieldName.GetStableHashU16();
+            if (!Fields.ContainsKey(id))
             {
                 var field = new Observable<T>(fieldName, saveValue, value).WithChanged(callback);
                 field.WithDirtied(MarkDirty);
-                Fields.Add(fieldName, field);
-                MarkDirty(Fields[fieldName]);
+                Fields.Add(id, field);
+                MarkDirty(Fields[id]);
                 return field;
             }
             else
             {
                 Debug.LogError($"Field [{fieldName}] already added to class {Name}");
-                return (Observable<T>)Fields[fieldName];
+                return (Observable<T>)Fields[id];
             }
         }
 
         public void AddField(Observable field)
         {
-            if (Fields.TryAdd(field.Name, field))
+            if (Fields.TryAdd(field.Id, field))
             {
                 field.WithDirtied(MarkDirty);
                 MarkDirty(field);
@@ -119,16 +144,20 @@ namespace Vapor.Observables
 
         public void RemoveField(string fieldName)
         {
-            if (Fields.TryGetValue(fieldName, out var field))
+            RemoveField(fieldName.GetStableHashU16());
+        }
+        public void RemoveField(ushort fieldId)
+        {
+            if (Fields.TryGetValue(fieldId, out var field))
             {
                 field.ClearCallbacks();
-                Fields.Remove(fieldName);
+                Fields.Remove(fieldId);
             }
         }
 
         internal virtual void MarkDirty(Observable field)
         {
-            Dirtied.Invoke(this, field);
+            Dirtied?.Invoke(this, field);
         }
         #endregion
 
@@ -136,7 +165,7 @@ namespace Vapor.Observables
         public string SaveAsJson()
         {
             var save = Save();
-            return JsonConvert.SerializeObject(save);
+            return JsonConvert.SerializeObject(save, ObservableSerializerUtility.s_JsonSerializerSettings);
         }
 
         public SavedObservableClass Save()
@@ -154,7 +183,7 @@ namespace Vapor.Observables
 
         public static SavedObservableClass Load(string json)
         {
-            return JsonConvert.DeserializeObject<SavedObservableClass>(json);
+            return JsonConvert.DeserializeObject<SavedObservableClass>(json, ObservableSerializerUtility.s_JsonSerializerSettings);
         }
 
         public void Load(SavedObservableClass load)
@@ -168,9 +197,10 @@ namespace Vapor.Observables
                     foreach (var field in load.SavedFields)
                     {
                         var obs = Observable.Load(field);
-                        if (Fields.ContainsKey(field.Name))
+                        var id = field.Name.GetStableHashU16();
+                        if (Fields.ContainsKey(id))
                         {
-                            Fields[field.Name].SetValueBoxed(obs.GetValueBoxed());
+                            Fields[id].SetValueBoxed(obs.GetValueBoxed());
                         }
                         else
                         {

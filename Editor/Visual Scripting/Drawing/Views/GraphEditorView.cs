@@ -47,6 +47,8 @@ namespace VaporEditor.VisualScripting
 
         public void OnDropOutsidePort(Edge edge, Vector2 position)
         {
+            Debug.Log($"EdgeConnectorListener.OnDropOutsidePort({edge}, {position})");
+
             var draggedPort = (edge.output != null ? edge.output.edgeConnector.edgeDragHelper.draggedPort : null) ?? (edge.input != null ? edge.input.edgeConnector.edgeDragHelper.draggedPort : null);
             m_SearchWindowProvider.target = null;
             m_SearchWindowProvider.connectedPort = (BlueprintPort)draggedPort;
@@ -59,6 +61,8 @@ namespace VaporEditor.VisualScripting
 
         public void OnDrop(GraphView graphView, Edge edge)
         {
+            Debug.Log($"EdgeConnectorListener.OnDrop({graphView}, {edge})");
+
             var leftSlot = edge.output.GetSlot();
             var rightSlot = edge.input.GetSlot();
             if (leftSlot != null && rightSlot != null)
@@ -72,6 +76,8 @@ namespace VaporEditor.VisualScripting
 
     public class GraphEditorView : VisualElement, IDisposable
     {
+        const string k_ClassTag = "<b>GraphEditorView</b>";
+
         const string k_UserViewSettings = "VaporEditor.Graphs.ToggleSettings";
         const string k_FloatingWindowsLayoutKey = "VaporEditor.Graphs.FloatingWindowsLayout";
 
@@ -88,6 +94,8 @@ namespace VaporEditor.VisualScripting
         private SearchWindowProvider m_SearchWindowProvider;
         //private BlackboardViewController _blackboardController;
         private EdgeConnectorListener _edgeConnectorListener;
+        private bool _maximized;
+        private bool _debugMode;
 
         public event Action SaveRequested = delegate { };
         public event Action ShowInProjectRequested = delegate { };
@@ -103,6 +111,8 @@ namespace VaporEditor.VisualScripting
             AssetName = graphName;
 
             styleSheets.Add(Resources.Load<StyleSheet>("Styles/GraphEditorView"));
+            ColorUtility.TryParseHtmlString("#07070D", out var bgColor);
+            style.backgroundColor = bgColor;
             var serializedSettings = EditorUserSettings.GetConfigValue(k_UserViewSettings);
             ViewSettings = JsonUtility.FromJson<UserViewSettings>(serializedSettings) ?? new UserViewSettings();
 
@@ -126,6 +136,7 @@ namespace VaporEditor.VisualScripting
 
         private void NodeCreationRequest(NodeCreationContext context)
         {
+            Debug.Log($"GraphEditorView.NodeCreationRequest: target:{context.target}");
             if (EditorWindow.focusedWindow == Window) //only display the search window when current graph view is focused
             {
                 m_SearchWindowProvider.connectedPort = null;
@@ -143,16 +154,36 @@ namespace VaporEditor.VisualScripting
             var toolbar = new IMGUIContainer(() =>
             {
                 GUILayout.BeginHorizontal(EditorStyles.toolbar);
-                if (GUILayout.Button("Save Asset", EditorStyles.toolbarButton))
+                if (GUILayout.Button(EditorGUIUtility.IconContent("d_SaveAs"), EditorStyles.toolbarButton))
                 {
                     SaveRequested.Invoke();
                 }
-                if (GUILayout.Button("Show In Project", EditorStyles.toolbarButton))
+                if (GUILayout.Button(EditorGUIUtility.IconContent("d_scenepicking_pickable_hover"), EditorStyles.toolbarButton))
                 {
                     ShowInProjectRequested.Invoke();
                 }
 
                 GUILayout.FlexibleSpace();
+
+                EditorGUI.BeginChangeCheck();
+                _maximized = _maximized
+                    ? GUILayout.Toggle(_maximized, EditorGUIUtility.IconContent("d_FullscreenOn"), EditorStyles.toolbarButton)
+                    : GUILayout.Toggle(_maximized, EditorGUIUtility.IconContent("d_Fullscreen"), EditorStyles.toolbarButton);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    Window.maximized = _maximized;
+                    Debug.Log($"Window Maximized: {_maximized}");
+                }
+
+
+                EditorGUI.BeginChangeCheck();
+                _debugMode = _debugMode
+                    ? GUILayout.Toggle(_debugMode, EditorGUIUtility.IconContent("debug On"), EditorStyles.toolbarButton)
+                    : GUILayout.Toggle(_debugMode, EditorGUIUtility.IconContent("debug"), EditorStyles.toolbarButton);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    Debug.Log($"Debug Mode: {_debugMode}");
+                }
 
                 if (GUILayout.Button("Mock Evaluate", EditorStyles.toolbarButton))
                 {
@@ -283,7 +314,11 @@ namespace VaporEditor.VisualScripting
             GraphView.elementsRemovedFromGroup = null;
         }
 
-        void ApplySerializedWindowLayouts(GeometryChangedEvent evt)
+        /// <summary>
+        /// Create the default docking(position/size) layouts for the windows.
+        /// </summary>
+        /// <param name="evt"></param>
+        private void ApplySerializedWindowLayouts(GeometryChangedEvent evt)
         {
             //_blackboardController.Blackboard.DeserializeLayout();
 
@@ -306,7 +341,7 @@ namespace VaporEditor.VisualScripting
         #region - Setup Nodes -
         private void AddNodes()
         {
-            Debug.Log($"Adding Child Nodes: {GraphObject.Graph.Nodes.Count}");
+            Debug.Log($"{k_ClassTag}.AddNodes: {GraphObject.Graph.Nodes.Count}");
             foreach (var node in GraphObject.Graph.Nodes)
             {
                 NParamNodeDrawerHelper.AddNodes(node, this, _edgeConnectorListener, EditorNodes, null);
@@ -315,6 +350,7 @@ namespace VaporEditor.VisualScripting
 
         private void AddEdges()
         {
+            Debug.Log($"{k_ClassTag}.AddEdges: EditorNodes:{EditorNodes.Count}");
             foreach (var inputNode in EditorNodes)
             {
                 var edges = inputNode.GetNode().InEdges;
@@ -352,6 +388,7 @@ namespace VaporEditor.VisualScripting
             {
                 if (graphViewChange.edgesToCreate != null)
                 {
+                    Debug.Log($"{k_ClassTag}.OnGraphViewChanged: edges:{graphViewChange.edgesToCreate.Count}");
                     foreach (var edge in graphViewChange.edgesToCreate)
                     {
                         AddEdge(edge);
@@ -364,6 +401,7 @@ namespace VaporEditor.VisualScripting
             {
                 if (graphViewChange.movedElements != null)
                 {
+                    Debug.Log($"{k_ClassTag}.OnGraphViewChanged: moved:{graphViewChange.movedElements.Count}");
                     foreach (var element in graphViewChange.movedElements)
                     {
                         if (element is IGraphEditorNode node)
@@ -383,6 +421,7 @@ namespace VaporEditor.VisualScripting
             {
                 if (graphViewChange.elementsToRemove != null)
                 {
+                    Debug.Log($"{k_ClassTag}.OnGraphViewChanged: removed:{graphViewChange.elementsToRemove.Count}");
                     foreach (var edge in graphViewChange.elementsToRemove.OfType<Edge>())
                     {
                         if (edge.input != null && edge.output != null && edge.input.node is IGraphEditorNode rightN && edge.output.node is IGraphEditorNode leftN)
@@ -421,6 +460,8 @@ namespace VaporEditor.VisualScripting
 
         public void AddNode(NodeModel node)
         {
+            Debug.Log($"{k_ClassTag}.{nameof(AddNode)}: {node.GetType().Name}");
+
             if (NParamNodeDrawerHelper.AddNodes(node, this, _edgeConnectorListener, EditorNodes, GraphObject.Graph.Nodes))
                 return;
         }
@@ -438,6 +479,8 @@ namespace VaporEditor.VisualScripting
                 var outNodeSo = outNode.GetNode();
                 PortSlot outSlot = (PortSlot)edge.output.userData;
 
+                Debug.Log($"{k_ClassTag}.{nameof(AddEdge)}: In:{inNodeSo.GetType().Name} | Out:{outNodeSo.GetType().Name}");
+
                 //int inPortIndex = inNode.InPorts.Values.ToList().IndexOf(edge.input);
                 //string inPortName = inNodeSo.InSlots.Values.ToArray()[inPortIndex].UniqueName;
 
@@ -449,6 +492,10 @@ namespace VaporEditor.VisualScripting
 
                 inNodeSo.InEdges.Add(new EdgeConnection(new(inSlot.UniqueName, inNodeSo.Guid), new(outSlot.UniqueName, outNodeSo.Guid)));
                 outNodeSo.OutEdges.Add(new EdgeConnection(new(inSlot.UniqueName, inNodeSo.Guid), new(outSlot.UniqueName, inNodeSo.Guid)));
+            }
+            else
+            {
+                Debug.Log($"{k_ClassTag}.{nameof(AddEdge)}: IO is invalid | In:{inNode == null} | Out:{outNode == null}");
             }
         }
         #endregion        

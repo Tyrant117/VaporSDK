@@ -11,18 +11,18 @@ namespace Vapor.Events
     {
         [BoxGroup("Provided Key", order: -10000), SerializeField, ValueDropdown("@GetAllProviderKeyValues"), IgnoreCustomDrawer]
         protected KeyDropdownValue Key;
-        
+
         protected virtual void OnEnable()
         {
             if (Key.IsNone) return;
-            
+
             ProviderBus.Get<CachedProviderData<Component>>(Key).Subscribe(OnComponentRequested);
         }
 
         protected virtual void OnDisable()
         {
             if (Key.IsNone) return;
-            
+
             ProviderBus.Get<CachedProviderData<Component>>(Key).Unsubscribe(OnComponentRequested);
         }
 

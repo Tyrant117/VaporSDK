@@ -8,7 +8,7 @@ namespace Vapor.Events
 {
     public class ProvidesTransform : VaporBehaviour
     {
-        [SerializeField, ValueDropdown("$GetAllProviderKeyValues", searchable: true), IgnoreCustomDrawer]
+        [SerializeField, ValueDropdown("@GetAllProviderKeyValues", searchable: true), IgnoreCustomDrawer]
         private KeyDropdownValue _key;
         [SerializeField]
         private Transform _transform;
