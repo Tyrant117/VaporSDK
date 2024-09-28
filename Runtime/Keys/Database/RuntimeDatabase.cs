@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using UnityEngine;
 using Vapor;
+using Vapor.Inspector;
 using Object = UnityEngine.Object;
 
 namespace Vapor.Keys
@@ -68,7 +69,7 @@ namespace Vapor.Keys
                     s_Db.Add(data.name.GetStableHashU16(), (T)data);
                 }
             }
-            Debug.Log($"RuntimeDatabase of type:{typeof(T).Name}. Init! Added: {s_Db.Count} items!");
+            Debug.Log($"{TooltipMarkup.ClassMethod(nameof(RuntimeDatabase<T>), nameof(InitDatabase))} - {TooltipMarkup.Class(typeof(T).Name)} - Loaded {s_Db.Count} Items");
         }
 
         public static void InitKeyDatabase<U>(KeyDatabaseSo<U> db) where U : ScriptableObject, IKey, T

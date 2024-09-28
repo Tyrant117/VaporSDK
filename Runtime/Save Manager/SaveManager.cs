@@ -5,6 +5,7 @@ using System.Threading;
 using UnityEngine;
 using System.Linq;
 using System.IO;
+using Vapor.Inspector;
 
 namespace Vapor.SaveManager
 {
@@ -89,8 +90,8 @@ namespace Vapor.SaveManager
         public static void SetSaveDirectory(string directoryName)
         {
             Initialize();
-            s_PersistantPath = Path.Combine(s_PersistantPath, directoryName);
-            Debug.Log($"[SaveManager] SetSaveDirectory - {s_PersistantPath}");
+            s_PersistantPath = Path.Combine(s_PersistantPath, directoryName).Replace("\\", "/");
+            Debug.Log($"{TooltipMarkup.ClassMethod(nameof(SaveManager), nameof(SetSaveDirectory))} - {s_PersistantPath}");
             if (!Directory.Exists(s_PersistantPath))
             {
                 // Create the directory if it doesn't exist

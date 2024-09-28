@@ -39,7 +39,7 @@ namespace Vapor.Events
         /// <returns>T: Cannot return null</returns>
         public T As<T>() where T : ProvidedMonoBehaviour
         {
-            Assert.IsNotNull((T)this, $"Type {TooltipMarkup.ClassMarkup(nameof(T))} must inherit from {TooltipMarkup.ClassMarkup(nameof(ProvidedMonoBehaviour))}");
+            Assert.IsNotNull((T)this, $"Type {TooltipMarkup.Class(nameof(T))} must inherit from {TooltipMarkup.Class(nameof(ProvidedMonoBehaviour))}");
             return (T)this;
         }
 

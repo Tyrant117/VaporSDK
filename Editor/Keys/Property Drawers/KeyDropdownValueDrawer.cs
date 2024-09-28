@@ -25,7 +25,7 @@ namespace VaporEditor.Keys
             var atr = fieldInfo.GetCustomAttribute<ValueDropdownAttribute>();
             if (atr == null)
             {
-                return new Label($"{property.displayName} must implement {TooltipMarkup.ClassMarkup(nameof(ValueDropdownAttribute))}");
+                return new Label($"{property.displayName} must implement {TooltipMarkup.Class(nameof(ValueDropdownAttribute))}");
             }
             IList convert = null;
             switch (atr.Filter)
