@@ -511,7 +511,7 @@ namespace Vapor.Keys
             }
         }
 
-        private static string FindNearestDirectory(Object obj)
+        public static string FindNearestDirectory(Object obj)
         {
             string path = AssetDatabase.GetAssetPath(obj);
 
@@ -546,7 +546,7 @@ namespace Vapor.Keys
             return FullFolderPath;
         }
 
-        private static string FindNearestAssemblyDefinition(Object obj)
+        public static string FindNearestAssemblyDefinition(Object obj)
         {
             string path = AssetDatabase.GetAssetPath(obj);
             path = System.IO.Path.GetDirectoryName(path);

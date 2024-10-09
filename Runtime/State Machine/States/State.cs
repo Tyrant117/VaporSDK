@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Vapor;
 
-namespace Vapor.StateMachine
+namespace Vapor.StateMachines
 {
     public class State
     {
@@ -29,7 +29,7 @@ namespace Vapor.StateMachine
         /// <summary>
         /// The ID of the state
         /// </summary>
-        public int ID { get; }
+        public ushort Id { get; }
         /// <summary>
         /// If true, the state will immediatly test all outgoing transitions before calling OnUpdate.
         /// </summary>
@@ -62,7 +62,7 @@ namespace Vapor.StateMachine
         public State(string name, bool canExitInstantly, bool canTransitionToSelf = false)
         {
             Name = name;
-            ID = name.GetStableHashU16();
+            Id = name.GetStableHashU16();
             CanExitInstantly = canExitInstantly;
             CanTransitionToSelf = canTransitionToSelf;
             Timer = new Timer();

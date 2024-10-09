@@ -114,6 +114,16 @@ namespace Vapor.Keys
             return type.GetField(KeyGenerator.KEYS_FIELD_NAME, BindingFlags.Public | BindingFlags.Static);
         }
 
+        public static void GenerateKeysOfType<T>() where T : KeySo
+        {
+            var scriptName = typeof(T).Name;
+            scriptName = scriptName.Replace("Scriptable", "");
+            scriptName = scriptName.Replace("SO", "");
+            scriptName = scriptName.Replace("So", "");
+            scriptName = scriptName.Replace("Key", "");
+            KeyGenerator.GenerateKeys(typeof(T), $"{scriptName}Keys");
+        }
+
         //// Old
 
         //private static readonly Dictionary<string, Type> s_CachedKeyTypes = new();

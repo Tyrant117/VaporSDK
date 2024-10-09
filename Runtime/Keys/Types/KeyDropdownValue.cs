@@ -1,26 +1,26 @@
 using System;
 using UnityEngine;
 using Vapor.Inspector;
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
 
 namespace Vapor.Keys
 {
     /// <summary>
     /// The base struct that contains a key. Optionally links to the guid of an object and can be used for remapping key values if that objects key changes.
-    /// Has a custom drawer for selecting a key from a dropdown and be decorated with the <see cref="ValueDropdownAttribute"/>
+    /// Has a custom drawer for selecting a key from a dropdown and be decorated with the <see cref="ValueDropdownAttribute"/>.
     /// <example>
-    /// How to implement the custom dropdown.
+    /// <para>How to implement the custom dropdown.</para>
     /// <code>
-    /// [Serializable, DrawWithVapor]
+    /// [Serializable]
     /// public class DropdownDrawerExample
     /// {
     ///     [SerializeField, ValueDropdown("@GetCustomKeys")]
     ///     private KeyDropdownValue _exampleDropdown;
+    ///     [SerializeField, ValueDropdown("CustomKeysCategory",ValueDropdownAttribute.FilterType.Category)]
+    ///     private KeyDropdownValue _exampleDropdownCategory;
+    ///     [SerializeField, ValueDropdown("CustomKeysType", ValueDropdownAttribute.FilterType.TypeName)]
+    ///     private KeyDropdownValue _exampleDropdownType;
     ///
-    /// 
-    ///     private List&lt;(string, KeyDropdownValue)> GetCustomKeys()
+    ///     private IEnumerable GetCustomKeys()
     ///     {
     ///         return new List&lt;(string, KeyDropdownValue)> { "None", new KeyDropdownValue() };
     ///     }
@@ -70,8 +70,7 @@ namespace Vapor.Keys
             if (Guid == string.Empty) return;
             
             var refVal = UnityEditor.AssetDatabase.LoadAssetAtPath<ScriptableObject>(UnityEditor.AssetDatabase.GUIDToAssetPath(Guid));
-            EditorGUIUtility.PingObject(refVal);
-            Selection.SetActiveObjectWithContext(refVal, null);
+            RuntimeEditorUtility.Ping(refVal);
 #endif
         }
 
@@ -80,12 +79,12 @@ namespace Vapor.Keys
         {
 #if UNITY_EDITOR
             if (Guid == string.Empty) return;
-            var refVal = AssetDatabase.LoadAssetAtPath<ScriptableObject>(UnityEditor.AssetDatabase.GUIDToAssetPath(Guid));
+            var refVal = UnityEditor.AssetDatabase.LoadAssetAtPath<ScriptableObject>(UnityEditor.AssetDatabase.GUIDToAssetPath(Guid));
             
             if (refVal is not IKey rfk) return;
             rfk.ForceRefreshKey();
             Key = rfk.Key;
-            EditorUtility.SetDirty(refVal);
+            RuntimeEditorUtility.DirtyAndSave(refVal);
 #endif
         }
 

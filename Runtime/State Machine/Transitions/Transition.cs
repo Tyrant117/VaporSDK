@@ -1,7 +1,7 @@
 using System;
 using Vapor;
 
-namespace Vapor.StateMachine
+namespace Vapor.StateMachines
 {
     public class Transition
     {
@@ -49,8 +49,8 @@ namespace Vapor.StateMachine
 
         protected Transition(State from, State to, int desire)
         {
-            From = from.ID;
-            To = to.ID;
+            From = from.Id;
+            To = to.Id;
             Desire = desire;
             _inverse = false;
         }

@@ -31,6 +31,25 @@ namespace Vapor.Keys
                 Debug.LogError("[RuntimeDatabaseUtility] Method not found.");
             }
         }
+
+        public static void PostInitializeRuntimeDatabase(Type ofType)
+        {
+            Type runtimeDatabaseGenericType = typeof(RuntimeDatabase<>);
+            Type runtimeDatabaseType = runtimeDatabaseGenericType.MakeGenericType(ofType);
+
+            // Find the method you want to call
+            MethodInfo initKeyDatabaseMethod = runtimeDatabaseType.GetMethod("PostInitDatabase", BindingFlags.Public | BindingFlags.Static);
+
+            if (initKeyDatabaseMethod != null)
+            {
+                // Make the method call
+                initKeyDatabaseMethod.Invoke(null, null);
+            }
+            else
+            {
+                Debug.LogError("[RuntimeDatabaseUtility] Method not found.");
+            }
+        }
     }
 
     public class RuntimeDatabase<T> where T : Object
@@ -42,7 +61,6 @@ namespace Vapor.Keys
 
         public static void InitDatabase(List<Object> keyValuePairs)
         {
-
             s_Db ??= new Dictionary<int, T>();
             s_Db.Clear();
 
@@ -51,10 +69,6 @@ namespace Vapor.Keys
                 var converted = keyValuePairs.OfType<IKey>();
                 foreach (var data in converted)
                 {
-                    if (data is IDatabaseInitialize dbInit)
-                    {
-                        dbInit.InitializedInDatabase();
-                    }
                     s_Db.Add(data.Key, (T)data);
                 }
             }
@@ -62,14 +76,22 @@ namespace Vapor.Keys
             {
                 foreach (var data in keyValuePairs)
                 {
-                    if (data is IDatabaseInitialize dbInit)
-                    {
-                        dbInit.InitializedInDatabase();
-                    }
                     s_Db.Add(data.name.GetStableHashU16(), (T)data);
                 }
             }
             Debug.Log($"{TooltipMarkup.ClassMethod(nameof(RuntimeDatabase<T>), nameof(InitDatabase))} - {TooltipMarkup.Class(typeof(T).Name)} - Loaded {s_Db.Count} Items");
+        }
+
+        public static void PostInitDatabase()
+        {
+            //Debug.Log($"{TooltipMarkup.ClassMethod(nameof(RuntimeDatabase<T>), nameof(PostInitDatabase))} - {TooltipMarkup.Class(typeof(T).Name)}");
+            foreach (var item in s_Db.Values)
+            {
+                if(item is IDatabaseInitialize dbInit)
+                {
+                    dbInit.InitializedInDatabase();
+                }
+            }
         }
 
         public static void InitKeyDatabase<U>(KeyDatabaseSo<U> db) where U : ScriptableObject, IKey, T

@@ -1,6 +1,6 @@
 using System;
 
-namespace Vapor.StateMachine
+namespace Vapor.StateMachines
 {
     public class TimedTransition : Transition
     {

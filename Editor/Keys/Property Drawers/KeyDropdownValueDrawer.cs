@@ -177,6 +177,7 @@ namespace VaporEditor.Keys
                     else
                     {
                         Debug.LogError($"Could Not Resolve IEnumerable at Property: {Property.InspectorObject.Type.Name} Resolver: {dropdownAttribute.Resolver}");
+                        return null;
                     }
                     break;
                 case 1:

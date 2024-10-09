@@ -1,6 +1,6 @@
 using System;
 
-namespace Vapor.StateMachine
+namespace Vapor.StateMachines
 {
     /// <summary>
     /// A transition that waits until the coroutine running in a <see cref="CoroutineState"/> is complete then returns true.

@@ -83,6 +83,13 @@ namespace Vapor.Observables
         /// </summary>
         public event Action<ObservableClass, Observable> Dirtied;
 
+        protected ObservableClass(ushort id)
+        {
+            Name = id.ToString();
+            Id = id;
+            SetupFields();
+        }
+
         protected ObservableClass(string className)
         {
             Name = className;
@@ -96,6 +103,20 @@ namespace Vapor.Observables
         /// </summary>
         protected abstract void SetupFields();
 
+        public Observable<T> GetOrAddField<T>(ushort fieldId, bool saveValue, T value, Action<Observable<T>, T> callback = null) where T : struct
+        {
+            if (!Fields.ContainsKey(fieldId))
+            {
+                return AddField(fieldId, saveValue, value, callback);
+            }
+            else
+            {
+                var field = (Observable<T>)Fields[fieldId];
+                field.WithChanged(callback);
+                return field;
+            }
+        }
+
         public Observable<T> GetOrAddField<T>(string fieldName, bool saveValue, T value, Action<Observable<T>, T> callback = null) where T : struct
         {
             var id = fieldName.GetStableHashU16();
@@ -108,6 +129,23 @@ namespace Vapor.Observables
                 var field = (Observable<T>)Fields[id];
                 field.WithChanged(callback);
                 return field;
+            }
+        }
+
+        public Observable<T> AddField<T>(ushort fieldId, bool saveValue, T value, Action<Observable<T>, T> callback = null) where T : struct
+        {
+            if (!Fields.ContainsKey(fieldId))
+            {
+                var field = new Observable<T>(fieldId, saveValue, value).WithChanged(callback);
+                field.WithDirtied(MarkDirty);
+                Fields.Add(fieldId, field);
+                MarkDirty(Fields[fieldId]);
+                return field;
+            }
+            else
+            {
+                Debug.LogError($"Field [{fieldId}] already added to class {Name}");
+                return (Observable<T>)Fields[fieldId];
             }
         }
 

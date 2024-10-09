@@ -1,6 +1,6 @@
 using System;
 
-namespace Vapor.StateMachine
+namespace Vapor.StateMachines
 {
     /// <summary>
     /// Waits until a value is met then triggers the transition.

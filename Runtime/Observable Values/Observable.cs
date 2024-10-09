@@ -53,6 +53,13 @@ namespace Vapor.Observables
         // ***** Events ******
         public event Action<Observable> Dirtied;
 
+        protected Observable(ushort id, bool saveValue)
+        {
+            Name = id.ToString();
+            Id = id;
+            SaveValue = saveValue;
+        }
+
         protected Observable(string name, bool saveValue)
         {
             Name = name;
@@ -213,7 +220,16 @@ namespace Vapor.Observables
         }
 
         public event Action<Observable<T>, T> ValueChanged; // Value and Old Value
-        
+
+        public Observable(ushort id, bool saveValue) : base(id, saveValue)
+        {
+            Value = default;
+        }
+
+        public Observable(ushort id, bool saveValue, T value) : base(id, saveValue)
+        {
+            Value = value;
+        }
 
         public Observable(string name, bool saveValue) : base(name, saveValue)
         {

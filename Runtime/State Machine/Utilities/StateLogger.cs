@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Vapor.StateMachine
+namespace Vapor.StateMachines
 {
     [System.Serializable]
     public class StateLogger

@@ -346,6 +346,27 @@ namespace Vapor.GameplayTag
             return HasAllExact(tagContainer.GetTags());
         }
 
+        public bool AddTag(int tagId)
+        {
+            Init();
+            return _validTags.Add(tagId);
+        }
+        public bool AddTag(string tagName)
+        {
+            return AddTag(tagName.GetStableHashU16());
+        }
+
+        public bool RemoveTag(int tagId)
+        {
+            Init();
+
+            return _validTags.Remove(tagId);
+        }
+        public bool RemoveTag(string tagName)
+        {
+            return RemoveTag(tagName.GetStableHashU16());
+        }
+
         public IEnumerable<int> GetTags()
         {
             foreach (var t in _tags)

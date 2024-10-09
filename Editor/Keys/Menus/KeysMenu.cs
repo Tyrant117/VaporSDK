@@ -18,5 +18,11 @@ namespace VaporEditor.Keys
         {
             ScriptableObjectUtility.Create<IntegerKeySo>();
         }
+
+        [MenuItem("Assets/Create/Vapor/Keys/Key Collection", priority = VaporConfig.AssetMenuPriority, secondaryPriority = 2)]
+        private static void CreateKeyCollection()
+        {
+            ScriptableObjectUtility.Create<KeyCollectionSo>();
+        }
     }
 }

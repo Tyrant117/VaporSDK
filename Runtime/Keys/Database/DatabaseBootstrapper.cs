@@ -23,6 +23,11 @@ namespace Vapor.Keys
                     var assets = RuntimeAssetDatabaseUtility.FindAssetsByType(type);
                     RuntimeDatabaseUtility.InitializeRuntimeDatabase(type, assets);
                 }
+
+                foreach (var type in types)
+                {
+                    RuntimeDatabaseUtility.PostInitializeRuntimeDatabase(type);
+                }
 #endif
             }
             else
@@ -44,6 +49,14 @@ namespace Vapor.Keys
                         {
                             var assets = Resources.LoadAll("", type);
                             RuntimeDatabaseUtility.InitializeRuntimeDatabase(type, assets.ToList());
+                        }
+                    }
+
+                    foreach (var type in types)
+                    {
+                        if (type.IsDefined(typeof(DatabaseKeyValuePairAttribute), false))
+                        {
+                            RuntimeDatabaseUtility.PostInitializeRuntimeDatabase(type);
                         }
                     }
                 }

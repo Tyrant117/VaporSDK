@@ -48,6 +48,11 @@ namespace VaporEditor
 
         static PackageDependencyResolver()
         {
+            if (EditorApplication.isRemoteConnected || EditorApplication.isTemporaryProject || IsPackageManagerDisabled())
+            {
+                return;
+            }
+
             if (!SessionState.GetBool(nameof(PackageDependencyResolver), false))
             {
                 s_ResolveMissing = true;
@@ -56,6 +61,8 @@ namespace VaporEditor
                 SessionState.SetBool(nameof(PackageDependencyResolver), true);
             }
         }
+
+        public static bool IsPackageManagerDisabled() => (bool)typeof(EditorApplication).GetProperty("isPackageManagerDisabled", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic).GetValue(null);
 
         #region - Find Missing -
         private static void CheckingMissingDependencies()
@@ -115,7 +122,7 @@ namespace VaporEditor
                 }
                 else
                 {
-                    Debug.LogError($"Failed to search for packages: {s_ListRequest.Error.message}");
+                    Debug.Log($"Failed to search for packages: {s_ListRequest.Error.message}");
                 }
             }
         }

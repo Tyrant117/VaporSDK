@@ -8,22 +8,26 @@ namespace Vapor.Keys
     /// A scriptable object implementation of the IKey interface that derives its display name from the <see cref="ScriptableObject.name"/>
     /// Has a value that must be set in the editor.
     /// </summary>
-    //[CreateAssetMenu(menuName = "Vapor/Keys/Integer Key", fileName = "IntegerKey", order = VaporConfig.KeyPriority + 2)]
     public class IntegerKeySo : VaporScriptableObject, IKey
     {
-        [FoldoutGroup("Key", "Key Data"), SerializeField, RichTextTooltip("The unique for this object.")]
+        [BoxGroup("Key", "Key Data"), SerializeField, ReadOnly, RichTextTooltip("The unique for this object.")]
+        [InlineToggleButton("ToggleDeprecated", "@Deprecated", "d_VisibilityOff", "d_VisibilityOn", tooltip: "If <lw>Shut</lw>, this key will be ignored by KeyGenerator.GenerateKeys().")]
+        [InlineButton("GenerateKeys", icon: "d_Refresh", tooltip: "Forces Generation of the keys for this Type")]
         private int _key;
-        [SerializeField]
-        [FoldoutGroup("Key"), RichTextTooltip("If <lw>TRUE</lw>, this key will be ignored by KeyGenerator.GenerateKeys().")]
-        protected bool _deprecated;
+        [SerializeField, HideInInspector]
+        protected bool Deprecated;
+
         public int Key => _key;
-        public void ForceRefreshKey() { }
         public string DisplayName => name;
-        public bool IsDeprecated => _deprecated;
+        public bool IsDeprecated => Deprecated;
+
         public virtual bool ValidKey() { return true; }
 
+        public void ForceRefreshKey() { }
+#pragma warning disable IDE0051 // Remove unused private members
+        private void ToggleDeprecated() { Deprecated = !Deprecated; }
+#pragma warning restore IDE0051 // Remove unused private members        
 
-        [FoldoutGroup("Key"), Button, RichTextTooltip("Forces Generation of the keys for this Type")]
         public void GenerateKeys()
         {
             var type = GetKeyScriptType();
@@ -41,16 +45,6 @@ namespace Vapor.Keys
             return GetType();
         }
 
-        public virtual void GenerateAdditionalKeys() { }
-
-        public static void GenerateKeysOfType<T>() where T : KeySo
-        {
-            var scriptName = typeof(T).Name;
-            scriptName = scriptName.Replace("Scriptable", "");
-            scriptName = scriptName.Replace("SO", "");
-            scriptName = scriptName.Replace("So", "");
-            scriptName = scriptName.Replace("Key", "");
-            KeyGenerator.GenerateKeys(typeof(T), $"{scriptName}Keys");
-        }
+        public virtual void GenerateAdditionalKeys() { }        
     }
 }

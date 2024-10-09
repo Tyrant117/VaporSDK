@@ -112,7 +112,7 @@ namespace Vapor.SaveManager
             }
             else
             {
-                Debug.LogError($"Saveable with Key {saveable.Key} already exists!");
+                Debug.LogError($"Saveable with Key {saveable.Key} already exists! {saveable.Filename}");
             }
         }
 

@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Unity.Profiling;
 using UnityEngine;
 
-namespace Vapor.StateMachine
+namespace Vapor.StateMachines
 {
     /// <summary>
     /// A state machine that can be active on multiple layers at once.
@@ -29,7 +29,7 @@ namespace Vapor.StateMachine
             _activeStateIDs.Clear();
             for (int i = 0; i < _activeStates.Count; i++)
             {
-                _activeStateIDs.Add(_activeStates[i].ID);
+                _activeStateIDs.Add(_activeStates[i].Id);
             }
             return _activeStateIDs;
         }
@@ -106,7 +106,7 @@ namespace Vapor.StateMachine
         /// <param name="name">The name / identifier of the start state</param>
         public void SetDefaultState(State name, int layer)
         {
-            _startStates[layer] = (layer, name.ID, true);
+            _startStates[layer] = (layer, name.Id, true);
         }
 
         /// <summary>
@@ -420,17 +420,17 @@ namespace Vapor.StateMachine
             state.StateMachine = this;
             state.OnEnable();
 
-            StateBundle bundle = GetOrCreateStateBundle(layer, state.ID);
+            StateBundle bundle = GetOrCreateStateBundle(layer, state.Id);
             bundle.State = state;
-            _stateToStringMap[new(layer, state.ID)] = state.Name;
+            _stateToStringMap[new(layer, state.Id)] = state.Name;
 
             if (!_startStates.ContainsKey(layer) || !_startStates[layer].hasState)
             {
                 if (canBeStartingState)
                 {
-                    SetDefaultState(state.ID, layer);
+                    SetDefaultState(state.Id, layer);
                 }
-                _pendingStates[layer] = (layer, state.ID, false);
+                _pendingStates[layer] = (layer, state.Id, false);
                 _activeStates[layer] = null;
                 _transitionsFromAny[layer] = new();
                 _layerCount++;
@@ -596,7 +596,7 @@ namespace Vapor.StateMachine
             foreach (Transition transition in transitions)
             {
                 // Don't transition to the "to" state, if that state is already the active state
-                if (!canTransitionOnSelf && _activeStates[layer] != null && transition.To == _activeStates[layer].ID)
+                if (!canTransitionOnSelf && _activeStates[layer] != null && transition.To == _activeStates[layer].Id)
                 {
                     continue;
                 }

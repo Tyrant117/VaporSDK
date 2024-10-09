@@ -4,7 +4,7 @@ using Unity.Profiling;
 using UnityEngine;
 using UnityEngine.Assertions;
 
-namespace Vapor.StateMachine
+namespace Vapor.StateMachines
 {
     /// <summary>
     /// Standard implementation of the <see cref="IStateMachine"/>
@@ -41,7 +41,7 @@ namespace Vapor.StateMachine
                 return _activeState;
             }
         }
-        public int ActiveStateID => ActiveState.ID;
+        public int ActiveStateID => ActiveState.Id;
         public string ActiveStateName => ActiveState.Name;
         public bool IsRoot => StateMachine == null;
 
@@ -120,7 +120,7 @@ namespace Vapor.StateMachine
         /// <param name="name">The name / identifier of the start state</param>
         public void SetDefaultState(State state)
         {
-            _startState = (state.ID, true);
+            _startState = (state.Id, true);
         }
 
         /// <summary>
@@ -441,13 +441,13 @@ namespace Vapor.StateMachine
             state.StateMachine = this;
             state.OnEnable();
 
-            StateBundle bundle = GetOrCreateStateBundle(state.ID);
+            StateBundle bundle = GetOrCreateStateBundle(state.Id);
             bundle.State = state;
-            _stateToStringMap[state.ID] = state.Name;
+            _stateToStringMap[state.Id] = state.Name;
 
             if (_nameToStateBundle.Count == 1 && !_startState.hasState)
             {
-                SetDefaultState(state.ID);
+                SetDefaultState(state.Id);
             }
         }
 
@@ -607,7 +607,7 @@ namespace Vapor.StateMachine
             {
                 // Don't transition to the "to" state, if that state is already the active state
                 // Unless the state can explicitly transition to itself, but only on local transitions. Global transitions can never transition to the currently active state.
-                if ((isGlobalTransition || !_activeState.CanTransitionToSelf) && transition.To == _activeState.ID)
+                if ((isGlobalTransition || !_activeState.CanTransitionToSelf) && transition.To == _activeState.Id)
                 {
                     continue;
                 }
@@ -660,14 +660,11 @@ namespace Vapor.StateMachine
 		/// trigger transitions to see whether a transition should occur.
 		/// </summary>
 		/// <param name="trigger">The name / identifier of the trigger</param>
-		public void Trigger(int trigger)
+		public bool Trigger(int trigger)
         {
             // If a transition occurs, then the trigger should not be activated
             // in the new active state, that the state machine just switched to.
-            if (TryTrigger(trigger))
-            {
-                return;
-            }
+            return TryTrigger(trigger);
         }
         #endregion
 

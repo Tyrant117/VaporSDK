@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Vapor.StateMachine
+namespace Vapor.StateMachines
 {
     public class CoroutineState : State
     {

@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Vapor.StateMachine
+namespace Vapor.StateMachines
 {
     public static class StateMachineExtensions
     {
