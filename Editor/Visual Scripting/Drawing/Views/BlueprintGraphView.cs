@@ -11,7 +11,7 @@ namespace VaporEditor.VisualScripting
 {
     public class BlueprintGraphView : GraphView, IDrawableElement, ISelectionProvider
     {
-        public GraphEditorView View { get; }
+        public BlueprintGraphEditorView View { get; }
         public GraphObject GraphObject { get; }
 
         public List<ISelectable> GetSelection => selection;
@@ -19,7 +19,7 @@ namespace VaporEditor.VisualScripting
         public delegate void SelectionChanged(List<ISelectable> selection);
         public SelectionChanged OnSelectionChange;
 
-        public BlueprintGraphView(GraphEditorView view, GraphObject graphObject)
+        public BlueprintGraphView(BlueprintGraphEditorView view, GraphObject graphObject)
         {
             View = view;
             GraphObject = graphObject;

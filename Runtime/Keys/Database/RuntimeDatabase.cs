@@ -58,6 +58,7 @@ namespace Vapor.Keys
         public static T Get(int id) => s_Db[id];
         public static bool TryGet(int id, out T value) => s_Db.TryGetValue(id, out value);
         public static IEnumerable<T> All() => s_Db.Values;
+        public static int Count => s_Db.Count;
 
         public static void InitDatabase(List<Object> keyValuePairs)
         {
@@ -87,9 +88,17 @@ namespace Vapor.Keys
             //Debug.Log($"{TooltipMarkup.ClassMethod(nameof(RuntimeDatabase<T>), nameof(PostInitDatabase))} - {TooltipMarkup.Class(typeof(T).Name)}");
             foreach (var item in s_Db.Values)
             {
-                if(item is IDatabaseInitialize dbInit)
+                if (item is IDatabaseInitialize dbInit)
                 {
                     dbInit.InitializedInDatabase();
+                }
+            }
+
+            foreach (var item in s_Db.Values)
+            {
+                if (item is IDatabaseInitialize dbInit)
+                {
+                    dbInit.PostInitializedInDatabase();
                 }
             }
         }

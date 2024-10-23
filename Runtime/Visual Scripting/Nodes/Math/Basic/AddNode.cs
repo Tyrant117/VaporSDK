@@ -6,6 +6,7 @@ namespace Vapor.VisualScripting
     public class AddNode : INode, IReturnNode<double>
     {
         public uint Id { get; }
+        public IGraph Graph { get; set; }
 
         public readonly IReturnNode<double> A;
         public readonly IReturnNode<double> B;
@@ -25,6 +26,13 @@ namespace Vapor.VisualScripting
         public double GetValue(IGraphOwner owner, string portName = "")
         {
             return A.GetValue(owner, _aPort) + B.GetValue(owner, _bPort);
+        }
+
+        public void Traverse(Action<INode> callback)
+        {
+            A.Traverse(callback);
+            B.Traverse(callback);
+            callback(this);
         }
     }
 

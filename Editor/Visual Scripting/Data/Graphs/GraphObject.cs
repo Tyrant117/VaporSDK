@@ -27,6 +27,7 @@ namespace VaporEditor.VisualScripting
         private List<EdgeConnection> _edgesToRemove = new();
 
         public event Action<GraphModel, ISourceDataAction> Subscribe;
+        public Action<NodeModel> RequireRedraw;
 
         public void Setup(string json, Type modelType)
         {
@@ -49,10 +50,16 @@ namespace VaporEditor.VisualScripting
         public void Validate()
         {
             Graph.Nodes ??= new List<NodeModel>();
-            if(Graph is FunctionGraphModel functionGraph)
+            if (Graph is FunctionGraphModel functionGraph)
             {
                 functionGraph.GetEntryNode();
                 functionGraph.GetReturnNode();
+                functionGraph.RedrawEntryNode = OnRequireRedraw;
+                functionGraph.RedrawReturnNode = OnRequireRedraw;
+            }
+            if (Graph is MathGraphModel mathGraph)
+            {
+                mathGraph.GetReturnNode();
             }
         }
 
@@ -72,6 +79,11 @@ namespace VaporEditor.VisualScripting
         public void Dispatch(ISourceDataAction changeAction)
         {
 
+        }
+
+        private void OnRequireRedraw(NodeModel node)
+        {
+            RequireRedraw?.Invoke(node);
         }
 
         #region Nodes

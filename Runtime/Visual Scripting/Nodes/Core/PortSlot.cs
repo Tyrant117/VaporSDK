@@ -54,6 +54,15 @@ namespace Vapor.VisualScripting
             return this;
         }
 
+        public PortSlot WithContent(Type type)
+        {
+            IsOptional = true;
+            HasContent = true;
+            ContentType = type;
+            Content = Activator.CreateInstance(type);
+            return this;
+        }
+
         public FieldInfo GetContentFieldInfo()
         {
             if (_contentFieldInfo != null)

@@ -2,9 +2,10 @@
 
 namespace Vapor.VisualScripting
 {
-    public class DoubleNode : INode, IReturnNode<double>
+    public class DoubleNode : IReturnNode<double>
     {
         public uint Id { get; }
+        public IGraph Graph { get; set; }
         public double Value { get; }
 
         public DoubleNode(string guid, double value)
@@ -14,6 +15,11 @@ namespace Vapor.VisualScripting
         }
 
         public double GetValue(IGraphOwner owner, string portName = "") => Value;
+
+        public void Traverse(Action<INode> callback)
+        {
+            callback(this);
+        }
     }
 
     [Serializable, SearchableNode("Value Types/Double", "Double"), NodeIsToken]

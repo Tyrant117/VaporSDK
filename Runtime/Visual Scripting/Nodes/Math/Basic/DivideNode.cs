@@ -1,10 +1,12 @@
 using System;
+using Vapor.Inspector;
 
 namespace Vapor.VisualScripting
 {
-    public class DivideNode : INode, IReturnNode<double>
+    public class DivideNode : IReturnNode<double>
     {
         public uint Id { get; }
+        public IGraph Graph { get; set; }
 
         public readonly IReturnNode<double> A;
         public readonly IReturnNode<double> B;
@@ -16,8 +18,8 @@ namespace Vapor.VisualScripting
         {
             Id = guid.GetStableHashU32();
             A = (IReturnNode<double>)a.Node;
-            B = (IReturnNode<double>)b.Node;
             _aPort = a.PortName;
+            B = (IReturnNode<double>)b.Node;
             _bPort = b.PortName;
 
         }
@@ -26,18 +28,34 @@ namespace Vapor.VisualScripting
         {
             return A.GetValue(owner, _aPort) / B.GetValue(owner, _bPort);
         }
+
+        public void Traverse(Action<INode> callback)
+        {
+            A.Traverse(callback);
+            B.Traverse(callback);
+            callback(this);
+        }
     }
 
-    [SearchableNode("Math/Basic/Divide", "Divide", "math")]
+    [Serializable, SearchableNode("Math/Basic/Divide", "Divide", "math")]
     public class DivideNodeModel : NodeModel
     {
-        [PortIn("A", 0, true, typeof(double))]
-        public NodeReference A;
-        [PortIn("B", 1, true, typeof(double))]
-        public NodeReference B;
+        private const string k_A = "a";
+        private const string k_B = "b";
+        private const string k_Result = "result";
 
-        [PortOut("Out", 0, true, typeof(double))]
-        public NodeReference Out;
+        public override void BuildSlots()
+        {
+            base.BuildSlots();
+            InSlots.TryAdd(k_A, new PortSlot(k_A, "A", PortDirection.In, typeof(double))
+                .WithContent<double>(0));
+            InSlots.TryAdd(k_B, new PortSlot(k_B, "B", PortDirection.In, typeof(double))
+                .WithContent<double>(0));
+
+            OutSlots.TryAdd(k_Result, new PortSlot(k_Result, "Result", PortDirection.Out, typeof(double))
+                .SetAllowMultiple()
+                .SetIsOptional());
+        }
 
         public override INode Build(GraphModel graph)
         {
@@ -46,7 +64,12 @@ namespace Vapor.VisualScripting
                 return NodeRef;
             }
 
-            NodeRef = new DivideNode(Guid, new(graph.Get(A).Build(graph), A.PortName), new(graph.Get(B).Build(graph), B.PortName));
+            var sa = InSlots[k_A];
+            var sb = InSlots[k_B];
+
+            NodePortTuple a = sa.Reference.Guid.EmptyOrNull() ? new(new DoubleNode(Guid, (double)sa.Content), string.Empty) : new(graph.Get(sa.Reference).Build(graph), sa.Reference.PortName);
+            NodePortTuple b = sb.Reference.Guid.EmptyOrNull() ? new(new DoubleNode(Guid, (double)sb.Content), string.Empty) : new(graph.Get(sb.Reference).Build(graph), sb.Reference.PortName);
+            NodeRef = new DivideNode(Guid, a, b);
             return NodeRef;
         }
     }

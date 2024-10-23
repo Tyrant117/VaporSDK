@@ -33,7 +33,7 @@ namespace VaporEditor.VisualScripting
     {
         public static List<SearchContextElement> Elements = new();
 
-        public GraphEditorView View;
+        public BlueprintGraphEditorView View;
         public List<string> IncludeFlags = new();
 
         public void SetupIncludes(List<string> includes)

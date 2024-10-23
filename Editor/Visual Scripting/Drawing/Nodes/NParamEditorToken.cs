@@ -21,7 +21,7 @@ namespace VaporEditor.VisualScripting
         private List<FieldInfo> _nodeContentData;
         private Dictionary<int, FieldInfo> _portContentData;
 
-        public NParamEditorToken(GraphEditorView view, NodeModel node, EditorLabelVisualData visualData) : base(null, null)
+        public NParamEditorToken(BlueprintGraphEditorView view, NodeModel node, EditorLabelVisualData visualData) : base(null, null)
         {
             View = view;
             Node = node;
@@ -120,6 +120,11 @@ namespace VaporEditor.VisualScripting
             titleLabel.style.marginBottom = 6;
             titleLabel.style.marginLeft = 6;
             titleLabel.style.marginRight = 6;
+        }
+
+        public override void RedrawPorts(EdgeConnectorListener edgeConnectorListener)
+        {
+
         }
 
         private void CreateFlowInPort()

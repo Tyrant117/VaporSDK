@@ -1,11 +1,12 @@
 using System;
-using UnityEngine;
+using Vapor.Inspector;
 
 namespace Vapor.VisualScripting
 {
-    public class SquareRootNode : INode, IReturnNode<double>
+    public class SquareRootNode : IReturnNode<double>
     {
         public uint Id { get; }
+        public IGraph Graph { get; set; }
 
         public readonly IReturnNode<double> A;
 
@@ -22,16 +23,30 @@ namespace Vapor.VisualScripting
         {
             return Math.Sqrt(A.GetValue(owner, _aPort));
         }
+
+        public void Traverse(Action<INode> callback)
+        {
+            A.Traverse(callback);
+            callback(this);
+        }
     }
 
-    [SearchableNode("Math/Basic/Square Root", "Square Root", "math")]
+    [Serializable, SearchableNode("Math/Basic/Square Root", "Square Root", "math")]
     public class SquareRootNodeModel : NodeModel
     {
-        [PortIn("A", 0, true, typeof(double))]
-        public NodeReference A;
+        private const string k_A = "a";
+        private const string k_Result = "result";
 
-        [PortOut("Out", 0, true, typeof(double))]
-        public NodeReference Out;
+        public override void BuildSlots()
+        {
+            base.BuildSlots();
+            InSlots.TryAdd(k_A, new PortSlot(k_A, "A", PortDirection.In, typeof(double))
+                .WithContent<double>(0));
+
+            OutSlots.TryAdd(k_Result, new PortSlot(k_Result, "Result", PortDirection.Out, typeof(double))
+                .SetAllowMultiple()
+                .SetIsOptional());
+        }
 
         public override INode Build(GraphModel graph)
         {
@@ -40,7 +55,10 @@ namespace Vapor.VisualScripting
                 return NodeRef;
             }
 
-            NodeRef = new SquareRootNode(Guid, new(graph.Get(A).Build(graph), A.PortName));
+            var sa = InSlots[k_A];
+
+            NodePortTuple a = sa.Reference.Guid.EmptyOrNull() ? new(new DoubleNode(Guid, (double)sa.Content), string.Empty) : new(graph.Get(sa.Reference).Build(graph), sa.Reference.PortName);
+            NodeRef = new SquareRootNode(Guid, a);
             return NodeRef;
         }
     }

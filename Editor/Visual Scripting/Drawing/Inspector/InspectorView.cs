@@ -71,7 +71,7 @@ namespace VaporEditor.VisualScripting
         {
             contentContainer.Clear();
 
-            var graphEditorView = ParentView.GetFirstAncestorOfType<GraphEditorView>();
+            var graphEditorView = ParentView.GetFirstAncestorOfType<BlueprintGraphEditorView>();
             if (graphEditorView == null)
             {
                 Debug.Log("InspectorView not attached to GraphEditorView");
@@ -126,6 +126,7 @@ namespace VaporEditor.VisualScripting
                 bool anySelectables = false;
                 int currentInspectablesCount = 0;
                 var currentInspectables = new HashSet<IInspectableNode>();
+                //Debug.Log($"Drawing Selection: {Selection.Count}");
                 foreach (var selectable in Selection)
                 {
                     if (selectable is IInspectableNode inspectable)
@@ -168,7 +169,12 @@ namespace VaporEditor.VisualScripting
 
         private void DrawInspectable(VisualElement nodeSettingsContainer, IDrawableElement inspectable)
         {
-            nodeSettingsContainer.Add(inspectable.DrawElement());
+            var element = inspectable.DrawElement();
+            if (element == null)
+            {
+                return;
+            }
+            nodeSettingsContainer.Add(element);
         }
 
 

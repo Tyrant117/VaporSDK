@@ -1,19 +1,21 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace Vapor.Keys
 {
     public static class DatabaseBootstrapper
     {
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static HashSet<Type> s_TypeInitDataStoreCounter;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSplashScreen)]
         private static void Init()
         {
+            s_TypeInitDataStoreCounter ??= new();
+            s_TypeInitDataStoreCounter.Clear();
             if (Application.isEditor)
             {
 #if UNITY_EDITOR
@@ -40,6 +42,7 @@ namespace Vapor.Keys
                 {
                     // Get all types in the assembly
                     Type[] types = assembly.GetTypes();
+                    List<Type> validTypes = new(types.Length);
 
                     // Iterate through each type
                     foreach (Type type in types)
@@ -47,20 +50,37 @@ namespace Vapor.Keys
                         // Check if the type has the DatabaseKeyValuePair attribute
                         if (type.IsDefined(typeof(DatabaseKeyValuePairAttribute), false))
                         {
-                            var assets = Resources.LoadAll("", type);
-                            RuntimeDatabaseUtility.InitializeRuntimeDatabase(type, assets.ToList());
+                            validTypes.Add(type);
+                            var atr = type.GetCustomAttribute<DatabaseKeyValuePairAttribute>();
+                            if (atr.UseAddressables)
+                            {
+                                var assets = AddressableAssetUtility.LoadAll<UnityEngine.Object>(x => Debug.Log(x), atr.AddressableLabel);
+                                RuntimeDatabaseUtility.InitializeRuntimeDatabase(type, assets.ToList());
+                            }
+                            else
+                            {
+                                var assets = Resources.LoadAll("", type);
+                                RuntimeDatabaseUtility.InitializeRuntimeDatabase(type, assets.ToList());
+                            }
                         }
                     }
 
-                    foreach (var type in types)
+                    foreach (var type in validTypes)
                     {
-                        if (type.IsDefined(typeof(DatabaseKeyValuePairAttribute), false))
-                        {
-                            RuntimeDatabaseUtility.PostInitializeRuntimeDatabase(type);
-                        }
+                        RuntimeDatabaseUtility.PostInitializeRuntimeDatabase(type);
                     }
                 }
             }
+        }
+
+        public static bool HasInitDataStore(Type type)
+        {
+            return s_TypeInitDataStoreCounter.Contains(type);
+        }
+
+        public static void InitDataStore(Type type)
+        {
+            s_TypeInitDataStoreCounter.Add(type);
         }
     }
 }

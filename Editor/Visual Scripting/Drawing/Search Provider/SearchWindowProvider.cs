@@ -9,6 +9,7 @@ using UnityEngine.UIElements;
 using Vapor.VisualScripting;
 using Vapor;
 using Object = UnityEngine.Object;
+using System.Linq;
 
 namespace VaporEditor.VisualScripting
 {
@@ -104,7 +105,7 @@ namespace VaporEditor.VisualScripting
         public static List<NodeEntry> NodeEntries = new();
 
         public EditorWindow EditorWindow;
-        public GraphEditorView GraphEditorView;
+        public BlueprintGraphEditorView GraphEditorView;
         public Texture2D Icon;
 
 
@@ -112,7 +113,7 @@ namespace VaporEditor.VisualScripting
         public VisualElement target { get; set; }
         public bool regenerateEntries { get; set; }
 
-        public void Initialize(EditorWindow editorWindow, GraphEditorView graphEditorView)
+        public void Initialize(EditorWindow editorWindow, BlueprintGraphEditorView graphEditorView)
         {
             EditorWindow = editorWindow;
             GraphEditorView = graphEditorView;
@@ -210,10 +211,13 @@ namespace VaporEditor.VisualScripting
                 {
                     if (connectedPort == null)
                     {
-                        NodeEntry nodeEntry = new NodeEntry.Builder()
+                        if (GraphEditorView.SearchIncludeFlags.Intersect(attribute.IncludeFlags).Count() > 0)
+                        {
+                            NodeEntry nodeEntry = new NodeEntry.Builder()
                                 .WithNode(nodeType, attribute.MenuName)
                                 .Build();
-                        NodeEntries.Add(nodeEntry);
+                            NodeEntries.Add(nodeEntry);
+                        }
                     }
                 }
             }

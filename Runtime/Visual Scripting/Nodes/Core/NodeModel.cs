@@ -14,10 +14,16 @@ namespace Vapor.VisualScripting
     public class Node : INode
     {
         public uint Id { get; }
+        public IGraph Graph { get; set; }
 
         public Node(string guid)
         {
             Id = guid.GetStableHashU32();
+        }
+
+        public void Traverse(Action<INode> callback)
+        {
+            callback(this);
         }
     }
 
@@ -26,6 +32,7 @@ namespace Vapor.VisualScripting
     {
         protected const string k_In = "in";
         protected const string k_Out = "out";
+        protected static Color s_DefaultTextColor = new(0.7568628f, 0.7568628f, 0.7568628f);
 
         public static string CreateGuid() => System.Guid.NewGuid().ToString();
 
@@ -46,6 +53,12 @@ namespace Vapor.VisualScripting
         public Dictionary<string, PortSlot> OutSlots = new();
         public virtual bool HasInPort => false;
         public virtual bool HasOutPort => false;
+
+        public Action RenameNode;
+        public void OnRenameNode()
+        {
+            RenameNode?.Invoke();
+        }
 
         public NodeModel()
         {
@@ -77,6 +90,10 @@ namespace Vapor.VisualScripting
             NodeRef = new Node(Guid);
             return NodeRef;
         }
+
+        public virtual (string, Color) GetNodeName() => (Name, s_DefaultTextColor);
+        public virtual (Sprite, Color) GetNodeNameIcon() => (null, Color.white);
+        public virtual object GraphSettingsInspector() => null;
 
         [Conditional("UNITY_EDITOR")]
         public virtual void LinkNodeData(List<NodeModel> nodesToLink, Action<NodeModel> callback)

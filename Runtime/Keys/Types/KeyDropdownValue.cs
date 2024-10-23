@@ -31,16 +31,24 @@ namespace Vapor.Keys
     [Serializable, IgnoreChildNodes]
     public struct KeyDropdownValue : IEquatable<KeyDropdownValue>
     {
-        public static implicit operator int(KeyDropdownValue kdv) => kdv.Key;
+        public static implicit operator ushort(KeyDropdownValue kdv) => kdv.Key;
+        public static bool operator ==(KeyDropdownValue left, KeyDropdownValue right) => left.Equals(right);
+        public static bool operator !=(KeyDropdownValue left, KeyDropdownValue right) => !(left == right);
 
         /// <summary>
         /// The guid of the object linked to this key.
         /// </summary>
         public string Guid;
+
         /// <summary>
         /// The unique key.
         /// </summary>
-        public int Key;
+        public ushort Key;
+
+        /// <summary>
+        /// The nice display name.
+        /// </summary>
+        public string DisplayName;
 
         /// <summary>
         /// If true, this is a "None" key.
@@ -52,16 +60,17 @@ namespace Vapor.Keys
         /// </summary>
         /// <param name="guid">The guid of the linked object (can be empty)</param>
         /// <param name="key">the unique key</param>
-        public KeyDropdownValue(string guid, int key)
+        public KeyDropdownValue(string guid, ushort key, string displayName)
         {
             Guid = guid;
             Key = key;
+            DisplayName = displayName;
         }
 
         /// <summary>
         /// Returns the "None" KeyDropdownValue.
         /// </summary>
-        public static KeyDropdownValue None => new (string.Empty, 0);
+        public static KeyDropdownValue None => new(string.Empty, 0, string.Empty);
 
         [System.Diagnostics.Conditional("UNITY_EDITOR")]
         public void Select()
@@ -83,7 +92,7 @@ namespace Vapor.Keys
             
             if (refVal is not IKey rfk) return;
             rfk.ForceRefreshKey();
-            Key = rfk.Key;
+            Key = (ushort)rfk.Key;
             RuntimeEditorUtility.DirtyAndSave(refVal);
 #endif
         }
@@ -95,8 +104,8 @@ namespace Vapor.Keys
             return obj is KeyDropdownValue other && Equals(other);
         }
 
-        public readonly bool Equals(KeyDropdownValue other) => Guid == other.Guid && Key == other.Key;
+        public readonly bool Equals(KeyDropdownValue other) => Key == other.Key;
 
-        public override readonly int GetHashCode() => HashCode.Combine(Guid, Key);
+        public override readonly int GetHashCode() => Key;
     }
 }

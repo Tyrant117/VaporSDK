@@ -38,8 +38,8 @@ namespace VaporEditor.VisualScripting
             return true;
         }
 
-        [MenuItem("Assets/Create/Vapor/Graphs/Create Math Graph", priority = VaporConfig.AssetMenuPriority, secondaryPriority = 500)]
-        private static void CreateMathGraph()
+        [MenuItem("Assets/Create/Vapor/Graphs/Function Graph", priority = VaporConfig.AssetMenuPriority, secondaryPriority = 500)]
+        private static void CreateFunctionGraph()
         {
             FunctionGraphModel graph = new();
             var json = JsonConvert.SerializeObject(graph, new JsonSerializerSettings()
@@ -61,5 +61,25 @@ namespace VaporEditor.VisualScripting
             //ProjectWindowUtil.CreateAssetWithContent("MathGraph.graph", json, Resources.Load<Texture2D>("chart-line"));
         }
 
+        [MenuItem("Assets/Create/Vapor/Graphs/Math Graph", priority = VaporConfig.AssetMenuPriority, secondaryPriority = 501)]
+        private static void CreateMathGraph()
+        {
+            FunctionGraphModel graph = new();
+            var json = JsonConvert.SerializeObject(graph, new JsonSerializerSettings()
+            {
+                ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
+                ContractResolver = new FieldsOnlyContractResolver(),
+                Converters = new List<JsonConverter> { new RectConverter() },
+                TypeNameHandling = TypeNameHandling.Auto,
+                Formatting = Formatting.Indented
+            });
+            var path = ScriptableObjectUtility.Create<GraphSo>(processAsset: (x) =>
+            {
+                var so = (GraphSo)x;
+                so.ModelType = typeof(MathGraphModel).AssemblyQualifiedName;
+                so.SearchIncludeFlags.Add("math");
+                so.ModelJson = json;
+            });
+        }
     }
 }

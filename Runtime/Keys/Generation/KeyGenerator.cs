@@ -46,7 +46,11 @@ namespace Vapor.Keys
 
             public KeyValuePair(string name, int key, string guid)
             {
+#if UNITY_EDITOR
+                DisplayName = UnityEditor.ObjectNames.NicifyVariableName(name);
+#else
                 DisplayName = name;
+#endif
                 VariableName = Regex.Replace(name, " ", "").Replace(".", "_");
                 Guid = guid;
                 Key = key;
@@ -84,7 +88,7 @@ namespace Vapor.Keys
         {
             return new KeyValuePair(key, key.GetStableHashU16(), string.Empty);
         }
-        #endregion
+#endregion
 
 #if UNITY_EDITOR
 
@@ -740,7 +744,7 @@ namespace Vapor.Keys
             sb.Append("\t\t{\n");
             for (int i = 0; i < keys.Count; i++)
             {
-                sb.Append($"\t\t\tnew (\"{keys[i].DisplayName}\", new (\"{keys[i].Guid}\", {keys[i].VariableName})),\n");
+                sb.Append($"\t\t\tnew (\"{keys[i].DisplayName}\", new (\"{keys[i].Guid}\", {keys[i].VariableName}, \"{keys[i].DisplayName}\")),\n");
             }
             sb.Append("\t\t};\n");
         }

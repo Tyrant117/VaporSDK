@@ -14,12 +14,13 @@ namespace VaporEditor.VisualScripting
         public Dictionary<string, Port> InPorts { get; set; } = new();
         public Dictionary<string, Port> OutPorts { get; set; } = new();
 
-        public GraphEditorView View { get; protected set; }
+        public BlueprintGraphEditorView View { get; protected set; }
 
         public event Action<string> ConnectedPort;
         public event Action<string> DisconnectedPort;
 
         public NodeModel GetNode() => Node;
+        public abstract void RedrawPorts(EdgeConnectorListener edgeConnectorListener);
 
         public void OnConnectedInputEdge(string portName)
         {

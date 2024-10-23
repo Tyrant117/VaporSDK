@@ -11,21 +11,26 @@ using NodeModel = Vapor.VisualScripting.NodeModel;
 
 namespace VaporEditor.VisualScripting
 {
-    public class NParamEditorNode : GraphToolsNode<NodeModel>
+    public class NParamEditorNode : GraphToolsNode<NodeModel>, IInspectableNode
     {
         private static readonly StyleSheet s_PortColors = Resources.Load<StyleSheet>("Styles/PortColors");
 
         private List<FieldInfo> _nodeContentData;
 
-        public NParamEditorNode(GraphEditorView view, NodeModel node, EdgeConnectorListener edgeConnectorListener)
+        public SelectableManipulator Selectable { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+
+        public NParamEditorNode(BlueprintGraphEditorView view, NodeModel node, EdgeConnectorListener edgeConnectorListener)
         {
             View = view;
             Node = node;
+            Node.RenameNode = OnRenameNode;
             FindParams();
 
             m_CollapseButton.RemoveFromHierarchy();
             StyleNode();
-            CreateTitle(node.Name);
+            var nameTuple = node.GetNodeName();
+            var iconTuple = node.GetNodeNameIcon();
+            CreateTitle(nameTuple.Item1, nameTuple.Item2, iconTuple.Item1, iconTuple.Item2);
 
             CreateAdditionalContent(mainContainer.Q("contents"));
 
@@ -60,18 +65,75 @@ namespace VaporEditor.VisualScripting
                 style.minWidth = width.MinWidth;
         }
 
-        private void CreateTitle(string title)
+        private void CreateTitle(string title, Color titleTint, Sprite titleIcon, Color titleIconTint)
         {
-            var overrideAtr = Node.GetType().GetCustomAttribute<NodeNameAttribute>();
-            if (overrideAtr != null)
-                title = overrideAtr.Name;
-
             this.title = title;
             var label = titleContainer.Q<Label>();
+            label.style.color = titleTint;
             label.style.flexGrow = 1;
             label.style.unityTextAlign = TextAnchor.MiddleCenter;
             label.style.marginRight = 6;
             label.style.marginLeft = 6;
+
+            if (titleIcon != null)
+            {
+                titleContainer.Insert(0, new Image()
+                {
+                    sprite = titleIcon,
+                    tintColor = titleIconTint,
+                    scaleMode = ScaleMode.ScaleToFit,
+                    style =
+                    {
+                        maxWidth = 16,
+                        maxHeight = 16,
+                        alignSelf = Align.Center,
+                        marginLeft = 6,
+                    }
+                });
+            }
+        }
+
+        private void OnRenameNode()
+        {
+            Debug.Log($"Setting Title: [{GetNode().GetNodeName()}]");
+            var nameTuple = GetNode().GetNodeName();
+            title = nameTuple.Item1;
+            titleContainer.Q<Label>().style.color = nameTuple.Item2;
+            var iconTuple = GetNode().GetNodeNameIcon();
+            if (iconTuple.Item1 != null)
+            {
+                var image = titleContainer.Q<Image>();
+                if(image == null)
+                {
+                    titleContainer.Insert(0,new Image()
+                    {
+                        sprite = iconTuple.Item1,
+                        tintColor = iconTuple.Item2,
+                        scaleMode = ScaleMode.ScaleToFit,
+                        style =
+                    {
+                        maxWidth = 16,
+                        maxHeight = 16,
+                        alignSelf = Align.Center,
+                        marginLeft = 6,
+                    }
+                    });
+                }
+                else
+                {
+                    image.sprite = iconTuple.Item1;
+                    image.tintColor = iconTuple.Item2;
+                }
+            }
+        }
+
+        public override void RedrawPorts(EdgeConnectorListener edgeConnectorListener)
+        {
+            inputContainer.DisconnectChildren();
+            outputContainer.DisconnectChildren();
+
+            CreateFlowInPorts(edgeConnectorListener);
+            CreateFlowOutPorts(edgeConnectorListener);
         }
 
         private void CreateFlowInPorts(EdgeConnectorListener edgeConnectorListener)
@@ -142,6 +204,34 @@ namespace VaporEditor.VisualScripting
                 }
                 content.Add(foldout);
             }
+        }
+
+        public override void OnSelected()
+        {
+            base.OnSelected();
+            View.ViewController.View.Update();
+        }
+
+        public override void OnUnselected()
+        {
+            base.OnUnselected();
+            View?.ViewController?.View?.Update();
+        }
+
+        public VisualElement DrawElement()
+        {
+            var obj = GetNode().GraphSettingsInspector();
+            if (obj == null)
+            {
+                return null;
+            }
+
+            InspectorTreeObject ito = new(obj, obj.GetType());
+            InspectorTreeRootElement root = new(ito);
+
+            var ve = new VisualElement();
+            root.DrawToScreen(ve);
+            return ve;
         }
     }
 }

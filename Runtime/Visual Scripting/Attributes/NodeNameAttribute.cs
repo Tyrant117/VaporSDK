@@ -2,7 +2,7 @@ using System;
 
 namespace Vapor.VisualScripting
 {
-    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+    [System.Obsolete, AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
     public class NodeNameAttribute : Attribute
     {
         public string Name { get; }

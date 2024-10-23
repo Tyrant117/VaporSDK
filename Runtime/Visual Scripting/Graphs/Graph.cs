@@ -1,10 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using UnityEngine;
-using UnityEngine.UIElements;
-using Vapor.Inspector;
 
 namespace Vapor.VisualScripting
 {
@@ -17,6 +13,16 @@ namespace Vapor.VisualScripting
         {
             Root = root;
         }
+
+        public void Evaluate(IGraphOwner graphOwner)
+        {
+
+        }
+
+        public void Traverse(Action<INode> callback)
+        {
+
+        }
     }
 
     [Serializable]
@@ -28,7 +34,7 @@ namespace Vapor.VisualScripting
         public abstract IGraph Build(bool refresh = false);
         public abstract object GraphSettingsInspector();
 
-        internal NodeModel Get(NodeReference a)
+        public NodeModel Get(NodeReference a)
         {
             return Nodes.First(c => c.Guid == a.Guid);
         }

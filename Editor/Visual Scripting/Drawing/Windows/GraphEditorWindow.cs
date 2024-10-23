@@ -30,8 +30,8 @@ namespace VaporEditor.VisualScripting
             }
         }
 
-        private GraphEditorView _graphEditorView;
-        public GraphEditorView GraphEditorView
+        private BlueprintGraphEditorView _graphEditorView;
+        public BlueprintGraphEditorView GraphEditorView
         {
             get { return _graphEditorView; }
             private set

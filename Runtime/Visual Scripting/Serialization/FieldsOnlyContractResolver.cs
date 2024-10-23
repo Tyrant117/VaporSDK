@@ -2,7 +2,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using System.Reflection;
 
-namespace VaporEditor.VisualScripting
+namespace Vapor.VisualScripting
 {
     public class FieldsOnlyContractResolver : DefaultContractResolver
     {

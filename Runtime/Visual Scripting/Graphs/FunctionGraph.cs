@@ -1,30 +1,95 @@
 using Newtonsoft.Json;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using UnityEditor.UIElements;
 using UnityEngine;
-using UnityEngine.UIElements;
 using Vapor.Inspector;
 
 namespace Vapor.VisualScripting
 {
-    public class FunctionGraph : IGraph, IEvaluatorNode<double, IExternalValueSource>
+    public class FunctionGraph : IGraph
     {
         public uint Id { get; }
 
-        public readonly IEvaluatorNode<double, IExternalValueSource> Root;
+        public readonly FunctionEntryNode Entry;
+
+        public readonly Dictionary<string, object> InputData;
+        public readonly Dictionary<string, object> OutputData;
+
+        private readonly Dictionary<string, object> _tempData;
 
         public FunctionGraph(INode root)
         {
-            Root = (IEvaluatorNode<double, IExternalValueSource>)root;
-        }        
+            Entry = (FunctionEntryNode)root;
+            InputData = new Dictionary<string, object>();
+            OutputData = new Dictionary<string, object>();
+            _tempData = new Dictionary<string, object>();
 
-        public double Evaluate(GraphModel graph, IExternalValueSource arg)
+            Traverse(SetGraph);
+        }
+
+        public void Evaluate(IGraphOwner graphOwner, params (string, object)[] parameters)
+        {            
+            InputData.Clear();
+            foreach (var param in parameters)
+            {
+                InputData.Add(param.Item1, param.Item2);
+            }
+            Evaluate(graphOwner);
+        }
+
+        public void Evaluate(IGraphOwner graphOwner)
         {
-            return Root.Evaluate(graph, arg);
+            _tempData.Clear();
+            Entry.Invoke(graphOwner);
+        }
+
+        public T GetInputValue<T>(string fieldName) => InputData.TryGetValue(fieldName, out var data) ? (T)data : default;
+        public void SetReturnData(string fieldName, object data) => OutputData[fieldName] = data;
+        public T GetReturnValue<T>(string fieldName) => OutputData.TryGetValue(fieldName, out var data) ? (T)data : default;
+
+        public void SetTempData(string fieldName, object data) => _tempData[fieldName] = data;
+        public T GetTempData<T>(string fieldName) => _tempData.TryGetValue(fieldName, out var data) ? (T)data : default;
+
+        public void Traverse(Action<INode> callback)
+        {
+            Entry.Traverse(callback);
+        }
+
+        private void SetGraph(INode node)
+        {
+            node.Graph = this;
+        }
+    }
+
+    [Serializable, DrawWithVapor(UIGroupType.Vertical)]
+    public class GraphFieldEntry
+    {
+        [HorizontalGroup("H"), OnValueChanged("OnChanged", false)]
+        public string FieldName = string.Empty;
+        [HorizontalGroup("H"), TypeSelector("@GetTypes"), OnValueChanged("OnChanged", false)]
+        public string FieldType = typeof(double).AssemblyQualifiedName;
+
+        [NonSerialized]
+        public Action Changed;
+        private void OnChanged(string old, string @new)
+        {
+            Changed?.Invoke();
+        }
+
+        public static IEnumerable<Type> GetTypes()
+        {
+            return new List<Type>()
+            {
+                typeof(double),
+                typeof(bool),
+                typeof(int),
+            };
+        }
+
+        public (string, Type) ToTuple()
+        {
+            return FieldName == null || FieldType == null ? (string.Empty, typeof(double)) : (FieldName, Type.GetType(FieldType));
         }
     }
 
@@ -34,25 +99,64 @@ namespace Vapor.VisualScripting
         [Serializable]
         public class InspectorDrawer
         {
-            [TypeSelector("@GetTypes")]
-            public List<string> Input = new();
-            [TypeSelector("@GetTypes")]
-            public List<string> Output = new();
+            [OnValueChanged("OnInputChanged", false)]
+            public List<GraphFieldEntry> Input;
+            [OnValueChanged("OnOutputChanged", false)]
+            public List<GraphFieldEntry> Output;
 
-            public static IEnumerable<Type> GetTypes()
+            public FunctionGraphModel Graph { get; set; }
+            private readonly List<(string, Type)> _cachedReturnTuples = new();
+
+            private void OnInputChanged(int old, int current)
             {
-                return new List<Type>()
+                foreach (var item in Input)
                 {
-                    typeof(int),
-                    typeof(double),
-                    typeof(Vector2),
-                    typeof(Vector3)
-                };                
+                    item.Changed = OnInputFieldChanged;
+                }
+
+                OnInputFieldChanged();
+            }
+
+            private void OnOutputChanged(int old, int current)
+            {
+                foreach (var item in Output)
+                {
+                    item.Changed = OnOutputFieldChanged;
+                }
+
+                OnOutputFieldChanged();
+            }
+
+            private void OnInputFieldChanged()
+            {
+                _cachedReturnTuples.Clear();
+                foreach (var item in Input)
+                {
+                    _cachedReturnTuples.Add(item.ToTuple());
+                }
+                Graph.GetEntryNode().UpdateInputValues(_cachedReturnTuples);
+                Graph.OnRedrawEntryNode();
+            }
+
+            private void OnOutputFieldChanged()
+            {
+                _cachedReturnTuples.Clear();
+                foreach (var item in Output)
+                {
+                    _cachedReturnTuples.Add(item.ToTuple());
+                }
+                Graph.GetReturnNode().UpdateReturnValues(_cachedReturnTuples);
+                Graph.OnRedrawReturnNode();
             }
         }
 
         [JsonIgnore]
         public InspectorDrawer Inspector { get; set; }
+
+        public Dictionary<string, object> InputObjects;
+
+        public Action<NodeModel> RedrawEntryNode;
+        public Action<NodeModel> RedrawReturnNode;
 
         public FunctionGraphModel()
         {
@@ -72,10 +176,20 @@ namespace Vapor.VisualScripting
             var entry = GetEntryNode();
             var exit = GetReturnNode();
             var root = entry.Build(this);
+
             return new FunctionGraph(root);
+
+            //// Define the type parameter
+            //Type typeParameter = Type.GetType(Inspector.Output[0].FieldType);
+
+            //// Define the type of the class to create
+            //Type genericType = typeof(FunctionGraph).MakeGenericType(typeParameter);
+
+            //// Create an instance of FunctionGraph2<MyStruct>
+            //return (IGraph)Activator.CreateInstance(genericType, root);
         }
 
-        public NodeModel GetEntryNode()
+        public FunctionEntryNodeModel GetEntryNode()
         {
             var entry = Nodes.OfType<FunctionEntryNodeModel>().FirstOrDefault();
             if (entry == null)
@@ -86,7 +200,12 @@ namespace Vapor.VisualScripting
             return entry;
         }
 
-        public NodeModel GetReturnNode()
+        public void OnRedrawEntryNode()
+        {
+            RedrawEntryNode?.Invoke(GetEntryNode());
+        }
+
+        public FunctionReturnNodeModel GetReturnNode()
         {
             var @return = Nodes.OfType<FunctionReturnNodeModel>().FirstOrDefault();
             if (@return == null)
@@ -95,6 +214,11 @@ namespace Vapor.VisualScripting
                 Nodes.Add(@return);
             }
             return @return;
+        }
+
+        public void OnRedrawReturnNode()
+        {
+            RedrawReturnNode?.Invoke(GetReturnNode());
         }
 
         public virtual FunctionEntryNodeModel GenerateDefaultEntryNode()
@@ -123,9 +247,13 @@ namespace Vapor.VisualScripting
         {
             if (Inspector != null)
             {
+                Inspector.Graph = this;
                 return Inspector;
             }
-            Inspector = new InspectorDrawer();
+            Inspector = new InspectorDrawer
+            {
+                Graph = this
+            };
 
             return Inspector;
         }

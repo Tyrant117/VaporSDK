@@ -1,3 +1,4 @@
+using System;
 using Vapor.Keys;
 
 namespace Vapor.VisualScripting
@@ -5,6 +6,7 @@ namespace Vapor.VisualScripting
     public class IntegerKVN : INode, IValueNode<int>
     {
         public uint Id { get; }
+        public IGraph Graph { get; set; }
         public int Value { get; }
 
 
@@ -17,6 +19,11 @@ namespace Vapor.VisualScripting
         public int GetValue(int portIndex)
         {
             return Value;
+        }
+
+        public void Traverse(Action<INode> callback)
+        {
+            callback(this);
         }
     }
 

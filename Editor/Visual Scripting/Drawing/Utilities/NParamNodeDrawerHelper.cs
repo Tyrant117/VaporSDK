@@ -6,7 +6,7 @@ namespace VaporEditor.VisualScripting
 {
     public static class NParamNodeDrawerHelper
     {
-        public static bool AddNodes(NodeModel node, GraphEditorView editorView, EdgeConnectorListener edgeConnectorListener, List<IGraphEditorNode> editorNodes, List<NodeModel> refNodes)
+        public static bool AddNodes(NodeModel node, BlueprintGraphEditorView editorView, EdgeConnectorListener edgeConnectorListener, List<IGraphEditorNode> editorNodes, List<NodeModel> refNodes)
         {
             if (node != null)
             {
@@ -18,7 +18,7 @@ namespace VaporEditor.VisualScripting
             return false;
         }
 
-        public static IGraphEditorNode GetNParamNodeOrToken(GraphEditorView editorView, NodeModel node, EdgeConnectorListener edgeConnectorListener)
+        public static IGraphEditorNode GetNParamNodeOrToken(BlueprintGraphEditorView editorView, NodeModel node, EdgeConnectorListener edgeConnectorListener)
         {
             if (node.GetType().IsDefined(typeof(NodeIsTokenAttribute), true))
             {

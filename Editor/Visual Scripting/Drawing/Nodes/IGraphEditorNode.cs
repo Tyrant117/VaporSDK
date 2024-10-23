@@ -10,6 +10,7 @@ namespace VaporEditor.VisualScripting
         Dictionary<string, Port> OutPorts { get; }
 
         NodeModel GetNode();
+        void RedrawPorts(EdgeConnectorListener edgeConnectorListener);
 
         void OnConnectedInputEdge(string portName);
         void OnDisconnectedInputEdge(string portName);

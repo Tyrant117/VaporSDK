@@ -2,7 +2,7 @@ using Newtonsoft.Json;
 using UnityEngine;
 using System;
 
-namespace VaporEditor.VisualScripting
+namespace Vapor.VisualScripting
 {
     public class RectConverter : JsonConverter<Rect>
     {
