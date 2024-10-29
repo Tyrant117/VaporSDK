@@ -21,7 +21,7 @@ namespace Vapor.VisualScripting
 
         public void Evaluate(IGraphOwner graphOwner)
         {
-            Value = Root.GetValue(graphOwner);
+            Value = Root.GetValue(graphOwner, -1);
         }
 
         public void Traverse(Action<INode> callback)
@@ -47,8 +47,9 @@ namespace Vapor.VisualScripting
         [JsonIgnore]
         public InspectorDrawer Inspector { get; set; }
 
-        public override IGraph Build(bool refresh = false)
+        public override IGraph Build(bool refresh = false, string debugName = "")
         {
+            DebugName = debugName;
             if (refresh)
             {
                 foreach (var c in Nodes)

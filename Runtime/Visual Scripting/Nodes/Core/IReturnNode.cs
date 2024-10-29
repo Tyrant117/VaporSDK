@@ -2,8 +2,13 @@ using UnityEngine;
 
 namespace Vapor.VisualScripting
 {
-    public interface IReturnNode<T> : INode
+    public interface IReturnNode : INode
     {
-        T GetValue(IGraphOwner owner, string portName = "");
+        object GetBoxedValue(IGraphOwner owner, int portIndex);
+    }
+
+    public interface IReturnNode<T> : IReturnNode
+    {
+        T GetValue(IGraphOwner owner, int portIndex);
     }
 }

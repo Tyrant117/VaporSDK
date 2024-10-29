@@ -11,17 +11,24 @@ namespace Vapor.VisualScripting
         public readonly IReturnNode<double> A;
 
         private readonly string _aPort;
+        private readonly int _aPortIndex;
 
         public SquareRootNode(string guid, NodePortTuple a)
         {
             Id = guid.GetStableHashU32();
             A = (IReturnNode<double>)a.Node;
             _aPort = a.PortName;
+            _aPortIndex = a.Index;
         }
 
-        public double GetValue(IGraphOwner owner, string portName = "")
+        public object GetBoxedValue(IGraphOwner owner, int portIndex)
         {
-            return Math.Sqrt(A.GetValue(owner, _aPort));
+            return GetValue(owner, portIndex);
+        }
+
+        public double GetValue(IGraphOwner owner, int portIndex)
+        {
+            return Math.Sqrt(A.GetValue(owner, _aPortIndex));
         }
 
         public void Traverse(Action<INode> callback)
@@ -57,7 +64,7 @@ namespace Vapor.VisualScripting
 
             var sa = InSlots[k_A];
 
-            NodePortTuple a = sa.Reference.Guid.EmptyOrNull() ? new(new DoubleNode(Guid, (double)sa.Content), string.Empty) : new(graph.Get(sa.Reference).Build(graph), sa.Reference.PortName);
+            NodePortTuple a = sa.Reference.Guid.EmptyOrNull() ? new(new DoubleNode(Guid, (double)sa.Content), string.Empty, 0) : new(graph.Get(sa.Reference).Build(graph), sa.Reference.PortName, 0);
             NodeRef = new SquareRootNode(Guid, a);
             return NodeRef;
         }

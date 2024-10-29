@@ -14,7 +14,8 @@ namespace Vapor.VisualScripting
             Value = value;
         }
 
-        public double GetValue(IGraphOwner owner, string portName = "") => Value;
+        public object GetBoxedValue(IGraphOwner owner, int portIndex) => Value;
+        public double GetValue(IGraphOwner owner, int portIndex) => Value;
 
         public void Traverse(Action<INode> callback)
         {

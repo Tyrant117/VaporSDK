@@ -12,17 +12,24 @@ namespace Vapor.VisualScripting
         public readonly IReturnNode<double> Result;
 
         private readonly string _resultPort;
+        private readonly int _resultPortIndex;
 
         public MathReturnNode(string guid, NodePortTuple result)
         {
             Id = guid.GetStableHashU32();
             Result = (IReturnNode<double>)result.Node;
             _resultPort = result.PortName;
+            _resultPortIndex = result.Index;
         }
 
-        public double GetValue(IGraphOwner owner, string portName = "")
+        public object GetBoxedValue(IGraphOwner owner, int portIndex)
         {
-            return Result.GetValue(owner, _resultPort);
+            return GetValue(owner, portIndex);
+        }
+
+        public double GetValue(IGraphOwner owner, int portIndex)
+        {
+            return Result.GetValue(owner, _resultPortIndex);
         }
 
         public void Traverse(Action<INode> callback)
@@ -52,7 +59,7 @@ namespace Vapor.VisualScripting
 
             var sResult = InSlots[k_Result];
 
-            NodePortTuple result = sResult.Reference.Guid.EmptyOrNull() ? new(new DoubleNode(Guid, (double)sResult.Content), string.Empty) : new(graph.Get(sResult.Reference).Build(graph), sResult.Reference.PortName);
+            NodePortTuple result = sResult.Reference.Guid.EmptyOrNull() ? new(new DoubleNode(Guid, (double)sResult.Content), string.Empty, 0) : new(graph.Get(sResult.Reference).Build(graph), sResult.Reference.PortName, 0);
             NodeRef = new MathReturnNode(Guid, result);
             return NodeRef;
         }

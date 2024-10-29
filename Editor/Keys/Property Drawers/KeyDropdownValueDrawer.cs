@@ -165,6 +165,8 @@ namespace VaporEditor.Keys
             List<string> keys = new();
             List<object> values = new();
 
+            Debug.Log(Property.PropertyPath);
+            Debug.Log(Property.PropertyInfoType);
             Property.TryGetAttribute<ValueDropdownAttribute>(out var dropdownAttribute);
             switch (dropdownAttribute.Filter)
             {
@@ -191,6 +193,11 @@ namespace VaporEditor.Keys
             //Debug.Log($"Building Property: {Property.PropertyName} | IsArray: {Property.IsArray} | Options: {keys.Count}");
             if (Property.IsArray)
             {
+                if (!dropdownAttribute.MultiSelectArray)
+                {
+                    return null;
+                }
+
                 var comboBox = new ComboBox(displayName, -1, keys, values, true);
                 List<int> selectedIdx = new();
                 foreach (var elem in Property.ArrayData)
@@ -221,7 +228,14 @@ namespace VaporEditor.Keys
                 comboBox.SelectionChanged += Field.OnComboBoxSelectionChanged;
                 horizontal.Add(comboBox);
 
-                var select = new Button(() => OnSelectClicked(Property));
+                var select = new Button(() => OnSelectClicked(Property))
+                {
+                    style =
+                    {
+                        paddingLeft = 3,
+                        paddingRight = 3,
+                    }
+                };
                 var image = new Image
                 {                    
                     image = EditorGUIUtility.IconContent("d_scenepicking_pickable_hover").image,
@@ -231,7 +245,14 @@ namespace VaporEditor.Keys
 
                 horizontal.Add(select);
 
-                var remap = new Button(() => OnRemapClicked(Property));
+                var remap = new Button(() => OnRemapClicked(Property))
+                {
+                    style =
+                    {
+                        paddingLeft = 3,
+                        paddingRight = 3,
+                    }
+                };
                 var image2 = new Image
                 {
                     image = EditorGUIUtility.IconContent("d_Refresh").image,

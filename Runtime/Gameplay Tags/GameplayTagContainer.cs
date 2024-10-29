@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -7,13 +8,15 @@ using Vapor.Keys;
 
 namespace Vapor.GameplayTag
 {
-    [System.Serializable, DrawWithVapor(UIGroupType.Vertical)]
+    [Serializable, DrawWithVapor(UIGroupType.Vertical)]
     public class GameplayTagContainer : IGameplayTagContainer
     {
         [SerializeField, ValueDropdown("@GetAllTagValues", searchable: true)]
         private List<KeyDropdownValue> _tags = new();
 
+        [NonSerialized]
         private bool _isInit;
+        [NonSerialized]
         private HashSet<int> _validTags;
 
         public bool HasTag(int tagId)

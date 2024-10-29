@@ -40,6 +40,7 @@ namespace VaporEditor.VisualScripting
                 Formatting = Formatting.Indented,
                 Error = (sender, args) =>
                 {
+                    Debug.Log(args.ErrorContext.Path);
                     args.ErrorContext.Handled = true;
                 }
             };

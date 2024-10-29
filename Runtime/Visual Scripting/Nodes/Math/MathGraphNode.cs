@@ -11,17 +11,24 @@ namespace Vapor.VisualScripting
         public IGraph Graph { get; set; }
         public ushort GraphKey { get; }
 
+        private MathGraph _graph;
+
         public MathGraphNode(string guid, ushort graphKey)
         {
             Id = guid.GetStableHashU32();
             GraphKey = graphKey;
         }
 
-        public double GetValue(IGraphOwner owner, string portName = "")
+        public object GetBoxedValue(IGraphOwner owner, int portIndex)
         {
-            var graph = (MathGraph)RuntimeDataStore<IGraph>.Get(GraphKey);
-            graph.Evaluate(owner);
-            return graph.Value;
+            return GetValue(owner, portIndex);
+        }
+
+        public double GetValue(IGraphOwner owner, int portIndex)
+        {
+            _graph ??= (MathGraph)RuntimeDataStore<IGraph>.Get(GraphKey);
+            _graph.Evaluate(owner);
+            return _graph.Value;
         }
 
         public void Traverse(Action<INode> callback)
@@ -57,7 +64,8 @@ namespace Vapor.VisualScripting
 
             OutSlots.TryAdd(k_Result, new PortSlot(k_Result, "Result", PortDirection.Out, typeof(double))
                 .SetAllowMultiple()
-                .SetIsOptional());
+                .SetIsOptional()
+                .WithIndex(0));
         }
 
         public override INode Build(GraphModel graph)

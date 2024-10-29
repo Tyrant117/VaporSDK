@@ -55,7 +55,7 @@ namespace VaporEditor
                 assetName = (string.IsNullOrEmpty(assetName) ? folderName : string.Format("{0}_{1}", folderName, assetName));
             }
 
-            return Create(className, assetName, folder, processAsset);
+            return Create(typeof(T), assetName, folder, processAsset);
         }
 
         private static string Create(string className, string assetName, string folder, Action<ScriptableObject> processAsset)
@@ -68,6 +68,23 @@ namespace VaporEditor
             }
 
             asset.name = assetName ?? className;
+            processAsset?.Invoke(asset);
+
+            string assetPath = AssetDatabase.GenerateUniqueAssetPath($"{folder}/{asset.name}.asset");
+            ProjectWindowUtil.CreateAsset(asset, assetPath);
+            return assetPath;
+        }
+
+        private static string Create(Type classType, string assetName, string folder, Action<ScriptableObject> processAsset)
+        {
+            var asset = ScriptableObject.CreateInstance(classType);
+            if (asset == null)
+            {
+                Debug.LogError("failed to create instance of " + classType);
+                return string.Empty;
+            }
+
+            asset.name = assetName ?? classType.Name;
             processAsset?.Invoke(asset);
 
             string assetPath = AssetDatabase.GenerateUniqueAssetPath($"{folder}/{asset.name}.asset");

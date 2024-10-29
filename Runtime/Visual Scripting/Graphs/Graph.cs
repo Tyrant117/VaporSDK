@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine.Assertions;
+using Vapor.Inspector;
 
 namespace Vapor.VisualScripting
 {
@@ -31,11 +33,14 @@ namespace Vapor.VisualScripting
         public Type AssemblyQualifiedType;
         public List<NodeModel> Nodes;
 
-        public abstract IGraph Build(bool refresh = false);
+        public string DebugName { get; set; }
+
+        public abstract IGraph Build(bool refresh = false, string debugName = "");
         public abstract object GraphSettingsInspector();
 
         public NodeModel Get(NodeReference a)
         {
+            Assert.IsTrue(Nodes.Exists(c => c.Guid == a.Guid), $"{TooltipMarkup.Class(AssemblyQualifiedType.Name)} - [{DebugName}] - Does not have nodes that matches Guid {a.Guid}");
             return Nodes.First(c => c.Guid == a.Guid);
         }
     }

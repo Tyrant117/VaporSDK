@@ -6,12 +6,14 @@ namespace Vapor.VisualScripting
     public readonly struct SlotReference : IEquatable<SlotReference>
     {
         public readonly string SlotName;
+        public readonly int Index;
         public readonly string NodeGuid;
         public readonly bool IsValid;
 
-        public SlotReference(string slotName, string nodeGuid)
+        public SlotReference(string slotName, int index, string nodeGuid)
         {
             SlotName = slotName;
+            Index = index;
             NodeGuid = nodeGuid;
             IsValid = true;
         }
@@ -23,12 +25,12 @@ namespace Vapor.VisualScripting
 
         public bool Equals(SlotReference other)
         {
-            return SlotName == other.SlotName && NodeGuid == other.NodeGuid;
+            return NodeGuid == other.NodeGuid;
         }
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(SlotName, NodeGuid, IsValid);
+            return HashCode.Combine(NodeGuid);
         }
     }
 

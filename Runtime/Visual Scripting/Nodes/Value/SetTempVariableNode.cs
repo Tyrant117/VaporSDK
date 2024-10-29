@@ -19,6 +19,7 @@ namespace Vapor.VisualScripting
         private FunctionGraph _graph;
         public readonly IReturnNode<T> A;
         private readonly string _aPort;
+        private readonly int _aPortIndex;
 
         public SetTempVariableNode(string guid, string variableName, NodePortTuple a)
         {
@@ -26,15 +27,21 @@ namespace Vapor.VisualScripting
             VariableName = variableName;
             A = (IReturnNode<T>)a.Node;
             _aPort = a.PortName;
+            _aPortIndex = a.Index;
         }
 
         public void Invoke(IGraphOwner owner)
         {
-            _graph.SetTempData(VariableName, A.GetValue(owner, _aPort));
+            _graph.SetTempData(VariableName, A.GetValue(owner, _aPortIndex));
             Next.Invoke(owner);
         }
 
-        public T GetValue(IGraphOwner owner, string portName = "")
+        public object GetBoxedValue(IGraphOwner owner, int portIndex)
+        {
+            return GetValue(owner, portIndex);
+        }
+
+        public T GetValue(IGraphOwner owner, int portIndex)
         {
             return _graph.GetTempData<T>(VariableName);
         }        
@@ -89,11 +96,12 @@ namespace Vapor.VisualScripting
         {
             base.BuildSlots();
 
-            InSlots.TryAdd(k_ValueIn, new PortSlot(k_ValueIn, "Value", PortDirection.In, typeof(object)));
+            InSlots.TryAdd(k_ValueIn, new PortSlot(k_ValueIn, "Value", PortDirection.In, typeof(object)).WithIndex(1));
 
             OutSlots.TryAdd(k_ValueOut, new PortSlot(k_ValueOut, "Value", PortDirection.Out, typeof(object))
                 .SetAllowMultiple()
-                .SetIsOptional());
+                .SetIsOptional()
+                .WithIndex(1));
         }
 
         public override INode Build(GraphModel graph)
@@ -104,7 +112,7 @@ namespace Vapor.VisualScripting
             }
 
             var sValue = InSlots[k_ValueIn];
-            NodePortTuple valueIn = new(graph.Get(sValue.Reference).Build(graph), sValue.Reference.PortName);
+            NodePortTuple valueIn = new(graph.Get(sValue.Reference).Build(graph), sValue.Reference.PortName, 0);
 
             Type typeParameter = Type.GetType(Inspector.VariableType);
             Type genericType = typeof(GetTempVariableNode<>).MakeGenericType(typeParameter);
@@ -113,7 +121,7 @@ namespace Vapor.VisualScripting
             NodeRef = refN;
 
             var sNext = OutSlots[k_Out];
-            NodePortTuple next = new(graph.Get(sNext.Reference).Build(graph), sNext.Reference.PortName);
+            NodePortTuple next = new(graph.Get(sNext.Reference).Build(graph), sNext.Reference.PortName, 0);
             refN.Next = (IImpureNode)next.Node;
             return NodeRef;
         }

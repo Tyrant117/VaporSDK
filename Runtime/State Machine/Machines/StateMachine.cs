@@ -286,6 +286,13 @@ namespace Vapor.StateMachines
             ActiveStateChanged?.Invoke(this, _activeState);
             _layerLog?.LogEnter(_activeState.Name);
             _activeState.OnEnter();
+
+            if (!IsPlaying)
+            {
+                // The state machine exited when entering the last active state, break here.
+                return;
+            }
+
             foreach (Transition t in activeTransitions)
             {
                 t.OnEnter();
@@ -632,6 +639,11 @@ namespace Vapor.StateMachines
 		/// <returns>True when a transition occurred, otherwise false</returns>
 		private bool TryTrigger(int trigger)
         {
+            if (!IsPlaying)
+            {
+                return false;
+            }
+
             EnsureIsInitializedFor();
 
             if (_triggerTransitionsFromAny.TryGetValue(trigger, out List<Transition> triggerTransitions))

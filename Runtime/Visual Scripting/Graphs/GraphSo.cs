@@ -11,6 +11,9 @@ namespace Vapor.VisualScripting
     public class GraphSo : NamedKeySo, IDatabaseInitialize
     {
         public List<string> SearchIncludeFlags = new();
+        public bool AllowImpureNodes;
+        [ValueDropdown("GraphType", ValueDropdownAttribute.FilterType.Category)]
+        public KeyDropdownValue GraphType;
 
         [Title("Graph")]
         [ReadOnly]
@@ -56,7 +59,7 @@ namespace Vapor.VisualScripting
             //}
 
             var model = GetGraphModel();
-            Graph = model.Build(true);
+            Graph = model.Build(true, name);
 
             //_isLoaded = true;
             RuntimeDataStore<IGraph>.InitDatabase(RuntimeDatabase<GraphSo>.Count);
@@ -64,6 +67,7 @@ namespace Vapor.VisualScripting
 
         public void PostInitializedInDatabase()
         {
+            Debug.Log("Post Initialized Graph: " + Key);
             RuntimeDataStore<IGraph>.Add(Key, Graph);
         }
 
@@ -80,5 +84,31 @@ namespace Vapor.VisualScripting
         //    _isLoaded = true;
         //    return Graph;
         //}
+
+        public override void GenerateAdditionalKeys()
+        {
+#if UNITY_EDITOR
+            var allGraphs = RuntimeAssetDatabaseUtility.FindAssetsByType<GraphSo>();
+            Dictionary<KeyDropdownValue, List<string>> guidMap = new();
+            foreach (var graph in allGraphs)
+            {
+                if (!guidMap.TryGetValue(graph.GraphType, out var list))
+                {
+                    list = new List<string>();
+                    guidMap.Add(graph.GraphType, list);
+                }
+                list.Add(UnityEditor.AssetDatabase.AssetPathToGUID(UnityEditor.AssetDatabase.GetAssetPath(graph)));
+            }
+
+            foreach (var kvp in guidMap)
+            {
+                if(kvp.Key != KeyDropdownValue.None)
+                {
+                    var groupName = kvp.Key.DisplayName.Replace(" ", string.Empty);
+                    KeyGenerator.GenerateKeys<GraphSo>(kvp.Value, $"Graph{groupName}Keys", true);
+                }
+            }
+#endif
+        }
     }
 }

@@ -23,7 +23,12 @@ namespace Vapor.VisualScripting
             VariableName = variableName;
         }
 
-        public T GetValue(IGraphOwner owner, string portName = "")
+        public object GetBoxedValue(IGraphOwner owner, int portIndex)
+        {
+            return GetValue(owner, portIndex);
+        }
+
+        public T GetValue(IGraphOwner owner, int portIndex)
         {
             return _graph.GetTempData<T>(VariableName);
         }
@@ -74,7 +79,8 @@ namespace Vapor.VisualScripting
 
             OutSlots.TryAdd(k_ValueOut, new PortSlot(k_ValueOut, "Value", PortDirection.Out, typeof(object))
                 .SetAllowMultiple()
-                .SetIsOptional());
+                .SetIsOptional()
+                .WithIndex(0));
         }
 
         public override INode Build(GraphModel graph)

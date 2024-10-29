@@ -54,6 +54,7 @@ namespace Vapor.VisualScripting
         public virtual bool HasInPort => false;
         public virtual bool HasOutPort => false;
 
+        [JsonIgnore]
         public Action RenameNode;
         public void OnRenameNode()
         {
@@ -69,11 +70,11 @@ namespace Vapor.VisualScripting
         {
             if (HasInPort)
             {
-                InSlots.TryAdd(k_In, new PortSlot(k_In, "", PortDirection.In, typeof(NodeModel)));
+                InSlots.TryAdd(k_In, new PortSlot(k_In, "", PortDirection.In, typeof(NodeModel)).WithIndex(0));
             }
             if (HasOutPort)
             {
-                OutSlots.TryAdd(k_Out, new PortSlot(k_Out, "", PortDirection.Out, typeof(NodeModel)).SetAllowMultiple());
+                OutSlots.TryAdd(k_Out, new PortSlot(k_Out, "", PortDirection.Out, typeof(NodeModel)).SetAllowMultiple().WithIndex(0));
             }
         }
 
@@ -98,29 +99,24 @@ namespace Vapor.VisualScripting
         [Conditional("UNITY_EDITOR")]
         public virtual void LinkNodeData(List<NodeModel> nodesToLink, Action<NodeModel> callback)
         {
-            //InEdges.Sort((l, r) => l.InPortName.CompareTo(r.InPortName));
-            //OutEdges.Sort((l, r) => l.OutPortName.CompareTo(r.OutPortName));
-
-
             FindNodeAndConnectedPort(nodesToLink);
-
-            //var fields = GetType().GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
-            //FindNodeAndConnectedPort(fields, nodesToLink);
         }
 
         [Conditional("UNITY_EDITOR")]
         private void FindNodeAndConnectedPort(List<NodeModel> nodesToLink)
         {
+            List<EdgeConnection> GoodEdges = new();
             foreach (var slot in InSlots.Values)
             {
-                slot.Reference = new NodeReference(string.Empty, string.Empty);
+                slot.Reference = new NodeReference(string.Empty, string.Empty, 0);
                 var edge = InEdges.FirstOrDefault(e => e.InSlot.SlotName == slot.UniqueName);
                 if (edge.IsValid)
                 {
                     var node = nodesToLink.FirstOrDefault(n => edge.OutputGuidMatches(n.Guid));
                     if (node != null)
                     {
-                        slot.Reference = new NodeReference(node.Guid, edge.OutSlot.SlotName); // Set the port nodes value to this selected node.
+                        slot.Reference = new NodeReference(node.Guid, edge.OutSlot.SlotName, edge.OutSlot.Index); // Set the port nodes value to this selected node.
+                        GoodEdges.Add(edge);
                     }
                     else
                     {
@@ -134,16 +130,21 @@ namespace Vapor.VisualScripting
                 }
             }
 
+            InEdges.Clear();
+            InEdges.AddRange(GoodEdges);
+
+            GoodEdges.Clear();
             foreach (var slot in OutSlots.Values)
             {
-                slot.Reference = new NodeReference(string.Empty, string.Empty);
+                slot.Reference = new NodeReference(string.Empty, string.Empty, 0);
                 var edge = OutEdges.FirstOrDefault(e => e.OutSlot.SlotName == slot.UniqueName);
                 if (edge.IsValid)
                 {
                     var node = nodesToLink.FirstOrDefault(n => edge.InputGuidMatches(n.Guid));
                     if (node != null)
                     {
-                        slot.Reference = new NodeReference(node.Guid, edge.InSlot.SlotName); // Set the port nodes value to this selected node.
+                        slot.Reference = new NodeReference(node.Guid, edge.InSlot.SlotName, edge.InSlot.Index); // Set the port nodes value to this selected node.
+                        GoodEdges.Add(edge);
                     }
                     else
                     {
@@ -155,6 +156,9 @@ namespace Vapor.VisualScripting
                     Assert.IsTrue(slot.IsOptional, $"Node:[{Name}] of type:[{GetType()}] has a Out Port with the name [{slot.UniqueName}] that is a required node," +
                         $" but there is no edge connecting to it in the graph.");
                 }
+
+                OutEdges.Clear();
+                OutEdges.AddRange(GoodEdges);
             }
         }    
     }

@@ -76,6 +76,10 @@ namespace VaporEditor.VisualScripting
         public VisualElement DrawElement()
         {
             var obj = GraphObject.Graph.GraphSettingsInspector();
+            if(obj == null)
+            {
+                return new VisualElement();
+            }
             InspectorTreeObject ito = new(obj, obj.GetType());
             InspectorTreeRootElement root = new(ito);
 

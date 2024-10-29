@@ -56,7 +56,7 @@ namespace VaporEditor.VisualScripting
 
         public void OnDropOutsidePort(Edge edge, Vector2 position)
         {
-            Debug.Log($"EdgeConnectorListener.OnDropOutsidePort({edge}, {position})");
+            Debug.Log($"{TooltipMarkup.ClassMethod(nameof(EdgeConnectorListener), nameof(OnDropOutsidePort))} - Edge [{edge}] - Pos [{position}])");
 
             var draggedPort = (edge.output != null ? edge.output.edgeConnector.edgeDragHelper.draggedPort : null) ?? (edge.input != null ? edge.input.edgeConnector.edgeDragHelper.draggedPort : null);
             m_SearchWindowProvider.target = null;
@@ -70,7 +70,7 @@ namespace VaporEditor.VisualScripting
 
         public void OnDrop(GraphView graphView, Edge edge)
         {
-            Debug.Log($"EdgeConnectorListener.OnDrop({graphView}, {edge})");
+            Debug.Log($"{TooltipMarkup.ClassMethod(nameof(EdgeConnectorListener), nameof(OnDropOutsidePort))} - ({graphView}, {edge})");
 
             m_EdgesToCreate.Clear();
             m_EdgesToCreate.Add(edge);
@@ -187,6 +187,7 @@ namespace VaporEditor.VisualScripting
             var editorNode = EditorNodes.FirstOrDefault(n => n.GetNode() == model);
             Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintGraphEditorView), nameof(OnRedrawNode))} - Redrawing [{editorNode}]");
             editorNode?.RedrawPorts(_edgeConnectorListener);
+            AddEdges();
         }
 
         private void NodeCreationRequest(NodeCreationContext context)
@@ -249,9 +250,10 @@ namespace VaporEditor.VisualScripting
                         Debug.Log($"{TooltipMarkup.Method("MockEvaluate")} - Value [{mathGraph.Value}]");
                     }
 
-                    if (mockGraph is IEvaluatorNode<double, IExternalValueSource> evalMock)
+                    if (mockGraph is FunctionGraph funcGraph)
                     {
-                        Debug.Log($"Mock Eval: {evalMock.Evaluate(null, null)}");
+                        funcGraph.Evaluate(null);
+                        Debug.Log($"{TooltipMarkup.Method("MockEvaluate")} - Function Graph");
                     }
                 }
 
@@ -388,27 +390,34 @@ namespace VaporEditor.VisualScripting
         private void AddEdges()
         {
             Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintGraphEditorView), nameof(AddEdges))} - EditorNodes:{EditorNodes.Count}");
-            foreach (var inputNode in EditorNodes)
+            foreach (var rightNode in EditorNodes)
             {
-                var edges = inputNode.GetNode().InEdges;
+                var edges = rightNode.GetNode().InEdges;
                 foreach (var edge in edges)
                 {
-                    var outputNode = EditorNodes.FirstOrDefault(iNode => edge.OutputGuidMatches(iNode.GetNode().Guid));
-                    if (outputNode != null)
+                    var leftNode = EditorNodes.FirstOrDefault(iNode => edge.OutputGuidMatches(iNode.GetNode().Guid));
+                    if (leftNode != null)
                     {
-                        //Debug.Log($"childOutPorts: {child.OutPorts.Count} Idx {edge.OutPortIndex} [Connect] rootInPorts: {root.InPorts.Count} Idx {edge.InPortIndex}");
-                        //int outIndex = outputNode.GetNode().OutSlots.Values.ToList().FindIndex(x => x.UniqueName == edge.OutPortName);
-                        //int inIndex = inputNode.GetNode().InSlots.Values.ToList().FindIndex(x => x.UniqueName == edge.InPortName);
-                        if(outputNode.OutPorts.TryGetValue(edge.OutSlot.SlotName, out var outPort) && inputNode.InPorts.TryGetValue(edge.InSlot.SlotName, out var inPort))
+                        if(leftNode.OutPorts.TryGetValue(edge.OutSlot.SlotName, out var outPort) && rightNode.InPorts.TryGetValue(edge.InSlot.SlotName, out var inPort))
                         {
+                            if(outPort.connected || inPort.connected)
+                            {
+                                Debug.LogWarning($"{TooltipMarkup.ClassMethod(nameof(BlueprintGraphEditorView), nameof(AddEdges))} - A port already has a connection. {edge.OutSlot.SlotName}: {outPort.connected} -> {edge.InSlot.SlotName} {inPort.connected}");
+                                continue;
+                            }
                             var e = outPort.ConnectTo(inPort);
-                            inputNode.OnConnectedInputEdge(edge.InSlot.SlotName);
+                            rightNode.OnConnectedInputEdge(edge.InSlot.SlotName);
+                            Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintGraphEditorView), nameof(AddEdges))} - Connected {edge.OutSlot.SlotName} -> {edge.InSlot.SlotName}");
                             GraphView.AddElement(e);
                         }
                         else
                         {
                             Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintGraphEditorView), nameof(AddEdges))} - Could Not Connect {edge.OutSlot.SlotName} -> {edge.InSlot.SlotName}");
                         }                        
+                    }
+                    else
+                    {
+                        Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintGraphEditorView), nameof(AddEdges))} - Could Not Find Output Node {edge.OutSlot.SlotName} -> {edge.InSlot.SlotName}");
                     }
                 }
             }
@@ -469,23 +478,25 @@ namespace VaporEditor.VisualScripting
                     {
                         if (edge.input != null && edge.output != null && edge.input.node is IGraphEditorNode rightN && edge.output.node is IGraphEditorNode leftN)
                         {
-                            if (rightN.GetNode() is NodeModel rightNode && leftN.GetNode() is NodeModel leftNode)
-                            {
-                                // Remove the InEdge link from the parent.
-                                var idx = rightNode.InEdges.FindIndex(edgeCon => edgeCon.OutputGuidMatches(leftNode.Guid));
-                                if (idx != -1)
-                                {
-                                    var rightSlot = edge.input.GetSlot();
-                                    rightN.OnDisconnectedInputEdge(rightSlot.UniqueName);
-                                    rightNode.InEdges.RemoveAt(idx);
-                                }
+                            var left = leftN.GetNode();
+                            var right = rightN.GetNode();
 
-                                // Remove the OutEdge Link From The Child
-                                idx = leftNode.OutEdges.FindIndex(edge => edge.InputGuidMatches(rightNode.Guid));
-                                if (idx != -1)
-                                {
-                                    leftNode.OutEdges.RemoveAt(idx);
-                                }
+                            // Remove the InEdge link from the parent.
+                            var idx = right.InEdges.FindIndex(edgeCon => edgeCon.OutputGuidMatches(left.Guid));
+                            if (idx != -1)
+                            {
+                                Debug.Log($"Removed Right Index: {idx}");
+                                var rightSlot = edge.input.GetSlot();
+                                rightN.OnDisconnectedInputEdge(rightSlot.UniqueName);
+                                right.InEdges.RemoveAt(idx);
+                            }
+
+                            // Remove the OutEdge Link From The Child
+                            idx = left.OutEdges.FindIndex(edge => edge.InputGuidMatches(right.Guid));
+                            if (idx != -1)
+                            {
+                                Debug.Log($"Removed Left Index: {idx}");
+                                left.OutEdges.RemoveAt(idx);
                             }
                         }
                     }
@@ -510,27 +521,27 @@ namespace VaporEditor.VisualScripting
 
         private void AddEdge(Edge edge)
         {
-            var inNode = (IGraphEditorNode)edge.input.node; // Right Node
-            var outNode = (IGraphEditorNode)edge.output.node; // Left Node
+            var rightNode = (IGraphEditorNode)edge.input.node; // Right Node
+            var leftNode = (IGraphEditorNode)edge.output.node; // Left Node
 
-            if (inNode != null && outNode != null)
+            if (rightNode != null && leftNode != null)
             {
-                var inNodeSo = inNode.GetNode();
-                PortSlot inSlot = edge.input.GetSlot();
-                var outNodeSo = outNode.GetNode();
-                PortSlot outSlot = edge.output.GetSlot();
+                var right = rightNode.GetNode();
+                PortSlot rightSlot = edge.input.GetSlot();
+                var left = leftNode.GetNode();
+                PortSlot leftSlot = edge.output.GetSlot();
 
-                Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintGraphEditorView), nameof(AddEdge))} - In:{inNodeSo.GetType().Name} | Out:{outNodeSo.GetType().Name}");
+                Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintGraphEditorView), nameof(AddEdge))} - In:{right.GetType().Name} | Out:{left.GetType().Name}");
 
 
-                inNode.OnConnectedInputEdge(inSlot.UniqueName);
+                rightNode.OnConnectedInputEdge(rightSlot.UniqueName);
 
-                inNodeSo.InEdges.Add(new EdgeConnection(new(inSlot.UniqueName, inNodeSo.Guid), new(outSlot.UniqueName, outNodeSo.Guid)));
-                outNodeSo.OutEdges.Add(new EdgeConnection(new(inSlot.UniqueName, inNodeSo.Guid), new(outSlot.UniqueName, outNodeSo.Guid)));
+                left.OutEdges.Add(new EdgeConnection(new(rightSlot.UniqueName, rightSlot.Index, right.Guid), new(leftSlot.UniqueName, leftSlot.Index, left.Guid)));
+                right.InEdges.Add(new EdgeConnection(new(rightSlot.UniqueName, rightSlot.Index, right.Guid), new(leftSlot.UniqueName, leftSlot.Index, left.Guid)));
             }
             else
             {
-                Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintGraphEditorView), nameof(AddEdge))} - IO is invalid | In:{inNode == null} | Out:{outNode == null}");
+                Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintGraphEditorView), nameof(AddEdge))} - IO is invalid | In:{rightNode == null} | Out:{leftNode == null}");
             }
         }
         #endregion        

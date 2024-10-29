@@ -8,6 +8,7 @@ using Vapor.VisualScripting;
 using Vapor.Inspector;
 using VaporEditor.Inspector;
 using NodeModel = Vapor.VisualScripting.NodeModel;
+using System.Linq;
 
 namespace VaporEditor.VisualScripting
 {
@@ -129,6 +130,34 @@ namespace VaporEditor.VisualScripting
 
         public override void RedrawPorts(EdgeConnectorListener edgeConnectorListener)
         {
+            List<Edge> edgesToRemove = new();
+            foreach (var port in InPorts.Values)
+            {
+                edgesToRemove.AddRange(port.connections);
+                port.DisconnectAll();
+            }
+            InPorts.Clear();
+
+            foreach (var port in OutPorts.Values)
+            {
+                edgesToRemove.AddRange(port.connections);
+                port.DisconnectAll();
+            }
+            OutPorts.Clear();
+
+            //GraphViewChange graphViewChange = new()
+            //{
+            //    elementsToRemove = edgesToRemove.OfType<UnityEditor.Experimental.GraphView.GraphElement>().ToList()
+            //};
+            //View.GraphView.graphViewChanged.Invoke(graphViewChange);
+
+            foreach (var e in edgesToRemove)
+            {
+                e.output.Disconnect(e);
+                e.input.Disconnect(e);
+                e.RemoveFromHierarchy();
+            }
+
             inputContainer.DisconnectChildren();
             outputContainer.DisconnectChildren();
 

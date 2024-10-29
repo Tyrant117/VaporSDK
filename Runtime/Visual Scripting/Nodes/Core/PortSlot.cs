@@ -8,10 +8,10 @@ namespace Vapor.VisualScripting
 {
     public class PortSlot
     {
-        public readonly string UniqueName;
-        public readonly string DisplayName;
-        public readonly PortDirection Direction;
-        public readonly Type Type;
+        public string UniqueName;
+        public string DisplayName;
+        public PortDirection Direction;
+        public Type Type;        
 
         public bool AllowMultiple;
         public bool IsOptional;
@@ -23,6 +23,7 @@ namespace Vapor.VisualScripting
         private FieldInfo _contentFieldInfo;
 
         public NodeReference Reference;
+        public int Index;
 
 
         public PortSlot(string uniqueName, string displayName, PortDirection direction, Type type)
@@ -42,6 +43,12 @@ namespace Vapor.VisualScripting
         public PortSlot SetIsOptional()
         {
             IsOptional = true;
+            return this;
+        }
+
+        public PortSlot WithIndex(int index)
+        {
+            Index = index;
             return this;
         }
 

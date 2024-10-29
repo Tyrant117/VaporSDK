@@ -8,7 +8,6 @@ namespace Vapor.VisualScripting
     {
         public uint Id { get; }
         public IGraph Graph { get; set; }
-        //public IImpureNode Previous { get; set; }
         public IImpureNode Next { get; set; }
 
         private readonly string _nextPort;
@@ -16,8 +15,6 @@ namespace Vapor.VisualScripting
         public FunctionEntryNode(string guid)
         {
             Id = guid.GetStableHashU32();
-            //Next = (IImpureNode)next.Node;
-            //_nextPort = next.PortName;
         }
 
         public void Traverse(Action<INode> callback)
@@ -38,11 +35,14 @@ namespace Vapor.VisualScripting
 
         protected List<(string, Type)> InputTypes;
 
-        public void UpdateInputValues(List<(string, Type)> returnTypes)
+        public void UpdateInputValues(List<(string, Type)> inputTypes)
         {
             InputTypes ??= new();
             InputTypes.Clear();
-            InputTypes.AddRange(returnTypes);
+            if (inputTypes != null)
+            {
+                InputTypes.AddRange(inputTypes);
+            }
 
             BuildSlots();
         }
@@ -71,8 +71,8 @@ namespace Vapor.VisualScripting
             var refN = new FunctionEntryNode(Guid);
             NodeRef = refN;
 
-            var sNext = InSlots[k_Out];
-            NodePortTuple next = new(graph.Get(sNext.Reference).Build(graph), sNext.Reference.PortName);
+            var sNext = OutSlots[k_Out];
+            NodePortTuple next = new(graph.Get(sNext.Reference).Build(graph), sNext.Reference.PortName, 0);
             refN.Next = (IImpureNode)next.Node;
             return NodeRef;
         }

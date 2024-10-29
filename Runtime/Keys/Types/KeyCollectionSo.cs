@@ -42,12 +42,17 @@ namespace Vapor.Keys
         }
 
         public string Category;
+        public bool IncludeNone;
         public List<InternalKey> Keys;
 
         [System.Diagnostics.Conditional("UNITY_EDITOR"), Button]
         public void GenerateKeys()
         {
-            List<KeyGenerator.KeyValuePair> kvps = new List<KeyGenerator.KeyValuePair>();
+            List<KeyGenerator.KeyValuePair> kvps = new();
+            if (IncludeNone)
+            {
+                kvps.Add(new KeyGenerator.KeyValuePair("None", KeyDropdownValue.None, string.Empty));
+            }
             foreach (var key in Keys)
             {
                 if (key.IsDeprecated)

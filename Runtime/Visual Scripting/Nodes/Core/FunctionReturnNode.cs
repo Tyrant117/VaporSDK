@@ -8,27 +8,43 @@ namespace Vapor.VisualScripting
     public class FunctionReturnNode : IImpureNode
     {
         public uint Id { get; }
-        public IGraph Graph { get; set; }
-        //public IImpureNode Previous { get; set; }
+        public IGraph Graph
+        {
+            get => _graph;
+            set => _graph = (FunctionGraph)value;
+        }
         public IImpureNode Next { get; set; }
 
-        private readonly string _previousPort;
+        private FunctionGraph _graph;
+        private readonly List<IReturnNode> _returnNodes;
 
-        public FunctionReturnNode(string guid)
+        public FunctionReturnNode(string guid, List<NodePortTuple> portTuples)
         {
             Id = guid.GetStableHashU32();
-            //Previous = (IImpureNode)previous.Node;
-            //_previousPort = previous.PortName;
+
+            _returnNodes = new();
+            foreach (var t in portTuples)
+            {
+                _returnNodes.Add((IReturnNode)t.Node);
+            }
         }
 
         public void Traverse(Action<INode> callback)
         {
+            foreach (var n in _returnNodes)
+            {
+                n.Traverse(callback);
+            }
             callback(this);
         }
 
         public void Invoke(IGraphOwner owner)
         {
-
+            for (int i = 0; i < _returnNodes.Count; i++)
+            {
+                var val = _returnNodes[i].GetBoxedValue(owner, i);
+                _graph.SetReturnData(i.ToString(), val);
+            }
         }
     }
 
@@ -43,10 +59,12 @@ namespace Vapor.VisualScripting
         {
             ReturnTypes ??= new();
             ReturnTypes.Clear();
-            ReturnTypes.AddRange(returnTypes);
+            if (returnTypes != null)
+            {
+                ReturnTypes.AddRange(returnTypes);
+            }
 
             BuildSlots();
-            Debug.Log("Built New Slots");
         }
 
         public override void BuildSlots()
@@ -55,10 +73,13 @@ namespace Vapor.VisualScripting
             InSlots.Clear();
 
             base.BuildSlots();
+            int idx = 1;
             foreach (var rt in ReturnTypes)
             {
                 InSlots.TryAdd(rt.Item1, new PortSlot(rt.Item1, rt.Item1, PortDirection.In, rt.Item2)
-                    .WithContent(rt.Item2));
+                    .WithContent(rt.Item2)
+                    .WithIndex(idx));
+                idx++;
             }
         }
 
@@ -69,10 +90,19 @@ namespace Vapor.VisualScripting
                 return NodeRef;
             }
 
-            //var sIn = InSlots[k_In];
-            //NodePortTuple @in = new(graph.Get(sIn.Reference).Build(graph), sIn.Reference.PortName);
+            List<NodePortTuple> portTuples = new();
+            foreach (var resultPort in InSlots)
+            {
+                if (resultPort.Key == k_In)
+                {
+                    continue;
+                }
 
-            NodeRef = new FunctionReturnNode(Guid);
+                portTuples.Add(new(graph.Get(resultPort.Value.Reference).Build(graph), resultPort.Value.Reference.PortName, resultPort.Value.Index));
+            }
+            portTuples.Sort((l, r) => l.Index.CompareTo(r.Index));
+
+            NodeRef = new FunctionReturnNode(Guid, portTuples);
             return NodeRef;
         }
 

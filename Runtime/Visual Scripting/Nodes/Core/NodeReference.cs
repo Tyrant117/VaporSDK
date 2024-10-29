@@ -7,11 +7,13 @@ namespace Vapor.VisualScripting
     {
         public string Guid;
         public string PortName;
+        public int PortIndex;
 
-        public NodeReference(string guid, string portName)
+        public NodeReference(string guid, string portName, int portIndex)
         {
             Guid = guid;
             PortName = portName;
+            PortIndex = portIndex;
         }
 
         public readonly bool Equals(NodeReference other) => Guid == other.Guid;
@@ -20,6 +22,6 @@ namespace Vapor.VisualScripting
 
         public override readonly int GetHashCode() => HashCode.Combine(Guid);
 
-        public override readonly string ToString() => $"{Guid} : {PortName}";
+        public override readonly string ToString() => $"{Guid} - {PortName} - {PortIndex}";
     }
 }

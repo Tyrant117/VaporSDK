@@ -18,9 +18,9 @@ namespace Vapor.VisualScripting
 
         private readonly Dictionary<string, object> _tempData;
 
-        public FunctionGraph(INode root)
+        public FunctionGraph(INode entry)
         {
-            Entry = (FunctionEntryNode)root;
+            Entry = (FunctionEntryNode)entry;
             InputData = new Dictionary<string, object>();
             OutputData = new Dictionary<string, object>();
             _tempData = new Dictionary<string, object>();
@@ -28,7 +28,7 @@ namespace Vapor.VisualScripting
             Traverse(SetGraph);
         }
 
-        public void Evaluate(IGraphOwner graphOwner, params (string, object)[] parameters)
+        public void Evaluate(IGraphOwner graphOwner, params ValueTuple<string,object>[] parameters)
         {            
             InputData.Clear();
             foreach (var param in parameters)
@@ -105,6 +105,7 @@ namespace Vapor.VisualScripting
             public List<GraphFieldEntry> Output;
 
             public FunctionGraphModel Graph { get; set; }
+            [JsonIgnore]
             private readonly List<(string, Type)> _cachedReturnTuples = new();
 
             private void OnInputChanged(int old, int current)
@@ -150,12 +151,11 @@ namespace Vapor.VisualScripting
             }
         }
 
+        public InspectorDrawer Inspector;
+
         [JsonIgnore]
-        public InspectorDrawer Inspector { get; set; }
-
-        public Dictionary<string, object> InputObjects;
-
         public Action<NodeModel> RedrawEntryNode;
+        [JsonIgnore]
         public Action<NodeModel> RedrawReturnNode;
 
         public FunctionGraphModel()
@@ -163,8 +163,9 @@ namespace Vapor.VisualScripting
             AssemblyQualifiedType = GetType();
         }
 
-        public override IGraph Build(bool refresh = false)
+        public override IGraph Build(bool refresh = false, string debugName = "")
         {
+            DebugName = debugName;
             if (refresh)
             {
                 foreach (var c in Nodes)
