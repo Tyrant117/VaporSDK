@@ -33,12 +33,14 @@ namespace Vapor.Keys
         [Button]
         private void GenerateKeys()
         {
+#if UNITY_EDITOR
             var scriptName = typeof(T).Name;
             scriptName = scriptName.Replace("Scriptable", "");
             scriptName = scriptName.Replace("SO", "");
             scriptName = scriptName.Replace("So", "");
             scriptName = scriptName.Replace("Key", "");
             KeyGenerator.GenerateKeys<T>($"{scriptName}Keys", true);
+#endif
         }
     }
 }

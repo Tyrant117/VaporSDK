@@ -30,6 +30,7 @@ namespace Vapor.Keys
 
         public void GenerateKeys()
         {
+#if UNITY_EDITOR
             var type = GetKeyScriptType();
             var scriptName = type.Name;
             scriptName = scriptName.Replace("Scriptable", "");
@@ -38,6 +39,7 @@ namespace Vapor.Keys
             scriptName = scriptName.Replace("Key", "");
             KeyGenerator.GenerateKeys(type, $"{scriptName}Keys");
             GenerateAdditionalKeys();
+#endif
         }
 
         public virtual Type GetKeyScriptType()

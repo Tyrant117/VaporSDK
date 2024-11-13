@@ -1,7 +1,5 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
 
 namespace Vapor.Events
 {
@@ -18,6 +16,8 @@ namespace Vapor.Events
         {
             OnRequestRaised -= listener;
         }
+
+        public void RemoveAllListeners() => OnRequestRaised = null;
 
         public TResult Request(TResult defaultResult)
         {
@@ -47,6 +47,8 @@ namespace Vapor.Events
         {
             OnRequestRaised -= listener;
         }
+
+        public void RemoveAllListeners() => OnRequestRaised = null;
 
         public TResult Request(T1 value1, TResult defaultResult)
         {
@@ -78,6 +80,8 @@ namespace Vapor.Events
             OnRequestRaised -= listener;
         }
 
+        public void RemoveAllListeners() => OnRequestRaised = null;
+
         public TResult Request(T1 value1, T2 value2, TResult defaultResult)
         {
             return OnRequestRaised != null ? OnRequestRaised.Invoke(value1, value2) : defaultResult;
@@ -108,6 +112,8 @@ namespace Vapor.Events
             OnRequestRaised -= listener;
         }
 
+        public void RemoveAllListeners() => OnRequestRaised = null;
+
         public TResult Request(T1 value1, T2 value2, T3 value3, TResult defaultResult)
         {
             return OnRequestRaised != null ? OnRequestRaised.Invoke(value1, value2, value3) : defaultResult;
@@ -136,6 +142,8 @@ namespace Vapor.Events
         {
             OnRequestRaised -= listener;
         }
+
+        public void RemoveAllListeners() => OnRequestRaised = null;
 
         public TResult Request(T1 value1, T2 value2, T3 value3, T4 value4, TResult defaultResult)
         {

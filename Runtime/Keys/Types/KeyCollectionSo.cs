@@ -45,9 +45,10 @@ namespace Vapor.Keys
         public bool IncludeNone;
         public List<InternalKey> Keys;
 
-        [System.Diagnostics.Conditional("UNITY_EDITOR"), Button]
+        [Button]
         public void GenerateKeys()
         {
+#if UNITY_EDITOR
             List<KeyGenerator.KeyValuePair> kvps = new();
             if (IncludeNone)
             {
@@ -73,6 +74,7 @@ namespace Vapor.Keys
 
                 RuntimeEditorUtility.SaveAndRefresh();
             }
+#endif
         }
     }
 }

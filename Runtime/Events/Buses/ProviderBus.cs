@@ -5,18 +5,62 @@ using UnityEngine;
 using Vapor;
 
 namespace Vapor.Events
-{
+{    
     /// <summary>
     /// Static class used to access providers
     /// </summary>
     public static class ProviderBus
     {
+        internal static class ProviderId<T>
+        {
+            // automated message id from type hash.
+            // platform independent via stable hashcode.
+            // => convenient so we don't need to track messageIds across projects
+            // => addons can work with each other without knowing their ids before
+            // => 2 bytes is enough to avoid collisions.
+            //    registering a messageId twice will log a warning anyway.
+            public static readonly ushort Id = typeof(T).FullName.GetStableHashU16();
+        }
+
         public static readonly Dictionary<int, IProviderData> ProviderMap = new();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void Init()
         {
             ProviderMap.Clear();
+        }
+
+        /// <summary>
+        /// Sets this component as a unique type. Only the componet set here will return when calling <see cref="GetUnique{T}"/> or <see cref="GetUniqueAsync{T}"/>
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="component"></param>
+        public static void SetUnique<T>(T component) where T : Component
+        {
+            EventLogging.Log($"[Provider Bus] Setting Provider: [{ProviderId<T>.Id}] of Type: {typeof(T)}");
+            var provider = new CachedProviderData<T>();
+            provider.Subscribe(() => component);
+            ProviderMap.Add(ProviderId<T>.Id, provider);
+        }
+
+        public static void RemoveUnique<T>(T _) where T : Component => RemoveUnique<T>();
+        public static void RemoveUnique<T>() where T : Component
+        {
+            EventLogging.Log($"[Provider Bus] Removing Provider: Type: {typeof(T)}");
+            if (ProviderMap.TryGetValue(ProviderId<T>.Id, out var handler))
+            {
+                handler.RemoveAllListeners();
+            }
+        }        
+
+        public static T GetUnique<T>() where T : Component
+        {
+            return ProviderMap.TryGetValue(ProviderId<T>.Id, out var handler) ? ((CachedProviderData<T>)handler).Request<T>() : null;
+        }
+
+        public static async Awaitable<T> GetUniqueAsync<T>() where T : Component
+        {
+            return await Get<CachedProviderData<T>>(ProviderId<T>.Id).RequestAsync<T>();
         }
 
         /// <summary>

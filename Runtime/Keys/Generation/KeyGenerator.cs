@@ -88,7 +88,7 @@ namespace Vapor.Keys
         {
             return new KeyValuePair(key, key.GetStableHashU16(), string.Empty);
         }
-#endregion
+        #endregion
 
 #if UNITY_EDITOR
 
@@ -119,7 +119,7 @@ namespace Vapor.Keys
                 formattedKeys.Add(RelativeKeyPath, list);
                 namespaces.Add(NamespaceName);
                 list.Add(new KeyValuePair("None", 0, string.Empty));
-            }                        
+            }
 
             var sb = new StringBuilder();
             foreach (var item in GetAllAssetsFromGUIDs<Object>(guids))
@@ -160,7 +160,7 @@ namespace Vapor.Keys
             }
 
             AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
+            AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
         }
 
         public static void GenerateKeys(string searchFilter, string scriptName, bool includeNone, string category)
@@ -626,7 +626,6 @@ namespace Vapor.Keys
 
             throw new System.ArgumentException($"Invalid full path: {fullPath}");
         }
-#endif
 
         #region Format Keys
         /// <summary>
@@ -781,5 +780,6 @@ namespace Vapor.Keys
             sb.Append("\t\t}\n");
         }
         #endregion
+#endif
     }
 }

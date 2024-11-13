@@ -20,6 +20,8 @@ namespace Vapor.Events
             OnRequestRaised -= listener;
         }
 
+        public void RemoveAllListeners() => OnRequestRaised = null;
+
         public T Request<T>() where T : TResult
         {
             if (_cached != null)
@@ -81,6 +83,7 @@ namespace Vapor.Events
             OnRequestRaised -= listener;
         }
 
+        public void RemoveAllListeners() => OnRequestRaised = null;
         public T Request<T>(T1 value1) where T : TResult
         {
             if (_cached != null)
@@ -127,6 +130,8 @@ namespace Vapor.Events
         {
             OnRequestRaised -= listener;
         }
+
+        public void RemoveAllListeners() => OnRequestRaised = null;
 
         public T Request<T>(T1 value1, T2 value2) where T : TResult
         {
@@ -175,6 +180,8 @@ namespace Vapor.Events
             OnRequestRaised -= listener;
         }
 
+        public void RemoveAllListeners() => OnRequestRaised = null;
+
         public T Request<T>(T1 value1, T2 value2, T3 value3) where T : TResult
         {
             if (_cached != null)
@@ -221,6 +228,8 @@ namespace Vapor.Events
         {
             OnRequestRaised -= listener;
         }
+
+        public void RemoveAllListeners() => OnRequestRaised = null;
 
         public T Request<T>(T1 value1, T2 value2, T3 value3, T4 value4) where T : TResult
         {

@@ -116,12 +116,14 @@ namespace Vapor.Keys
 
         public static void GenerateKeysOfType<T>() where T : KeySo
         {
+#if UNITY_EDITOR
             var scriptName = typeof(T).Name;
             scriptName = scriptName.Replace("Scriptable", "");
             scriptName = scriptName.Replace("SO", "");
             scriptName = scriptName.Replace("So", "");
             scriptName = scriptName.Replace("Key", "");
             KeyGenerator.GenerateKeys(typeof(T), $"{scriptName}Keys");
+#endif
         }
 
         //// Old
