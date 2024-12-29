@@ -22,7 +22,6 @@ namespace Vapor.Keys
             [InlineToggleButton("ToggleDeprecated", "@IsDeprecated", "d_VisibilityOff", "d_VisibilityOn", tooltip: "If <lw>Shut</lw>, this key will be ignored by KeyGenerator.GenerateKeys().")]
             public KeyType KeyType;
             [HorizontalGroup("H")]
-            [HideIf("@UseInteger")]
             public string Name;
             [HorizontalGroup("H")]
             [ShowIf("@UseInteger")]

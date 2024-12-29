@@ -59,7 +59,7 @@ namespace Vapor.VisualScripting
             //}
 
             var model = GetGraphModel();
-            Graph = model.Build(true, name);
+            Graph = model.Build((ushort)Key, true, name);
 
             //_isLoaded = true;
             RuntimeDataStore<IGraph>.InitDatabase(RuntimeDatabase<GraphSo>.Count);

@@ -1,7 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-
 namespace Vapor.StateMachines
 {
     public static class StateMachineExtensions
@@ -10,7 +6,7 @@ namespace Vapor.StateMachines
         /// <summary>
         /// Adds two transitions:
         /// If the condition of the transition instance is true, it transitions from the "from"
-        /// state to the "to" state. Otherwise it performs a transition in the opposite direction,
+        /// state to the "to" state. Otherwise, it performs a transition in the opposite direction,
         /// i.e. from "to" to "from".
         /// </summary>
         /// <remarks>
@@ -20,14 +16,14 @@ namespace Vapor.StateMachines
         public static void AddTwoWayTransition(this StateMachine fsm, Transition transition)
 		{
 			fsm.AddTransition(transition);
-			Transition reverse = transition.Reverse();
+			var reverse = transition.Reverse();
 			fsm.AddTransition(reverse);
 		}
 
         /// <summary>
 		/// Adds two transitions that are only checked when the specified trigger is activated:
 		/// If the condition of the transition instance is true, it transitions from the "from"
-		/// state to the "to" state. Otherwise it performs a transition in the opposite direction,
+		/// state to the "to" state. Otherwise, it performs a transition in the opposite direction,
 		/// i.e. from "to" to "from".
 		/// </summary>
 		/// <remarks>
@@ -37,7 +33,7 @@ namespace Vapor.StateMachines
 		public static void AddTwoWayTriggerTransition(this StateMachine fsm, int trigger, Transition transition)
         {
             fsm.AddTriggerTransition(trigger, transition);
-            Transition reverse = transition.Reverse();
+            var reverse = transition.Reverse();
             fsm.AddTriggerTransition(trigger, reverse);
         }
         #endregion

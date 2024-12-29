@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
+using Vapor.Inspector;
 
 namespace Vapor.Keys
 {
@@ -33,7 +34,7 @@ namespace Vapor.Keys
                 typeSet.Add(keysType);
                 nameSet.Add(keysType);
             }
-            Debug.Log("[KeyUtility] - Cached Keys");
+            Debug.Log($"{TooltipMarkup.ClassMethod(nameof(KeyUtility), nameof(InitEditor))} - Cached Keys");
         }
 #endif
 
@@ -125,106 +126,5 @@ namespace Vapor.Keys
             KeyGenerator.GenerateKeys(typeof(T), $"{scriptName}Keys");
 #endif
         }
-
-        //// Old
-
-        //private static readonly Dictionary<string, Type> s_CachedKeyTypes = new();
-        //public static List<(string, KeyDropdownValue)> GetAllKeysOfNamedType(string nameOfType, string assemblyName = s_AssemblyName)
-        //{
-        //    if (s_CachedKeyTypes.TryGetValue(nameOfType, out var type) && s_CachedFieldInfos.TryGetValue(type, out var fieldInfo))
-        //    {
-        //        return (List<(string, KeyDropdownValue)>)fieldInfo?.GetValue(null);
-        //    }
-
-        //    var assembly = Assembly.Load($"{assemblyName}");
-        //    type = assembly.GetType($"{assemblyName}.{nameOfType}");
-        //    if (type == null)
-        //    {
-        //        return new List<(string, KeyDropdownValue)>() { ("None", KeyDropdownValue.None) };
-        //    }
-        //    else
-        //    {
-        //        s_CachedKeyTypes.Add(nameOfType, type);
-        //        var fi = type.GetField("DropdownValues", BindingFlags.Public | BindingFlags.Static);
-        //        s_CachedFieldInfos.Add(type, fi);
-        //        return (List<(string, KeyDropdownValue)>)fi?.GetValue(null);
-        //    }
-        //}
-
-        //public static List<(string, KeyDropdownValue)> GetAllKeysOfInternalAndNamedType(string nameOfType, Type internalType, string assemblyName = s_AssemblyName)
-        //{
-        //    var result = new List<(string, KeyDropdownValue)>();
-        //    result.AddRange((List<(string, KeyDropdownValue)>)internalType.GetField("DropdownValues", BindingFlags.Public | BindingFlags.Static)?.GetValue(null));
-
-        //    if (s_CachedKeyTypes.TryGetValue(nameOfType, out var type) && s_CachedFieldInfos.TryGetValue(type, out var fieldInfo))
-        //    {
-        //        result.AddRange((List<(string, KeyDropdownValue)>)fieldInfo?.GetValue(null));
-        //        return result;
-        //    }
-
-        //    var assembly = Assembly.Load($"{assemblyName}");
-        //    type = assembly.GetType($"{assemblyName}.{nameOfType}");
-        //    if (type == null)
-        //    {
-        //        return result;
-        //    }
-        //    else
-        //    {
-        //        s_CachedKeyTypes.Add(nameOfType, type);
-        //        var fi = type.GetField("DropdownValues", BindingFlags.Public | BindingFlags.Static);
-        //        s_CachedFieldInfos.Add(type, fi);
-        //        result.AddRange((List<(string, KeyDropdownValue)>)fi?.GetValue(null));
-        //        return result;
-        //    }
-        //}
-
-        //public static List<(string, KeyDropdownValue)> GetAllKeysFromType(Type type)
-        //{
-        //    var result = new List<(string, KeyDropdownValue)>();
-        //    result.AddRange((List<(string, KeyDropdownValue)>)type.GetField("DropdownValues", BindingFlags.Public | BindingFlags.Static)?.GetValue(null));
-        //    return result;
-        //}
-
-        //public static List<int> GetAllValuesOfNamedType(string nameOfType, string assemblyName = s_AssemblyName)
-        //{
-        //    if (s_CachedKeyTypes.TryGetValue(nameOfType, out var type))
-        //    {
-        //        return (List<int>)type.GetField("Values", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-        //    }
-
-        //    var assembly = Assembly.Load($"{assemblyName}");
-        //    type = assembly.GetType($"{assemblyName}.{nameOfType}");
-        //    if (type == null)
-        //    {
-        //        return new List<int>() { 0 };
-        //    }
-        //    s_CachedKeyTypes.Add(nameOfType, type);
-        //    return (List<int>)type.GetField("Values", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-        //}
-
-        //public static List<int> GetAllValuesOfInternalAndNamedType(string nameOfType, string assemblyName = s_AssemblyName, params Type[] internalTypes)
-        //{
-        //    var result = new List<int>();
-        //    foreach (var internalType in internalTypes)
-        //    {
-        //        result.AddRange((List<int>)internalType.GetField("Values", BindingFlags.Public | BindingFlags.Static)?.GetValue(null));
-        //    }
-
-        //    if (s_CachedKeyTypes.TryGetValue(nameOfType, out var type))
-        //    {
-        //        result.AddRange((List<int>)type.GetField("Values", BindingFlags.Public | BindingFlags.Static)?.GetValue(null));
-        //        return result;
-        //    }
-
-        //    var assembly = Assembly.Load($"{assemblyName}");
-        //    type = assembly.GetType($"{assemblyName}.{nameOfType}");
-        //    if (type == null)
-        //    {
-        //        return result;
-        //    }
-        //    s_CachedKeyTypes.Add(nameOfType, type);
-        //    result.AddRange((List<int>)type.GetField("Values", BindingFlags.Public | BindingFlags.Static)?.GetValue(null));
-        //    return result;
-        //}
     }
 }

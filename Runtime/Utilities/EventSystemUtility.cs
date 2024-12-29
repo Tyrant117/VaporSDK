@@ -43,5 +43,49 @@ namespace Vapor
 
             return s_Module.GetLastRaycastResult(Pointer.current.deviceId).isValid;
         }
+
+        public static void Disable()
+        {
+            if (!EventSystem.current)
+            {
+                Debug.Log($"{TooltipMarkup.ClassMethod(nameof(EventSystemUtility), nameof(IsPointerOverGUIAction))} - No Event System");
+                return;
+            }
+
+            if (!s_Module)
+            {
+                s_Module = (InputSystemUIInputModule)EventSystem.current.currentInputModule;
+            }
+
+            if (!s_Module.enabled)
+            {
+                return;
+            }
+
+            s_Module.DeactivateModule();
+            s_Module.enabled = false;
+        }
+
+        public static void Enable()
+        {
+            if (!EventSystem.current)
+            {
+                Debug.Log($"{TooltipMarkup.ClassMethod(nameof(EventSystemUtility), nameof(IsPointerOverGUIAction))} - No Event System");
+                return;
+            }
+
+            if (!s_Module)
+            {
+                s_Module = (InputSystemUIInputModule)EventSystem.current.currentInputModule;
+            }
+
+            if(s_Module.enabled)
+            {
+                return;
+            }
+
+            s_Module.enabled = true;
+            s_Module.ActivateModule();
+        }
     }
 }

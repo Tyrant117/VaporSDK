@@ -87,7 +87,7 @@ namespace Vapor.StateMachines
 		/// Initialises a new instance of the StateMachine class
 		/// </summary>
 		/// <param name="needsExitTime">(Only for hierarchical states):
-		/// 	Determins whether the state machine as a state of a parent state machine is allowed to instantly
+		/// 	Determines whether the state machine as a state of a parent state machine is allowed to instantly
 		/// 	exit on a transition (false), or if it should wait until the active state is ready for a
 		/// 	state change (true).</param>
 		public StateMachine(string name, bool canExitInstantly = false) : base(name, canExitInstantly)

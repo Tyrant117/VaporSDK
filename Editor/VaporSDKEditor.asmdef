@@ -2,10 +2,11 @@
     "name": "VaporSDKEditor",
     "rootNamespace": "VaporEditor",
     "references": [
-        "GUID:50cb284694900174982da26fd2a77ac7",
-        "GUID:aeec71dded0d067448e6f17091aa5d5d",
-        "GUID:071e6a2fa0d7aed478aab93abd77a3c9",
-        "GUID:4988cf9794f41d64c884876ab6574b89"
+        "VaporSDK",
+        "VaporSDK.Inspector",
+        "VaporSDK.InspectorEditor",
+        "Unity.Searcher.Editor",
+        "Unity.Addressables.Editor"
     ],
     "includePlatforms": [
         "Editor"

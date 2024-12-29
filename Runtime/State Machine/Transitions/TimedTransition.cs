@@ -42,7 +42,7 @@ namespace Vapor.StateMachines
 
         public override Transition Reverse()
         {
-            return new TimedTransition(From, To, Desire, _durationEvaluator, TimerComplete).ShouldForceTransition(ForceTransition);
+            return new TimedTransition(To, From, Desire, _durationEvaluator, TimerComplete).ShouldForceTransition(ForceTransition);
         }
     }
 }

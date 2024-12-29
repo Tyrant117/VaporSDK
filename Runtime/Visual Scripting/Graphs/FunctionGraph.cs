@@ -18,8 +18,9 @@ namespace Vapor.VisualScripting
 
         private readonly Dictionary<string, object> _tempData;
 
-        public FunctionGraph(INode entry)
+        public FunctionGraph(ushort key, INode entry)
         {
+            Id = key;
             Entry = (FunctionEntryNode)entry;
             InputData = new Dictionary<string, object>();
             OutputData = new Dictionary<string, object>();
@@ -163,7 +164,7 @@ namespace Vapor.VisualScripting
             AssemblyQualifiedType = GetType();
         }
 
-        public override IGraph Build(bool refresh = false, string debugName = "")
+        public override IGraph Build(ushort key, bool refresh = false, string debugName = "")
         {
             DebugName = debugName;
             if (refresh)
@@ -178,7 +179,7 @@ namespace Vapor.VisualScripting
             var exit = GetReturnNode();
             var root = entry.Build(this);
 
-            return new FunctionGraph(root);
+            return new FunctionGraph(key, root);
 
             //// Define the type parameter
             //Type typeParameter = Type.GetType(Inspector.Output[0].FieldType);

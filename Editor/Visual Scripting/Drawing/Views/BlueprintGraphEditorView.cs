@@ -243,7 +243,7 @@ namespace VaporEditor.VisualScripting
 
                 if (GUILayout.Button("Mock Evaluate", EditorStyles.toolbarButton))
                 {
-                    var mockGraph = GraphObject.Graph.Build(true);
+                    var mockGraph = GraphObject.Graph.Build(0, true);
                     if(mockGraph is MathGraph mathGraph)
                     {
                         mathGraph.Evaluate(null);

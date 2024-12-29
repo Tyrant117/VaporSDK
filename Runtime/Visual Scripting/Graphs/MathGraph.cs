@@ -13,8 +13,9 @@ namespace Vapor.VisualScripting
 
         public double Value { get; set; }
 
-        public MathGraph(INode root)
+        public MathGraph(ushort key, INode root)
         {
+            Id = key;
             Root = (MathReturnNode)root;
             Traverse(SetGraph);
         }
@@ -47,7 +48,7 @@ namespace Vapor.VisualScripting
         [JsonIgnore]
         public InspectorDrawer Inspector { get; set; }
 
-        public override IGraph Build(bool refresh = false, string debugName = "")
+        public override IGraph Build(ushort key, bool refresh = false, string debugName = "")
         {
             DebugName = debugName;
             if (refresh)
@@ -62,7 +63,7 @@ namespace Vapor.VisualScripting
             var root = @return.Build(this);
 
             // Create an instance of FunctionGraph2<MyStruct>
-            return new MathGraph(root);
+            return new MathGraph(key, root);
         }
 
         public MathReturnNodeModel GetReturnNode()

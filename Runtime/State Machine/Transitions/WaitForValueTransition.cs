@@ -38,7 +38,7 @@ namespace Vapor.StateMachines
 
         public override Transition Reverse()
         {
-            return new WaitForValueTransition<T>(From, To, Desire, Watch, WaitFor, WaitForComplete).ShouldForceTransition(ForceTransition);
+            return new WaitForValueTransition<T>(To, From, Desire, Watch, WaitFor, WaitForComplete).ShouldForceTransition(ForceTransition);
         }
     }
 }

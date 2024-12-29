@@ -35,7 +35,7 @@ namespace Vapor.VisualScripting
 
         public string DebugName { get; set; }
 
-        public abstract IGraph Build(bool refresh = false, string debugName = "");
+        public abstract IGraph Build(ushort key, bool refresh = false, string debugName = "");
         public abstract object GraphSettingsInspector();
 
         public NodeModel Get(NodeReference a)

@@ -31,7 +31,7 @@ namespace Vapor.StateMachines
         /// </summary>
         public ushort Id { get; }
         /// <summary>
-        /// If true, the state will immediatly test all outgoing transitions before calling OnUpdate.
+        /// If true, the state will immediately test all outgoing transitions before calling OnUpdate.
         /// </summary>
         public bool CanExitInstantly { get; }
         /// <summary>
@@ -43,8 +43,14 @@ namespace Vapor.StateMachines
         /// The state machine this state belongs to.
         /// </summary>
         public IStateMachine StateMachine { get; set; }
+
         /// <summary>
-        /// The internal timer that tracks the since last entry to the state
+        /// The current owner of this state.
+        /// </summary>
+        public IStateOwner CurrentOwner { get; private set; }
+
+        /// <summary>
+        /// The internal timer that tracks the time since last entry to the state
         /// </summary>
         public Timer Timer { get; }
 
@@ -90,6 +96,12 @@ namespace Vapor.StateMachines
         public State WithCanExitRequest(Func<State, bool> canExit)
         {
             CanExit = canExit;
+            return this;
+        }
+
+        public State WithOwner(IStateOwner owner)
+        {
+            CurrentOwner = owner;
             return this;
         }
 
