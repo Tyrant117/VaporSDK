@@ -7,33 +7,33 @@ namespace Vapor.StateMachines
     /// </summary>
     public class CoroutineStateCompleteTransition : Transition
     {
-        protected readonly CoroutineState WatchingState;
+        private readonly CoroutineState _watchingState;
 
         public CoroutineStateCompleteTransition(string from, string to, int desire, CoroutineState state) : base(from, to, desire)
         {
-            WatchingState = state;
+            _watchingState = state;
             Condition = CoroutineComplete;
         }
 
         public CoroutineStateCompleteTransition(State from, State to, int desire, CoroutineState state) : base(from, to, desire)
         {
-            WatchingState = state;
+            _watchingState = state;
             Condition = CoroutineComplete;
         }
-        
-        protected CoroutineStateCompleteTransition(int from, int to, int desire, Func<Transition, bool> condition, CoroutineState state) : base(from, to, desire, true, condition)
+
+        private CoroutineStateCompleteTransition(int from, int to, int desire, Func<Transition, bool> condition, CoroutineState state) : base(from, to, desire, true, condition)
         {
-            WatchingState = state;
+            _watchingState = state;
         }
 
         private bool CoroutineComplete(Transition t)
         {
-            return WatchingState.CoroutineIsComplete;
+            return _watchingState.CoroutineIsComplete;
         }
 
         public override Transition Reverse()
         {
-            return new CoroutineStateCompleteTransition(To, From, Desire, CoroutineComplete, WatchingState).ShouldForceTransition(ForceTransition);
+            return new CoroutineStateCompleteTransition(To, From, Desire, CoroutineComplete, _watchingState).ShouldForceTransition(ForceTransition);
         }
     }
 }

@@ -1,0 +1,10 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="project://database/Assets/Vapor%20SDK/Editor/State%20Machine/Resources/StateView.uss?fileID=7433441132597879392&amp;guid=0049da8d1802b634f90106a5eca3d28f&amp;type=3#StateView" />
+    <engine:VisualElement style="flex-grow: 1; margin-top: 8px; margin-right: 8px; margin-bottom: 8px; margin-left: 8px;">
+        <engine:TextField label="State Name" name="Name" style="margin-top: 0; margin-right: 0; margin-bottom: 2px; margin-left: 0;" />
+        <engine:Toggle label="Exit Instantly" name="CanExitInstantly" toggle-on-label-click="false" style="margin-top: 2px; margin-right: 0; margin-bottom: 2px; margin-left: 0;" />
+        <engine:Toggle label="Transition To Self" name="CanTransitionToSelf" toggle-on-label-click="false" style="margin-top: 2px; margin-right: 0; margin-bottom: 2px; margin-left: 0;" />
+        <engine:EnumField label="Type" value="Center" type="Vapor.StateMachines.SerializableState+Type, VaporSDK" name="Type" style="margin-top: 2px; margin-right: 0; margin-bottom: 0; margin-left: 0;" />
+        <engine:Button text="Delete" name="Delete" style="margin-top: 12px;" />
+    </engine:VisualElement>
+</engine:UXML>

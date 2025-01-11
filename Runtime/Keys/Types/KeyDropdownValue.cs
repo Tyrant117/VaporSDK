@@ -60,6 +60,7 @@ namespace Vapor.Keys
         /// </summary>
         /// <param name="guid">The guid of the linked object (can be empty)</param>
         /// <param name="key">the unique key</param>
+        /// <param name="displayName">The displayed name of the key</param>
         public KeyDropdownValue(string guid, ushort key, string displayName)
         {
             Guid = guid;

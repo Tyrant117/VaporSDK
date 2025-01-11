@@ -23,10 +23,11 @@ namespace Vapor.StateMachines
             Condition = TimerComplete;
         }
 
-        protected TimedTransition(int from, int to, int desire, Func<float> durationEvaluator, Func<Transition, bool> condition) : base(from, to, desire, true, condition)
+        private TimedTransition(int from, int to, int desire, Func<float> durationEvaluator) : base(from, to, desire, true, null)
         {
             Timer = new Timer();
             _durationEvaluator = durationEvaluator;
+            Condition = TimerComplete;
         }
 
         private bool TimerComplete(Transition thisT)
@@ -42,7 +43,7 @@ namespace Vapor.StateMachines
 
         public override Transition Reverse()
         {
-            return new TimedTransition(To, From, Desire, _durationEvaluator, TimerComplete).ShouldForceTransition(ForceTransition);
+            return new TimedTransition(To, From, Desire, _durationEvaluator).ShouldForceTransition(ForceTransition);
         }
     }
 }

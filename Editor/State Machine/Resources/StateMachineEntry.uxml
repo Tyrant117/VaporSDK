@@ -1,0 +1,10 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="project://database/Assets/Vapor%20SDK/Editor/State%20Machine/Resources/StateMachineEntry.uss?fileID=7433441132597879392&amp;guid=9969727205db2fd49b2b8359ccc3b40d&amp;type=3#StateMachineEntry" />
+    <engine:VisualElement class="outline" style="flex-grow: 1; border-top-left-radius: 3px; border-top-right-radius: 3px; border-bottom-right-radius: 3px; border-bottom-left-radius: 3px; border-top-width: 1px; border-right-width: 1px; border-bottom-width: 1px; border-left-width: 1px; background-color: rgb(89, 89, 89); margin-top: 2px; margin-bottom: 2px; margin-left: 2px; margin-right: 2px;">
+        <engine:VisualElement style="flex-grow: 1; flex-direction: row; justify-content: space-between; align-items: center;">
+            <engine:Label text="State Name" name="StateName" style="-unity-text-align: middle-left; margin-left: 6px; margin-right: 0; margin-top: 0; margin-bottom: 0; padding-top: 0; padding-right: 0; padding-bottom: 0; padding-left: 0;" />
+            <engine:Button text="+" name="AddTransition" style="border-top-left-radius: 4px; border-top-right-radius: 4px; border-bottom-right-radius: 4px; border-bottom-left-radius: 4px; padding-left: 0; padding-top: 0; padding-right: 0; padding-bottom: 2px; margin-top: 2px; margin-right: 2px; margin-bottom: 2px; margin-left: 2px; width: 16px; height: 16px;" />
+        </engine:VisualElement>
+        <engine:VisualElement name="Content" style="flex-grow: 1; margin-bottom: 1px;" />
+    </engine:VisualElement>
+</engine:UXML>

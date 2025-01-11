@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5dfba506942bfc045b69e21c00dd2be5, type: 3}
+  m_Name: StateMachineSo
+  m_EditorClassIdentifier: 
+  OwnerType: Vapor.StateMachines.StateOwnerTest, VaporSDK, Version=0.0.0.0, Culture=neutral,
+    PublicKeyToken=null
+  States:
+  - Name: Start Casting
+    CanExitInstantly: 1
+    CanTransitionToSelf: 0
+    StateType: 0
+    Transitions:
+    - FromStateName: Start Casting
+      ToStateName: While Casting
+      Desire: 0
+      TransitionType: 0
+      MethodEvaluatorName: 
+  - Name: While Casting
+    CanExitInstantly: 1
+    CanTransitionToSelf: 1
+    StateType: 0
+    Transitions:
+    - FromStateName: While Casting
+      ToStateName: Finish Casting
+      Desire: 0
+      TransitionType: 0
+      MethodEvaluatorName: 
+  - Name: Finish Casting
+    CanExitInstantly: 0
+    CanTransitionToSelf: 0
+    StateType: 0
+    Transitions: []
+  GlobalTransitions: []

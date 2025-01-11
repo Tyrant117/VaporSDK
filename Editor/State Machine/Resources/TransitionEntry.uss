@@ -1,0 +1,15 @@
+.outline {
+    background-color: rgba(26, 26, 26, 0.1);
+}
+
+.outline__hover {
+    background-color: rgba(102, 102, 102, 0.1);
+}
+
+.outline__active {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.outline__checked {
+    background-color: rgba(177, 0, 0, 0.4);
+}

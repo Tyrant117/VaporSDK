@@ -1,0 +1,10 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="project://database/Assets/Vapor%20SDK/Editor/State%20Machine/Resources/TransitionView.uss?fileID=7433441132597879392&amp;guid=aa5dec992e38274428d6e4e215a9039f&amp;type=3#TransitionView" />
+    <engine:VisualElement style="flex-grow: 1; margin-top: 8px; margin-right: 8px; margin-bottom: 8px; margin-left: 8px;">
+        <engine:DropdownField label="To State" name="ToState" style="margin-top: 0; margin-right: 0; margin-bottom: 2px; margin-left: 0;" />
+        <engine:IntegerField label="Desire" name="Desire" style="margin-top: 2px; margin-right: 0; margin-bottom: 2px; margin-left: 0;" />
+        <engine:EnumField label="Type" value="Center" type="Vapor.StateMachines.SerializableTransition+Type, VaporSDK" name="Type" style="margin-top: 2px; margin-right: 0; margin-bottom: 2px; margin-left: 0;" />
+        <engine:DropdownField label="Evaluator" name="MethodEvaluator" style="margin-top: 2px; margin-right: 0; margin-bottom: 0; margin-left: 0; padding-top: 0;" />
+        <engine:Button text="Delete" name="Delete" style="margin-top: 12px;" />
+    </engine:VisualElement>
+</engine:UXML>

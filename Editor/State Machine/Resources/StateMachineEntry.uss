@@ -1,0 +1,27 @@
+.outline {
+    border-top-color: rgb(199, 199, 199);
+    border-right-color: rgb(199, 199, 199);
+    border-bottom-color: rgb(199, 199, 199);
+    border-left-color: rgb(199, 199, 199);
+}
+
+.outline__hover {
+    border-top-color: rgb(61, 181, 238);
+    border-right-color: rgb(61, 181, 238);
+    border-bottom-color: rgb(61, 181, 238);
+    border-left-color: rgb(61, 181, 238);
+}
+
+.outline__active {
+    border-top-color: rgb(0, 123, 180);
+    border-right-color: rgb(0, 123, 180);
+    border-bottom-color: rgb(0, 123, 180);
+    border-left-color: rgb(0, 123, 180);
+}
+
+.outline__checked {
+    border-top-color: rgb(180, 161, 0);
+    border-right-color: rgb(180, 161, 0);
+    border-bottom-color: rgb(180, 161, 0);
+    border-left-color: rgb(180, 161, 0);
+}

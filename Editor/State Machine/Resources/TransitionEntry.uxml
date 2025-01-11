@@ -1,0 +1,6 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="project://database/Assets/Vapor%20SDK/Editor/State%20Machine/Resources/TransitionEntry.uss?fileID=7433441132597879392&amp;guid=c715a14465a9fdf4297721ca98f732d4&amp;type=3#TransitionEntry" />
+    <engine:VisualElement name="Hover" class="outline" style="flex-grow: 1; flex-direction: row; justify-content: flex-end;">
+        <engine:Label text="Label" name="TransitionLabel" style="margin-top: 0; margin-right: 8px; margin-bottom: 0; margin-left: 0; padding-top: 0; padding-right: 0; padding-bottom: 0; padding-left: 0; -unity-text-align: middle-left; color: rgb(235, 235, 235); align-self: auto;" />
+    </engine:VisualElement>
+</engine:UXML>

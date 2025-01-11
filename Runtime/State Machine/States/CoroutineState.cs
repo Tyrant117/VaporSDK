@@ -7,14 +7,14 @@ namespace Vapor.StateMachines
 {
     public class CoroutineState : State
     {
-        protected readonly Func<CoroutineState, IEnumerator> OnCoroutineUpdated;
-        protected readonly MonoBehaviour Runner;
-        protected Coroutine Routine;
-        protected readonly bool ExitAfterCoroutine;
-        protected readonly int Iterations;
+        private readonly Func<CoroutineState, IEnumerator> OnCoroutineUpdated;
+        private readonly MonoBehaviour Runner;
+        private Coroutine Routine;
+        private readonly bool ExitAfterCoroutine;
+        private readonly int Iterations;
 
         public bool CoroutineIsComplete { get; private set; }
-        protected int IterationCount;
+        private int IterationCount;
 
         public CoroutineState(MonoBehaviour runner, string name, bool canExitInstantly, Func<CoroutineState, IEnumerator> updated = null) : base(name, canExitInstantly)
         {
@@ -49,7 +49,7 @@ namespace Vapor.StateMachines
         private IEnumerator RunCoroutine()
         {
             var routine = OnCoroutineUpdated(this);
-            for (int i = 0; i < Iterations; i++)
+            for (var i = 0; i < Iterations; i++)
             {
                 // This checks if the routine needs at least one frame to execute.
                 // If not, LoopCoroutine will wait 1 frame to avoid an infinite
