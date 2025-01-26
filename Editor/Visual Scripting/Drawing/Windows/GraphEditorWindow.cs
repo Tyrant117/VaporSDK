@@ -213,7 +213,7 @@ namespace VaporEditor.VisualScripting
             {
                 Debug.Log("Save Called");
                 var mainAsset = AssetDatabase.LoadAssetAtPath<GraphSo>(AssetDatabase.GUIDToAssetPath(SelectedGuid));
-
+                
                 mainAsset.ModelJson = GraphObject.Serialize();
 
                 EditorUtility.SetDirty(mainAsset);

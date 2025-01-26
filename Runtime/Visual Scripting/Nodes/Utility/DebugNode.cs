@@ -46,9 +46,8 @@ namespace Vapor.VisualScripting
 
         public InspectorDrawer Inspector;
 
-        public override void BuildSlots()
+        protected override void BuildAdditionalSlots()
         {
-            base.BuildSlots();
         }
 
         public override INode Build(GraphModel graph)

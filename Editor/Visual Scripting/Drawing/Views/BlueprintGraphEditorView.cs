@@ -197,11 +197,14 @@ namespace VaporEditor.VisualScripting
             {
                 m_SearchWindowProvider.connectedPort = null;
                 m_SearchWindowProvider.target = context.target;
-                var displayPosition = context.screenMousePosition;
+                //var displayPosition = RuntimePanelUtils.ScreenToPanel(this.panel, context.screenMousePosition);
+                var displayPosition = context.screenMousePosition - Window.position.position;
+                Debug.Log(displayPosition);
+                Debug.Log(Window.position);
 
                 SearcherWindow.Show(Window, (m_SearchWindowProvider as SearcherProvider).LoadSearchWindow(),
                     item => (m_SearchWindowProvider as SearcherProvider).OnSearcherSelectEntry(item, displayPosition),
-                    displayPosition, null, new SearcherWindow.Alignment(SearcherWindow.Alignment.Vertical.Center, SearcherWindow.Alignment.Horizontal.Left));
+                    displayPosition, null, new SearcherWindow.Alignment(SearcherWindow.Alignment.Vertical.Top, SearcherWindow.Alignment.Horizontal.Left));
             }
         }
 

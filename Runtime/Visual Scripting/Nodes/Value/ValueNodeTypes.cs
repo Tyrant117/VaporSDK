@@ -26,25 +26,6 @@ namespace Vapor.VisualScripting
     [Serializable]
     public class TypeValueNode : ValueNode<Type> { }
 
-    public class BoolNode : INode, IValueNode<bool>
-    {
-        public uint Id { get; }
-        public IGraph Graph { get; set; }
-        public bool Value { get; }
-
-        public BoolNode(string guid, bool value)
-        {
-            Id = guid.GetStableHashU32();
-            Value = value;
-        }
-
-        public bool GetValue(int portIndex) => Value;
-
-        public void Traverse(Action<INode> callback)
-        {
-            callback(this);
-        }
-    }
     [Serializable]
     public class BoolValueNode : ValueNode<bool> { }
 

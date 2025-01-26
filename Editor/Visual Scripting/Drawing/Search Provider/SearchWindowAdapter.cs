@@ -89,7 +89,9 @@ namespace VaporEditor.VisualScripting
         public override SearcherItem OnSearchResultsFilter(IEnumerable<SearcherItem> searchResults, string searchQuery)
         {
             if (searchQuery.Length == 0)
+            {
                 return GetFirstChildItem(searchResults.FirstOrDefault());
+            }
 
             // Sort results by length so that shorter length results are prioritized
             // prevents entries with short names getting stuck at end of list after entries with longer names when both contain the same word

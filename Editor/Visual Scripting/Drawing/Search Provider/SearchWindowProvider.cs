@@ -201,6 +201,7 @@ namespace VaporEditor.VisualScripting
                             NodeEntry nodeEntry = new NodeEntry.Builder()
                                 .WithNode(nodeType, attribute.MenuName)
                                 .WithName(item.name)
+                                .WithSynonyms(attribute.Synonyms)
                                 .WithAsset(AssetDatabase.GetAssetPath(item), item.GetType())    
                                 .Build();
                             NodeEntries.Add(nodeEntry);
@@ -215,6 +216,7 @@ namespace VaporEditor.VisualScripting
                         {
                             NodeEntry nodeEntry = new NodeEntry.Builder()
                                 .WithNode(nodeType, attribute.MenuName)
+                                .WithSynonyms(attribute.Synonyms)
                                 .Build();
                             NodeEntries.Add(nodeEntry);
                         }
@@ -291,7 +293,8 @@ namespace VaporEditor.VisualScripting
 
             var windowRoot = EditorWindow.rootVisualElement;
             var windowMousePosition = windowRoot.ChangeCoordinatesTo(windowRoot.parent, screenMousePosition); //- m_EditorWindow.position.position);
-            var graphMousePosition = GraphEditorView.GraphView.contentViewContainer.WorldToLocal(windowMousePosition);
+            //var graphMousePosition = GraphEditorView.GraphView.contentViewContainer.WorldToLocal(windowMousePosition);
+            var graphMousePosition = GraphEditorView.GraphView.contentViewContainer.WorldToLocal(screenMousePosition);
 
             var node = CopyNodeForGraph(nodeEntry.NodeType, graphMousePosition, nodeEntry.AssetPath, nodeEntry.AssetType); ;
 

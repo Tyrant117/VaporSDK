@@ -54,6 +54,9 @@ namespace Vapor.VisualScripting
         public virtual bool HasInPort => false;
         public virtual bool HasOutPort => false;
 
+        [JsonIgnore, NonSerialized]
+        private bool _hasBuiltNodes;
+
         [JsonIgnore]
         public Action RenameNode;
         public void OnRenameNode()
@@ -66,8 +69,13 @@ namespace Vapor.VisualScripting
             BuildSlots();
         }
 
-        public virtual void BuildSlots()
+        public void BuildSlots(bool force = false)
         {
+            if (!force && _hasBuiltNodes)
+            {
+                return;
+            }
+            
             if (HasInPort)
             {
                 InSlots.TryAdd(k_In, new PortSlot(k_In, "", PortDirection.In, typeof(NodeModel)).WithIndex(0));
@@ -76,6 +84,15 @@ namespace Vapor.VisualScripting
             {
                 OutSlots.TryAdd(k_Out, new PortSlot(k_Out, "", PortDirection.Out, typeof(NodeModel)).SetAllowMultiple().WithIndex(0));
             }
+            
+            BuildAdditionalSlots();
+            
+            _hasBuiltNodes = true;
+        }
+
+        protected virtual void BuildAdditionalSlots()
+        {
+            
         }
 
         [JsonIgnore, NonSerialized]
@@ -105,7 +122,7 @@ namespace Vapor.VisualScripting
         [Conditional("UNITY_EDITOR")]
         private void FindNodeAndConnectedPort(List<NodeModel> nodesToLink)
         {
-            List<EdgeConnection> GoodEdges = new();
+            List<EdgeConnection> goodEdges = new();
             foreach (var slot in InSlots.Values)
             {
                 slot.Reference = new NodeReference(string.Empty, string.Empty, 0);
@@ -116,7 +133,7 @@ namespace Vapor.VisualScripting
                     if (node != null)
                     {
                         slot.Reference = new NodeReference(node.Guid, edge.OutSlot.SlotName, edge.OutSlot.Index); // Set the port nodes value to this selected node.
-                        GoodEdges.Add(edge);
+                        goodEdges.Add(edge);
                     }
                     else
                     {
@@ -131,9 +148,9 @@ namespace Vapor.VisualScripting
             }
 
             InEdges.Clear();
-            InEdges.AddRange(GoodEdges);
+            InEdges.AddRange(goodEdges);
 
-            GoodEdges.Clear();
+            goodEdges.Clear();
             foreach (var slot in OutSlots.Values)
             {
                 slot.Reference = new NodeReference(string.Empty, string.Empty, 0);
@@ -144,7 +161,7 @@ namespace Vapor.VisualScripting
                     if (node != null)
                     {
                         slot.Reference = new NodeReference(node.Guid, edge.InSlot.SlotName, edge.InSlot.Index); // Set the port nodes value to this selected node.
-                        GoodEdges.Add(edge);
+                        goodEdges.Add(edge);
                     }
                     else
                     {
@@ -158,7 +175,7 @@ namespace Vapor.VisualScripting
                 }
 
                 OutEdges.Clear();
-                OutEdges.AddRange(GoodEdges);
+                OutEdges.AddRange(goodEdges);
             }
         }    
     }

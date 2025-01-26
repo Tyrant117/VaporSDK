@@ -8,6 +8,7 @@ namespace Vapor.VisualScripting
         public string[] MenuName { get; }
         public string NodeName { get; }
         public Type TypeCollection { get; }
+        public string[] Synonyms { get; }
         public string[] IncludeFlags { get; }
 
         public SearchableNodeAttribute(string menuName, params string[] includeFlags)
@@ -15,6 +16,15 @@ namespace Vapor.VisualScripting
             MenuName = menuName.Split('/');
             NodeName = MenuName[^1];
             TypeCollection = null;
+            IncludeFlags = includeFlags;
+        }
+
+        public SearchableNodeAttribute(string menuName, string[] synonyms, string[] includeFlags)
+        {
+            MenuName = menuName.Split('/');
+            NodeName = MenuName[^1];
+            TypeCollection = null;
+            Synonyms = synonyms;
             IncludeFlags = includeFlags;
         }
 

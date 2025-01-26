@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Vapor.VisualScripting
 {
-    public class FunctionEntryNode : IImpureNode
+    public class FunctionEntryNode : IImpureNode, IHasValuePorts
     {
         public uint Id { get; }
         public IGraph Graph { get; set; }
@@ -21,6 +21,16 @@ namespace Vapor.VisualScripting
         {
             callback(this);
             Next.Traverse(callback);
+        }
+
+        public T GetValue<T>(IGraphOwner owner, string portName)
+        {
+            if (Graph is FunctionGraph functionGraph)
+            {
+                return functionGraph.GetInputValue<T>(portName);
+            }
+
+            return default(T);
         }
 
         public void Invoke(IGraphOwner owner)
@@ -44,15 +54,14 @@ namespace Vapor.VisualScripting
                 InputTypes.AddRange(inputTypes);
             }
 
-            BuildSlots();
+            OutSlots.Clear();
+            BuildSlots(true);
         }
 
-        public override void BuildSlots()
+        protected override void BuildAdditionalSlots()
         {
-            InputTypes ??= new();
-            OutSlots.Clear();
-
-            base.BuildSlots();
+            InputTypes ??= new List<(string, Type)>();
+            
             foreach (var rt in InputTypes)
             {
                 OutSlots.TryAdd(rt.Item1, new PortSlot(rt.Item1, rt.Item1, PortDirection.Out, rt.Item2)

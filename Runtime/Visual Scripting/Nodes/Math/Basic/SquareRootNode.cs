@@ -44,9 +44,8 @@ namespace Vapor.VisualScripting
         private const string k_A = "a";
         private const string k_Result = "result";
 
-        public override void BuildSlots()
+        protected override void BuildAdditionalSlots()
         {
-            base.BuildSlots();
             InSlots.TryAdd(k_A, new PortSlot(k_A, "A", PortDirection.In, typeof(double))
                 .WithContent<double>(0));
 

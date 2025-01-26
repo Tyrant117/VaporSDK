@@ -68,6 +68,10 @@ namespace VaporEditor.VisualScripting
         {
             List<NodeModel> links = new();
             links.AddRange(Graph.Nodes);
+            foreach (var l in links)
+            {
+                l.BuildSlots();
+            }
 
             foreach (var l in links)
             {

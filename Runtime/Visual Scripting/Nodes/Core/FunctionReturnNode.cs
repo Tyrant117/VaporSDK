@@ -64,15 +64,13 @@ namespace Vapor.VisualScripting
                 ReturnTypes.AddRange(returnTypes);
             }
 
-            BuildSlots();
+            InSlots.Clear();
+            BuildSlots(true);
         }
 
-        public override void BuildSlots()
+        protected override void BuildAdditionalSlots()
         {
             ReturnTypes ??= new();
-            InSlots.Clear();
-
-            base.BuildSlots();
             int idx = 1;
             foreach (var rt in ReturnTypes)
             {

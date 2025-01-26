@@ -92,10 +92,8 @@ namespace Vapor.VisualScripting
 
         public InspectorDrawer Inspector;
 
-        public override void BuildSlots()
+        protected override void BuildAdditionalSlots()
         {
-            base.BuildSlots();
-
             InSlots.TryAdd(k_ValueIn, new PortSlot(k_ValueIn, "Value", PortDirection.In, typeof(object)).WithIndex(1));
 
             OutSlots.TryAdd(k_ValueOut, new PortSlot(k_ValueOut, "Value", PortDirection.Out, typeof(object))
