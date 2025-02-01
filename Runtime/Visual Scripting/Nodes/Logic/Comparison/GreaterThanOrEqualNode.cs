@@ -11,6 +11,7 @@ namespace Vapor.VisualScripting
         
         public readonly IReturnNode<double> A;
         public readonly IReturnNode<double> B;
+        public readonly IHasValuePorts BOther;
         
         private readonly string _aPort;
         private readonly int _aPortIndex;
@@ -23,7 +24,15 @@ namespace Vapor.VisualScripting
             A = (IReturnNode<double>)a.Node;
             _aPort = a.PortName;
             _aPortIndex = a.Index;
-            B = (IReturnNode<double>)b.Node;
+            if (b.Node is IReturnNode<double> bd)
+            {
+                B = bd;
+            }
+            else
+            {
+                BOther = (IHasValuePorts)b.Node;
+            }
+
             _bPort = b.PortName;
             _bPortIndex = b.Index;
         }
@@ -35,13 +44,20 @@ namespace Vapor.VisualScripting
         
         public bool GetValue(IGraphOwner owner, int portIndex)
         {
-            return A.GetValue(owner, _aPortIndex) >= B.GetValue(owner, _bPortIndex);
+            if (B != null)
+            {
+                return A.GetValue(owner, _aPortIndex) >= B.GetValue(owner, _bPortIndex);
+            }
+            else
+            {
+                return A.GetValue(owner, _aPortIndex) >= BOther.GetValue<double>(owner, _bPort);
+            }
         }
         
         public void Traverse(Action<INode> callback)
         {
             A.Traverse(callback);
-            B.Traverse(callback);
+            B?.Traverse(callback);
             callback(this);
         }
     }

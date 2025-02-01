@@ -33,5 +33,17 @@ namespace Vapor
         {
             return index >= 0 && index < list.Count;
         }
+
+        public static void AddRangeUnique<T>(this List<T> list, IEnumerable<T> items)
+        {
+            foreach (var item in items)
+            {
+                if (list.Contains(item))
+                {
+                    continue;
+                }
+                list.Add(item);
+            }
+        }
     }
 }

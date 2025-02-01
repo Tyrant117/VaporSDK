@@ -14,6 +14,12 @@ namespace VaporEditor.VisualScripting
         [OnOpenAsset]
         public static bool OnOpenAsset(int instanceId, int index)
         {
+            var asset = EditorUtility.InstanceIDToObject(instanceId);
+            if (asset.GetType() != typeof(GraphSo))
+            {
+                return false;
+            }
+            
             var path = AssetDatabase.GetAssetPath(instanceId);
             var guid = AssetDatabase.AssetPathToGUID(path);
 
@@ -24,12 +30,6 @@ namespace VaporEditor.VisualScripting
                     w.Focus();
                     return true;
                 }
-            }
-
-            var asset = EditorUtility.InstanceIDToObject(instanceId);
-            if (asset.GetType() != typeof(GraphSo))
-            {
-                return false;
             }
 
             var window = EditorWindow.CreateWindow<GraphEditorWindow>(typeof(GraphEditorWindow), typeof(SceneView));

@@ -141,7 +141,7 @@ namespace VaporEditor.VisualScripting
         public void GenerateNodeEntries()
         {
             NodeEntries.Clear();
-
+            
             var types = TypeCache.GetTypesWithAttribute<SearchableNodeAttribute>();
             foreach (var type in types)
             {

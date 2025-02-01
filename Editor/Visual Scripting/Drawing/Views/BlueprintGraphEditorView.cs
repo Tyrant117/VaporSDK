@@ -430,16 +430,16 @@ namespace VaporEditor.VisualScripting
         #region - Edit Graph -
         private GraphViewChange OnGraphViewChanged(GraphViewChange graphViewChange)
         {
-            _CreateEdges(graphViewChange);
-            _MoveElements(graphViewChange);
-            _RemoveElements(graphViewChange);
+            _CreateEdges();
+            _MoveElements();
+            _RemoveElements();
 
             //UpdateEdgeColors(nodesToUpdate);
 
             Window.MarkDirty();
             return graphViewChange;
 
-            void _CreateEdges(GraphViewChange graphViewChange)
+            void _CreateEdges()
             {
                 if (graphViewChange.edgesToCreate != null)
                 {
@@ -452,7 +452,7 @@ namespace VaporEditor.VisualScripting
                 }
             }
 
-            void _MoveElements(GraphViewChange graphViewChange)
+            void _MoveElements()
             {
                 if (graphViewChange.movedElements != null)
                 {
@@ -472,7 +472,7 @@ namespace VaporEditor.VisualScripting
                 }
             }
 
-            void _RemoveElements(GraphViewChange graphViewChange)
+            void _RemoveElements()
             {
                 if (graphViewChange.elementsToRemove != null)
                 {
@@ -495,7 +495,7 @@ namespace VaporEditor.VisualScripting
                             }
 
                             // Remove the OutEdge Link From The Child
-                            idx = left.OutEdges.FindIndex(edge => edge.InputGuidMatches(right.Guid));
+                            idx = left.OutEdges.FindIndex(e => e.InputGuidMatches(right.Guid));
                             if (idx != -1)
                             {
                                 Debug.Log($"Removed Left Index: {idx}");

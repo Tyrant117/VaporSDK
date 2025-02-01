@@ -66,7 +66,14 @@ namespace Vapor.VisualScripting
             IsOptional = true;
             HasContent = true;
             ContentType = type;
-            Content = Activator.CreateInstance(type);
+            if (type == typeof(string))
+            {
+                Content = string.Empty;
+            }
+            else
+            {
+                Content = Activator.CreateInstance(type);
+            }
             return this;
         }
 
