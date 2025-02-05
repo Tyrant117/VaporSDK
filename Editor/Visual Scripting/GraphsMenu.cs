@@ -5,6 +5,7 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.Callbacks;
 using UnityEngine;
+using Vapor.NewtonsoftConverters;
 using Vapor.VisualScripting;
 
 namespace VaporEditor.VisualScripting

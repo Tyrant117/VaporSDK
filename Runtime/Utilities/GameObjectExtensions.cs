@@ -26,7 +26,7 @@ namespace Vapor
         public static bool IsObjectNull<T>(this T nullable) where T : class
         {
             Object @object = nullable as Object;
-            return @object ? false : true;
+            return !@object;
         }
 
         public static bool IsValidIndex<T>(this List<T> list, int index)

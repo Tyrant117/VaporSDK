@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
+using UnityEditor;
 using Vapor.Blueprints;
 
 namespace VaporEditor.Blueprints
@@ -11,24 +12,29 @@ namespace VaporEditor.Blueprints
         // Required
         public readonly string CombinedMenuName;
         public readonly string[] MenuName;
-        public readonly MethodInfo MethodInfo;
         public readonly BlueprintNodeType NodeType;
 
         // Optional
         public readonly string[] Synonyms;
 
         // Type Specific
-        public readonly string GetterSetterFieldName;
+        public readonly MethodInfo MethodInfo;
+        public readonly FieldInfo FieldInfo;
+        public readonly string[] NameData;
+        public readonly Type[] TypeData;
 
         // Constructor
-        private BlueprintSearchEntry(string combinedMenuName, string[] menuName, MethodInfo methodInfo, string[] synonyms, BlueprintNodeType nodeType, string getterSetterFieldName)
+        private BlueprintSearchEntry(string combinedMenuName, string[] menuName, MethodInfo methodInfo, FieldInfo fieldInfo, string[] synonyms, BlueprintNodeType nodeType, string[] nameData,
+            Type[] typeData)
         {
             CombinedMenuName = combinedMenuName;
             MenuName = menuName;
             MethodInfo = methodInfo;
+            FieldInfo = fieldInfo;
             Synonyms = synonyms;
             NodeType = nodeType;
-            GetterSetterFieldName = getterSetterFieldName;
+            NameData = nameData;
+            TypeData = typeData;
         }
 
         // Nested Builder Class
@@ -36,20 +42,28 @@ namespace VaporEditor.Blueprints
         {
             private List<string> _menuName;
             private MethodInfo _methodInfo;
-            private string[] _synonyms;
+            private FieldInfo _fieldInfo;
+            private List<string> _synonyms;
             private BlueprintNodeType _nodeType;
-            private string _getterSetterFieldName;
+            private List<Type> _typeData;
+            private List<string> _nameData;
 
             // Setters
-            public Builder WithNode(MethodInfo methodInfo)
+            public Builder WithMethodInfo(MethodInfo methodInfo)
             {
                 _methodInfo = methodInfo;
+                return this;
+            }
+            
+            public Builder WithFieldInfo(FieldInfo fieldInfo)
+            {
+                _fieldInfo = fieldInfo;
                 return this;
             }
 
             public Builder WithCategoryAndName(string[] menuName, string nodeName)
             {
-                _menuName ??= new();
+                _menuName ??= new List<string>();
                 _menuName.AddRange(menuName);
                 _menuName.Add(nodeName);
                 return this;
@@ -57,14 +71,18 @@ namespace VaporEditor.Blueprints
 
             public Builder WithFullName(string fullName)
             {
-                _menuName ??= new();
+                _menuName ??= new List<string>();
                 _menuName.Add(fullName);
                 return this;
             }
 
             public Builder WithSynonyms(params string[] synonyms)
             {
-                _synonyms = synonyms;
+                _synonyms ??= new List<string>();
+                if(synonyms is { Length: > 0 })
+                {
+                    _synonyms.AddRange(synonyms);
+                }
                 return this;
             }
 
@@ -74,9 +92,17 @@ namespace VaporEditor.Blueprints
                 return this;
             }
 
-            public Builder WithGetterSetterFieldName(string getterFieldName)
+            public Builder WithNameData(params string[] names)
             {
-                _getterSetterFieldName = getterFieldName;
+                _nameData ??= new List<string>();
+                _nameData.AddRange(names);
+                return this;
+            }
+
+            public Builder WithTypes(params Type[] types)
+            {
+                _typeData ??= new List<Type>();
+                _typeData.AddRange(types);
                 return this;
             }
 
@@ -93,8 +119,9 @@ namespace VaporEditor.Blueprints
                         sb.Append('/');
                     }
                 }
+                
 
-                return new BlueprintSearchEntry(sb.ToString(), _menuName.ToArray(), _methodInfo, _synonyms, _nodeType, _getterSetterFieldName);
+                return new BlueprintSearchEntry(sb.ToString(), _menuName?.ToArray(), _methodInfo, _fieldInfo, _synonyms?.ToArray(), _nodeType, _nameData?.ToArray(), _typeData?.ToArray());
             }
         }
     }

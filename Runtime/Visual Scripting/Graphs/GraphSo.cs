@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Vapor.Inspector;
 using Vapor.Keys;
+using Vapor.NewtonsoftConverters;
 
 namespace Vapor.VisualScripting
 {

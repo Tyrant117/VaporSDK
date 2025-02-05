@@ -98,6 +98,48 @@ BlueprintEditorPort.Execute > #connector > #cap{
     display: none;
 }
 
+BlueprintEditorPort.List > #connector{
+    background-image: resource("BlueprintIcons/list_outline");
+    background-color: rgba(0,0,0,0);
+    border-width: initial;
+    border-radius: initial;
+    width: 12px;
+    height: 12px;
+}
+
+BlueprintEditorPort.List:hover > #connector {
+    background-image: resource("BlueprintIcons/list_filled");
+}
+
+BlueprintEditorPort.connected.List > #connector{
+    background-image: resource("BlueprintIcons/list_filled") !important;
+}
+
+BlueprintEditorPort.List > #connector > #cap{
+    display: none;
+}
+
+BlueprintEditorPort.Dictionary > #connector{
+    background-image: resource("BlueprintIcons/dictionary_outline");
+    background-color: rgba(0,0,0,0);
+    border-width: initial;
+    border-radius: initial;
+    width: 12px;
+    height: 12px;
+}
+
+BlueprintEditorPort.Dictionary:hover > #connector {
+    background-image: resource("BlueprintIcons/dictionary_filled");
+}
+
+BlueprintEditorPort.connected.Dictionary > #connector{
+    background-image: resource("BlueprintIcons/dictionary_filled") !important;
+}
+
+BlueprintEditorPort.Dictionary > #connector > #cap{
+    display: none;
+}
+
 .Generic{
     --port-color: #1316c2;
 }
@@ -111,7 +153,7 @@ BlueprintEditorPort.Execute > #connector > #cap{
     --port-color: #843ffc;
 }
 .String{
-    --port-color: #ee6efc;
+    --port-color: #ea3ffc;
 }
 .Color{
     --port-color: #81fc3f;
@@ -147,7 +189,7 @@ BlueprintEditorPort.Execute > #connector > #cap{
     --port-color: #7efc3f;
 }
 .Gradient{
-    --port-color: #7efc3f;
+    --port-color: #3ffcda;
 }
 .Quaternion{
     --port-color: #7efc3f;
@@ -168,11 +210,90 @@ BlueprintEditorPort.Execute > #connector > #cap{
     --port-color: #7efc3f;
 }
 .RenderingLayerMask{
-    --port-color: #3ffcda;
+    --port-color: #7efc3f;
 }
 .ManagedClass{
     --port-color: #3ffcda;
 }
 .ManagedStruct{
     --port-color: #7efc3f;
+}
+
+.Generic > #connector{
+    -unity-background-image-tint-color: #1316c2;
+}
+.Integer > #connector{
+    -unity-background-image-tint-color: #3f81fc;
+}
+.Boolean > #connector{
+    -unity-background-image-tint-color: #fc3f3f;
+}
+.Float > #connector{
+    -unity-background-image-tint-color: #843ffc;
+}
+.String > #connector{
+    -unity-background-image-tint-color: #ea3ffc;
+}
+.Color > #connector{
+    -unity-background-image-tint-color: #7efc3f;
+}
+.ObjectReference > #connector{
+    -unity-background-image-tint-color: #3ffcda;
+}
+.LayerMask > #connector{
+    -unity-background-image-tint-color: #7efc3f;
+}
+.Enum > #connector{
+    -unity-background-image-tint-color: #fcaa3f;
+}
+.Vector2 > #connector{
+    -unity-background-image-tint-color: #7efc3f;
+}
+.Vector3 > #connector{
+    -unity-background-image-tint-color: #7efc3f;
+}
+.Vector4 > #connector{
+    -unity-background-image-tint-color: #7efc3f;
+}
+.Rect > #connector{
+    -unity-background-image-tint-color: #7efc3f;
+}
+.Character > #connector{
+    -unity-background-image-tint-color: #ea3ffc;
+}
+.AnimationCurve > #connector{
+    -unity-background-image-tint-color: #3ffcda;
+}
+.Bounds > #connector{
+    -unity-background-image-tint-color: #7efc3f;
+}
+.Gradient > #connector{
+    -unity-background-image-tint-color: #3ffcda;
+}
+.Quaternion > #connector{
+    -unity-background-image-tint-color: #7efc3f;
+}
+.Vector2Int > #connector{
+    -unity-background-image-tint-color: #7efc3f;
+}
+.Vector3Int > #connector{
+    -unity-background-image-tint-color: #7efc3f;
+}
+.RectInt > #connector{
+    -unity-background-image-tint-color: #7efc3f;
+}
+.BoundsInt > #connector{
+    -unity-background-image-tint-color: #7efc3f;
+}
+.Hash128 > #connector{
+    -unity-background-image-tint-color: #7efc3f;
+}
+.RenderingLayerMask > #connector{
+    -unity-background-image-tint-color: #7efc3f;
+}
+.ManagedClass > #connector > #connector{
+    -unity-background-image-tint-color: #3ffcda;
+}
+.ManagedStruct > #connector{
+    -unity-background-image-tint-color: #7efc3f;
 }

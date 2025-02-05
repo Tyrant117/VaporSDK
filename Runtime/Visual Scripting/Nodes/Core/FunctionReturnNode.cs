@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using Vapor.Blueprints;
 using Vapor.VisualScripting;
 
 namespace Vapor.VisualScripting
@@ -104,6 +105,6 @@ namespace Vapor.VisualScripting
             return NodeRef;
         }
 
-        public override (string, Color) GetNodeName() => ("Return", s_DefaultTextColor);
+        public override (string, Color) GetNodeName() => (PinNames.RETURN, s_DefaultTextColor);
     }
 }

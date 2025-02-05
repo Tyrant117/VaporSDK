@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using System.Security.Policy;
 using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
@@ -15,23 +17,25 @@ namespace VaporEditor.Blueprints
 {
     public class EdgeConnectorListener : IEdgeConnectorListener
     {
-        private readonly BlueprintGraphSo m_Graph;
-        private readonly BlueprintSearchWindowProvider m_SearchWindowProvider;
-        private readonly EditorWindow m_editorWindow;
+        private readonly BlueprintEditorView _view;
+        private readonly BlueprintGraphSo _graph;
+        private readonly BlueprintSearchWindowProvider _searchWindowProvider;
+        private readonly EditorWindow _editorWindow;
 
-        private GraphViewChange m_GraphViewChange;
-        private List<Edge> m_EdgesToCreate;
-        private List<GraphElement> m_EdgesToDelete;
+        private GraphViewChange _graphViewChange;
+        private List<Edge> _edgesToCreate;
+        private List<GraphElement> _edgesToDelete;
 
-        public EdgeConnectorListener(BlueprintGraphSo graph, BlueprintSearchWindowProvider searchWindowProvider, EditorWindow editorWindow)
+        public EdgeConnectorListener(BlueprintEditorView blueprintEditorView, BlueprintGraphSo graph, BlueprintSearchWindowProvider searchWindowProvider, EditorWindow editorWindow)
         {
-            m_Graph = graph;
-            m_SearchWindowProvider = searchWindowProvider;
-            m_editorWindow = editorWindow;
+            _view = blueprintEditorView;
+            _graph = graph;
+            _searchWindowProvider = searchWindowProvider;
+            _editorWindow = editorWindow;
 
-            m_EdgesToCreate = new List<Edge>();
-            m_EdgesToDelete = new List<GraphElement>();
-            m_GraphViewChange.edgesToCreate = m_EdgesToCreate;
+            _edgesToCreate = new List<Edge>();
+            _edgesToDelete = new List<GraphElement>();
+            _graphViewChange.edgesToCreate = _edgesToCreate;
         }
 
         public void OnDropOutsidePort(Edge edge, Vector2 position)
@@ -39,29 +43,30 @@ namespace VaporEditor.Blueprints
             Debug.Log($"{TooltipMarkup.ClassMethod(nameof(EdgeConnectorListener), nameof(OnDropOutsidePort))} - Edge [{edge}] - Pos [{position}])");
 
             var draggedPort = (edge.output != null ? edge.output.edgeConnector.edgeDragHelper.draggedPort : null) ?? (edge.input != null ? edge.input.edgeConnector.edgeDragHelper.draggedPort : null);
-            m_SearchWindowProvider.Target = null;
-            m_SearchWindowProvider.ConnectedPort = (BlueprintEditorPort)draggedPort;
-            m_SearchWindowProvider.RegenerateEntries = true;//need to be sure the entires are relevant to the edge we are dragging
-            SearcherWindow.Show(m_editorWindow, m_SearchWindowProvider.LoadSearchWindow(false, out var items),
-                item => (m_SearchWindowProvider).OnSearcherSelectEntry(item, position),
+            _searchWindowProvider.Target = null;
+            _searchWindowProvider.ConnectedPort = (BlueprintEditorPort)draggedPort;
+            _searchWindowProvider.RegenerateEntries = true;//need to be sure the entries are relevant to the edge we are dragging
+            SearcherWindow.Show(_editorWindow, _searchWindowProvider.LoadSearchWindow(false, out var items),
+                item => (_searchWindowProvider).OnSearcherSelectEntry(item, position),
+                _view.SearchClosed,
                 position, null);
-            m_SearchWindowProvider.RegenerateEntries = true;//entries no longer necessarily relevant, need to regenerate
+            _searchWindowProvider.RegenerateEntries = true;//entries no longer necessarily relevant, need to regenerate
         }
 
         public void OnDrop(GraphView graphView, Edge edge)
         {
             Debug.Log($"{TooltipMarkup.ClassMethod(nameof(EdgeConnectorListener), nameof(OnDropOutsidePort))} - ({graphView}, {edge})");
 
-            m_EdgesToCreate.Clear();
-            m_EdgesToCreate.Add(edge);
-            m_EdgesToDelete.Clear();
+            _edgesToCreate.Clear();
+            _edgesToCreate.Add(edge);
+            _edgesToDelete.Clear();
             if (edge.input.capacity == Capacity.Single)
             {
                 foreach (Edge connection in edge.input.connections)
                 {
                     if (connection != edge)
                     {
-                        m_EdgesToDelete.Add(connection);
+                        _edgesToDelete.Add(connection);
                     }
                 }
             }
@@ -72,27 +77,45 @@ namespace VaporEditor.Blueprints
                 {
                     if (connection2 != edge)
                     {
-                        m_EdgesToDelete.Add(connection2);
+                        _edgesToDelete.Add(connection2);
                     }
                 }
             }
 
-            if (m_EdgesToDelete.Count > 0)
+            if (_edgesToDelete.Count > 0)
             {
-                graphView.DeleteElements(m_EdgesToDelete);
+                graphView.DeleteElements(_edgesToDelete);
             }
 
-            List<Edge> edgesToCreate = m_EdgesToCreate;
+            List<Edge> edgesToCreate = _edgesToCreate;
             if (graphView.graphViewChanged != null)
             {
-                edgesToCreate = graphView.graphViewChanged(m_GraphViewChange).edgesToCreate;
+                edgesToCreate = graphView.graphViewChanged(_graphViewChange).edgesToCreate;
             }
 
             foreach (Edge item in edgesToCreate)
             {
-                graphView.AddElement(item);
-                edge.input.Connect(item);
-                edge.output.Connect(item);
+                if (edge.output.portType != edge.input.portType)
+                {
+                    if (edge.input.portType == typeof(object))
+                    {
+                        // Objects can always be connected
+                        graphView.AddElement(item);
+                        edge.input.Connect(item);
+                        edge.output.Connect(item);
+                    }
+                    else
+                    {
+                        // Create Redirect
+                        _view.GraphView.CreateConverterNode(item);
+                    }
+                }
+                else
+                {
+                    graphView.AddElement(item);
+                    edge.input.Connect(item);
+                    edge.output.Connect(item);
+                }
             }
         }
     }
@@ -109,6 +132,7 @@ namespace VaporEditor.Blueprints
         private EdgeConnectorListener _edgeConnectorListener;
         private bool _maximized;
         private bool _debugMode;
+        private readonly Dictionary<Type, Dictionary<Type, MethodInfo>> _canConvertMap = new();
         
         // Events
         public event Action SaveRequested = delegate { };
@@ -127,6 +151,19 @@ namespace VaporEditor.Blueprints
             styleSheets.Add(Resources.Load<StyleSheet>("Styles/BlueprintEditorView"));
             ColorUtility.TryParseHtmlString("#07070D", out var bgColor);
             style.backgroundColor = bgColor;
+            
+            var converters = TypeCache.GetMethodsWithAttribute<BlueprintPinConverterAttribute>();
+            foreach (var converter in converters)
+            {
+                var atr = converter.GetCustomAttribute<BlueprintPinConverterAttribute>();
+                if (!_canConvertMap.TryGetValue(atr.SourceType, out var map))
+                {
+                    map = new Dictionary<Type, MethodInfo>();
+                    _canConvertMap.Add(atr.SourceType, map);
+                }
+
+                map.Add(atr.TargetType, converter);
+            }
 
             CreateToolbar();
             var content = CreateContent();
@@ -136,7 +173,7 @@ namespace VaporEditor.Blueprints
             //regenerate entries when graph view is refocused, to propogate subgraph changes
             GraphView.RegisterCallback<FocusInEvent>(evt => { m_SearchWindowProvider.RegenerateEntries = true; });
 
-            _edgeConnectorListener = new EdgeConnectorListener(GraphObject, m_SearchWindowProvider, Window);
+            _edgeConnectorListener = new EdgeConnectorListener(this, GraphObject, m_SearchWindowProvider, Window);
 
             AddNodes();
             AddEdges();
@@ -172,10 +209,19 @@ namespace VaporEditor.Blueprints
             Debug.Log(Window.position);
 
             SearcherWindow.Show(Window, m_SearchWindowProvider.LoadSearchWindow(false, out var items),
-                item => m_SearchWindowProvider.OnSearcherSelectEntry(item, displayPosition),
+                item => m_SearchWindowProvider.OnSearcherSelectEntry(item, displayPosition), SearchClosed,
                 displayPosition, null, new SearcherWindow.Alignment(SearcherWindow.Alignment.Vertical.Top, SearcherWindow.Alignment.Horizontal.Left));
         }
-        
+
+        public void SearchClosed()
+        {
+            if (m_SearchWindowProvider == null)
+            {
+                return;
+            }
+            m_SearchWindowProvider.ConnectedPort = null;
+        }
+
         private void CreateToolbar()
         {
             var toolbar = new IMGUIContainer(() =>
@@ -217,8 +263,8 @@ namespace VaporEditor.Blueprints
                     var en = GraphObject.BlueprintNodes.FirstOrDefault(x => x.NodeType == BlueprintNodeType.Entry);
                     if (en != null)
                     {
-                        var mock = new BlueprintFunctionGraph(GraphObject);
-                        mock.Invoke((from outPortsValue in en.OutPorts.Values where outPortsValue.HasContent select outPortsValue.Content).ToArray(), 
+                        var mock = new BlueprintFunctionGraph(GraphObject, true);
+                        mock.Invoke((from outPortsValue in en.OutPorts.Values where outPortsValue.HasInlineValue select outPortsValue.InlineValue.Get()).ToArray(), 
                             x =>
                             {
                                 Debug.Log("Mock Evaluated");
@@ -299,6 +345,17 @@ namespace VaporEditor.Blueprints
             GraphView.elementsRemovedFromGroup = m_GraphViewElementsRemovedFromGroup;
         }
 
+        void OnMouseDown(MouseDownEvent evt)
+        {
+            if (evt.button == (int)MouseButton.LeftMouse && evt.clickCount == 2)
+            {
+                if (evt.target is Edge edgeTarget)
+                {
+                    Vector2 pos = evt.mousePosition;
+                    GraphView.CreateRedirectNode(pos, edgeTarget);
+                }
+            }
+        }
         #endregion
         
         #region - Setup Nodes -
@@ -319,52 +376,50 @@ namespace VaporEditor.Blueprints
                 var edges = rightNode.Node.InEdges;
                 foreach (var edge in edges)
                 {
-                    var leftNode = EditorNodes.FirstOrDefault(iNode => edge.LeftGuidMatches(iNode.Node.Guid));
+                    var leftNode = EditorNodes.FirstOrDefault(iNode => edge.LeftSidePin.NodeGuid == iNode.Node.Guid);
                     if (leftNode != null)
                     {
-                        if(leftNode.OutPorts.TryGetValue(edge.LeftSidePort.PortName, out var outPort) && rightNode.InPorts.TryGetValue(edge.RightSidePort.PortName, out var inPort))
+                        // Get Connected Pins
+                        if(leftNode.OutPorts.TryGetValue(edge.LeftSidePin.PinName, out var leftPort) && rightNode.InPorts.TryGetValue(edge.RightSidePin.PinName, out var rightPort))
                         {
-                            if (rightNode.Node.InPorts.TryGetValue(edge.RightSidePort.PortName, out var bpInPort))
-                            {
-                                if(!bpInPort.IsTransitionPort && outPort.connected)
-                                {
-                                    Debug.LogWarning($"{TooltipMarkup.ClassMethod(nameof(BlueprintEditorView), nameof(AddEdges))} - A port already has a connection. {edge.LeftSidePort.PortName}: {outPort.connected} -> {edge.RightSidePort.PortName} {inPort.connected}");
-                                    continue;
-                                }
-                            }
-                            else if(inPort.connected)
-                            {
-                                Debug.LogWarning($"{TooltipMarkup.ClassMethod(nameof(BlueprintEditorView), nameof(AddEdges))} - A port already has a connection. {edge.LeftSidePort.PortName}: {outPort.connected} -> {edge.RightSidePort.PortName} {inPort.connected}");
-                                continue;
-                            }
+                            var leftPin = leftPort.GetPin();
+                            var rightPin = rightPort.GetPin();
 
-                            if (leftNode.Node.OutPorts.TryGetValue(edge.LeftSidePort.PortName, out var bpOutPort))
+                            // Left Pin Is Already Connect
+                            if (leftPort.connected)
                             {
-                                if(!bpOutPort.AllowMultiple && outPort.connected)
+                                // Break if it is an execute pin or doesn't allow multiple wires.
+                                // Executes can only have one output but multiple inputs.
+                                if(leftPin.IsExecutePin || !leftPin.AllowMultipleWires)
                                 {
-                                    Debug.LogWarning($"{TooltipMarkup.ClassMethod(nameof(BlueprintEditorView), nameof(AddEdges))} - A port already has a connection. {edge.LeftSidePort.PortName}: {outPort.connected} -> {edge.RightSidePort.PortName} {inPort.connected}");
+                                    Debug.LogWarning(
+                                        $"{TooltipMarkup.ClassMethod(nameof(BlueprintEditorView), nameof(AddEdges))} - A port already has a connection. {edge.LeftSidePin.PinName}: {leftPort.connected} -> {edge.RightSidePin.PinName} {rightPort.connected}");
                                     continue;
                                 }
                             }
-                            else if(outPort.connected)
+                            
+                            if(rightPort.connected && !rightPin.IsExecutePin)
                             {
-                                Debug.LogWarning($"{TooltipMarkup.ClassMethod(nameof(BlueprintEditorView), nameof(AddEdges))} - A port already has a connection. {edge.LeftSidePort.PortName}: {outPort.connected} -> {edge.RightSidePort.PortName} {inPort.connected}");
+                                // Break if right port is connected and it is not an execute pin.
+                                // Right ports can only have one input value wire.
+                                Debug.LogWarning($"{TooltipMarkup.ClassMethod(nameof(BlueprintEditorView), nameof(AddEdges))} - A port already has a connection. {edge.LeftSidePin.PinName}: {leftPort.connected} -> {edge.RightSidePin.PinName} {rightPort.connected}");
                                 continue;
                             }
                             
-                            var e = outPort.ConnectTo(inPort);
-                            rightNode.OnConnectedInputEdge(edge.RightSidePort.PortName);
-                            Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintEditorView), nameof(AddEdges))} - Connected {edge.LeftSidePort.PortName} -> {edge.RightSidePort.PortName}");
+                            var e = leftPort.ConnectTo(rightPort);
+                            e.RegisterCallback<MouseDownEvent>(OnMouseDown);
+                            rightNode.OnConnectedInputEdge(edge.RightSidePin.PinName);
+                            Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintEditorView), nameof(AddEdges))} - Connected {edge.LeftSidePin.PinName} -> {edge.RightSidePin.PinName}");
                             GraphView.AddElement(e);
                         }
                         else
                         {
-                            Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintEditorView), nameof(AddEdges))} - Could Not Connect {edge.LeftSidePort.PortName} -> {edge.RightSidePort.PortName}");
+                            Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintEditorView), nameof(AddEdges))} - Could Not Connect {edge.LeftSidePin.PinName} -> {edge.RightSidePin.PinName}");
                         }                        
                     }
                     else
                     {
-                        Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintEditorView), nameof(AddEdges))} - Could Not Find Output Node {edge.LeftSidePort.PortName} -> {edge.RightSidePort.PortName}");
+                        Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintEditorView), nameof(AddEdges))} - Could Not Find Output Node {edge.LeftSidePin.PinName} -> {edge.RightSidePin.PinName}");
                     }
                 }
             }
@@ -429,11 +484,11 @@ namespace VaporEditor.Blueprints
                             var right = rightN.Node;
                             
                             // NEW
-                            var rightSlot = edge.input.GetSlot();
-                            var leftSlot = edge.output.GetSlot();
-                            BlueprintEdgeConnection edgeToMatch = new BlueprintEdgeConnection(
-                                new BlueprintPortReference(leftSlot.PortName, left.Guid, false),
-                                new BlueprintPortReference(rightSlot.PortName, right.Guid, false));
+                            var rightSlot = edge.input.GetPin();
+                            var leftSlot = edge.output.GetPin();
+                            BlueprintWireReference edgeToMatch = new BlueprintWireReference(
+                                new BlueprintPinReference(leftSlot.PortName, left.Guid, false),
+                                new BlueprintPinReference(rightSlot.PortName, right.Guid, false));
                             
                             right.InEdges.Remove(edgeToMatch);
                             left.OutEdges.Remove(edgeToMatch);
@@ -484,34 +539,54 @@ namespace VaporEditor.Blueprints
             if (rightNode != null && leftNode != null)
             {
                 var right = rightNode.Node;
-                BlueprintPortSlot rightSlot = edge.input.GetSlot();
+                BlueprintPin rightSlot = edge.input.GetPin();
                 var left = leftNode.Node;
-                BlueprintPortSlot leftSlot = edge.output.GetSlot();
+                BlueprintPin leftSlot = edge.output.GetPin();
 
                 Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintEditorView), nameof(AddEdge))} - In:{right.GetType().Name} | Out:{left.GetType().Name}");
 
 
                 rightNode.OnConnectedInputEdge(rightSlot.PortName);
 
-                left.OutEdges.Add(new BlueprintEdgeConnection(new(leftSlot.PortName, left.Guid, leftSlot.IsTransitionPort), new(rightSlot.PortName, right.Guid, rightSlot.IsTransitionPort)));
-                right.InEdges.Add(new BlueprintEdgeConnection(new(leftSlot.PortName, left.Guid, leftSlot.IsTransitionPort), new(rightSlot.PortName, right.Guid, rightSlot.IsTransitionPort)));
+                left.OutEdges.Add(new BlueprintWireReference(new(leftSlot.PortName, left.Guid, leftSlot.IsExecutePin), new(rightSlot.PortName, right.Guid, rightSlot.IsExecutePin)));
+                right.InEdges.Add(new BlueprintWireReference(new(leftSlot.PortName, left.Guid, leftSlot.IsExecutePin), new(rightSlot.PortName, right.Guid, rightSlot.IsExecutePin)));
+                
+                edge.RegisterCallback<MouseDownEvent>(OnMouseDown);
             }
             else
             {
                 Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintEditorView), nameof(AddEdge))} - IO is invalid | In:{rightNode == null} | Out:{leftNode == null}");
             }
         }
+
+        public void Connect(BlueprintPinReference leftPin, BlueprintPinReference rightPin)
+        {
+            var leftNode = EditorNodes.FirstOrDefault(n => n.Node.Guid == leftPin.NodeGuid);
+            var rightNode = EditorNodes.FirstOrDefault(n => n.Node.Guid == rightPin.NodeGuid);
+            if (leftNode != null && rightNode != null)
+            {
+                bool leftValid = leftNode.OutPorts.TryGetValue(leftPin.PinName, out var leftOutPort);
+                bool rightValid = rightNode.InPorts.TryGetValue(rightPin.PinName, out var rightInPort);
+                if (leftValid && rightValid)
+                {
+                    var edge = leftOutPort.ConnectTo(rightInPort);
+                    AddEdge(edge);
+                    GraphView.AddElement(edge);
+                }
+            }
+        }
         #endregion
 
         public void DeselectAll()
         {
-            
+            m_SearchWindowProvider.ConnectedPort = null;
         }
 
         public void Select(SearcherItem searcherItem)
         {
             if (searcherItem == null)
             {
+                m_SearchWindowProvider.ConnectedPort = null;
                 return;
             }
             
@@ -522,12 +597,11 @@ namespace VaporEditor.Blueprints
             switch (tuple.entry.NodeType)
             {
                 case BlueprintNodeType.Method:
-                    node = new BlueprintNodeDataModel
-                    {
-                        Position = new Rect(graphMousePosition, Vector2.zero),
-                        AssemblyQualifiedType = tuple.entry.MethodInfo.DeclaringType?.AssemblyQualifiedName,
-                        MethodName = tuple.entry.MethodInfo.Name
-                    };
+                    node = BlueprintNodeDataModelUtility.CreateOrUpdateMethodNode(null, 
+                        tuple.entry.MethodInfo.DeclaringType?.AssemblyQualifiedName, 
+                        tuple.entry.MethodInfo.Name, 
+                        tuple.entry.MethodInfo.GetParameters().Select(p => p.ParameterType.AssemblyQualifiedName).ToArray());
+                    node.Position = new Rect(graphMousePosition, Vector2.zero);
                     break;
                 case BlueprintNodeType.Entry:
                     break;
@@ -545,15 +619,57 @@ namespace VaporEditor.Blueprints
                     break;
                 case BlueprintNodeType.Getter:
                 {
-                    var tempData = GraphObject.TempData.FirstOrDefault(x => x.FieldName == tuple.entry.GetterSetterFieldName);
+                    var tempData = GraphObject.TempData.FirstOrDefault(x => x.FieldName == tuple.entry.NameData[0]);
                     node = BlueprintNodeDataModelUtility.CreateOrUpdateGetterNode(null, tempData);
                     node.Position = new Rect(graphMousePosition, Vector2.zero);
                     break;
                 }
                 case BlueprintNodeType.Setter:
                 {
-                    var tempData = GraphObject.TempData.FirstOrDefault(x => x.FieldName == tuple.entry.GetterSetterFieldName);
+                    var tempData = GraphObject.TempData.FirstOrDefault(x => x.FieldName == tuple.entry.NameData[0]);
                     node = BlueprintNodeDataModelUtility.CreateOrUpdateSetterNode(null, tempData);
+                    node.Position = new Rect(graphMousePosition, Vector2.zero);
+                    break;
+                }
+                case BlueprintNodeType.Reroute:
+                {
+                    var type = tuple.entry.TypeData[0];
+                    if (m_SearchWindowProvider.ConnectedPort != null)
+                    {
+                        type = m_SearchWindowProvider.ConnectedPort.Pin.Type;
+                    }
+                    Debug.Log($"Reroute {type}");
+                    node = BlueprintNodeDataModelUtility.CreateOrUpdateRerouteNode(null, type);
+                    node.Position = new Rect(graphMousePosition, Vector2.zero);
+                    break;
+                }
+                case BlueprintNodeType.Converter:
+                {
+                    var names = tuple.entry.NameData;
+                    node = BlueprintNodeDataModelUtility.CreateOrUpdateConverterNode(null, names[0], names[1]);
+                    node.Position = new Rect(graphMousePosition, Vector2.zero);
+                    break;
+                }
+                case BlueprintNodeType.Graph:
+                {
+                    var names = tuple.entry.NameData;
+                    node = BlueprintNodeDataModelUtility.CreateOrUpdateGraphNode(null, names[0]);
+                    node.Position = new Rect(graphMousePosition, Vector2.zero);
+                    break;
+                }
+                case BlueprintNodeType.FieldGetter:
+                {
+                    node = BlueprintNodeDataModelUtility.CreateOrUpdateFieldGetterNode(null,
+                        tuple.entry.FieldInfo.DeclaringType?.AssemblyQualifiedName, 
+                        tuple.entry.FieldInfo.Name);
+                    node.Position = new Rect(graphMousePosition, Vector2.zero);
+                    break;
+                }
+                case BlueprintNodeType.FieldSetter:
+                {
+                    node = BlueprintNodeDataModelUtility.CreateOrUpdateFieldSetterNode(null,
+                        tuple.entry.FieldInfo.DeclaringType?.AssemblyQualifiedName, 
+                        tuple.entry.FieldInfo.Name);
                     node.Position = new Rect(graphMousePosition, Vector2.zero);
                     break;
                 }
@@ -573,11 +689,11 @@ namespace VaporEditor.Blueprints
                 Port firstGoodPort = null;
                 if (m_SearchWindowProvider.ConnectedPort.direction == Direction.Input)
                 {
-                    firstGoodPort = last.OutPorts.Values.FirstOrDefault(x => x.portType == m_SearchWindowProvider.ConnectedPort.portType);
+                    firstGoodPort = last.OutPorts.Values.FirstOrDefault(p => GraphView.IsCompatiblePort(m_SearchWindowProvider.ConnectedPort, p));
                 }
                 else
                 {
-                    firstGoodPort = last.InPorts.Values.FirstOrDefault(x => x.portType == m_SearchWindowProvider.ConnectedPort.portType);
+                    firstGoodPort = last.InPorts.Values.FirstOrDefault(p => GraphView.IsCompatiblePort(m_SearchWindowProvider.ConnectedPort, p));
                 }
                 if (firstGoodPort == null)
                 {
@@ -588,6 +704,18 @@ namespace VaporEditor.Blueprints
                 AddEdge(e);
                 GraphView.AddElement(e);
             }
+            m_SearchWindowProvider.ConnectedPort = null;
+        }
+
+        public bool CanConvert(Type source, Type target)
+        {
+            return _canConvertMap.TryGetValue(source, out var map) && map.ContainsKey(target);
+        }
+
+        public bool TryGetConvertMethod(Type outputSlotType, Type inputSlotType, out MethodInfo methodInfo)
+        {
+            methodInfo = null;
+            return _canConvertMap.TryGetValue(outputSlotType, out var map) && map.TryGetValue(inputSlotType, out methodInfo);
         }
     }
 }

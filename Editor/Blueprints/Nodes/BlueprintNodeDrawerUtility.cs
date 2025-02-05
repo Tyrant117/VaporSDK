@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Vapor.Blueprints;
 
@@ -20,20 +21,33 @@ namespace VaporEditor.Blueprints
         
         public static IBlueprintEditorNode GetNodeOrToken(BlueprintEditorView editorView, BlueprintNodeDataModel node, EdgeConnectorListener edgeConnectorListener)
         {
-            // if (node.GetType().IsDefined(typeof(BlueprintPropertyAttribute), true))
-            // {
-            //     var editorNode = new NParamEditorToken(editorView, node, default);
-            //     editorNode.SetPosition(node.Position);
-            //     editorView.GraphView.AddElement(editorNode);
-            //     return editorNode;
-            // }
-            // else
+            switch (node.NodeType)
             {
-                var editorNode = new BlueprintEditorNode(editorView, node, edgeConnectorListener);
-                editorNode.SetPosition(node.Position);
-                editorView.GraphView.AddElement(editorNode);
-                return editorNode;
+                case BlueprintNodeType.Method:
+                case BlueprintNodeType.Entry:
+                case BlueprintNodeType.Return:
+                case BlueprintNodeType.IfElse:
+                case BlueprintNodeType.ForEach:
+                case BlueprintNodeType.Getter:
+                case BlueprintNodeType.Setter:
+                    default:
+                    var editorNode = new BlueprintEditorNode(editorView, node, edgeConnectorListener);
+                    editorNode.SetPosition(node.Position);
+                    editorView.GraphView.AddElement(editorNode);
+                    return editorNode;
+                case BlueprintNodeType.Reroute:
+                    var redirectNode = new BlueprintRedirectNode(editorView, node, edgeConnectorListener);
+                    redirectNode.SetPosition(node.Position);
+                    editorView.GraphView.AddElement(redirectNode);
+                    return redirectNode;
+                case BlueprintNodeType.Converter:
+                    var converterNode = new BlueprintRedirectNode(editorView, node, edgeConnectorListener);
+                    converterNode.SetPosition(node.Position);
+                    editorView.GraphView.AddElement(converterNode);
+                    return converterNode;
             }
+
+            return null;
         }
     }
 }

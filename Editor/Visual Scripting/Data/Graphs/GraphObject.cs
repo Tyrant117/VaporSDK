@@ -6,6 +6,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
 using Vapor.Inspector;
+using Vapor.NewtonsoftConverters;
 
 namespace VaporEditor.VisualScripting
 {
