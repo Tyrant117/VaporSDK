@@ -70,7 +70,11 @@ namespace Vapor.Keys
                 var converted = keyValuePairs.OfType<IKey>();
                 foreach (var data in converted)
                 {
-                    s_Db.Add(data.Key, (T)data);
+                    if (!s_Db.TryAdd(data.Key, (T)data))
+                    {
+                        Debug.LogError(
+                            $"{TooltipMarkup.ClassMethod(nameof(RuntimeDatabase<T>), nameof(InitDatabase))} - {TooltipMarkup.Class(typeof(T).Name)} - Could not add key for {data.DisplayName}");
+                    }
                 }
             }
             else

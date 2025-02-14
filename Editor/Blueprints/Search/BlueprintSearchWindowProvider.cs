@@ -70,21 +70,21 @@ namespace VaporEditor.Blueprints
             Entries.Add(returnEntry);
             
             BlueprintSearchEntry ifElseEntry = new BlueprintSearchEntry.Builder()
-                .WithCategoryAndName(new string[] { "Utilities", "Flow Control" }, "Branch")
+                .WithCategoryAndName(new[] { "Utilities", "Flow Control" }, "Branch")
                 .WithSynonyms("If, Else")
                 .WithNodeType(BlueprintNodeType.IfElse)
                 .Build();
             Entries.Add(ifElseEntry);
             
             BlueprintSearchEntry foreachEntry = new BlueprintSearchEntry.Builder()
-                .WithCategoryAndName(new string[] { "Utilities", "Array" }, "ForEach")
+                .WithCategoryAndName(new[] { "Utilities", "Array" }, "ForEach")
                 .WithSynonyms("For", "Loop")
                 .WithNodeType(BlueprintNodeType.ForEach)
                 .Build();
             Entries.Add(foreachEntry);
             
             BlueprintSearchEntry rerouteEntry = new BlueprintSearchEntry.Builder()
-                .WithCategoryAndName(new string[] { "Utilities", "Flow Control" }, "Reroute")
+                .WithCategoryAndName(new[] { "Utilities", "Flow Control" }, "Reroute")
                 .WithNodeType(BlueprintNodeType.Reroute)
                 .Build();
             Entries.Add(rerouteEntry);

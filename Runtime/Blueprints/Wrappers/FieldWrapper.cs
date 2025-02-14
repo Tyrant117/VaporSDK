@@ -6,58 +6,20 @@ using System.Reflection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
+using UnityEngine.Assertions;
+using UnityEngine.Serialization;
 using Vapor.Inspector;
 using Vapor.Keys;
 
 namespace Vapor.Blueprints
 {
-    [Serializable, DrawWithVapor(UIGroupType.Vertical)]
-    public class SubclassOf : FieldWrapper
+    public static class RuntimeSubclassUtility
     {
         private static List<Type> s_CachedTypes;
         private static HashSet<string> s_EditorAssemblies;
         
-        [SerializeField, TypeSelector("@TypeResolver")] 
-        private string _assemblyQualifiedName;
-        public string AssemblyQualifiedName
-        {
-            get => _assemblyQualifiedName;
-            set => _assemblyQualifiedName = value;
-        }
-
-        public SubclassOf()
-        {
-            
-        }
-        public SubclassOf(Type assignedType)
-        {
-            AssemblyQualifiedName = assignedType.AssemblyQualifiedName;
-        }
-        public SubclassOf(string assemblyQualifiedName)
-        {
-            AssemblyQualifiedName = assemblyQualifiedName;
-        }
-        
-        public override object Get() => AssemblyQualifiedName;
-        public override void Set(object value)
-        {
-            AssemblyQualifiedName = value switch
-            {
-                null => null,
-                Type t => t.AssemblyQualifiedName,
-                _ => value as string
-            };
-        }
-
-        public override Type GetPinType() => Type.GetType(AssemblyQualifiedName);
-        
-        protected virtual IEnumerable<Type> TypeResolver()
-        {
-            return GetFilteredTypes();
-        }
-        
         /// Default method: Returns all valid types
-        public static IEnumerable<Type> GetFilteredTypes()
+        public static IEnumerable<Type> GetCachedTypes()
         {
             if (s_CachedTypes != null)
             {
@@ -71,7 +33,7 @@ namespace Vapor.Blueprints
         /// Overload: Returns types that are assignable from base type T
         public static IEnumerable<Type> GetFilteredTypes<T>()
         {
-            return GetFilteredTypes().Where(t => typeof(T).IsAssignableFrom(t));
+            return GetCachedTypes().Where(t => typeof(T).IsAssignableFrom(t) && !t.IsAbstract);
         }
         
         /// Loads valid types while filtering out editor-only assemblies
@@ -86,7 +48,9 @@ namespace Vapor.Blueprints
             {
                 // Exclude Editor
                 if (IsEditorAssembly(assembly))
+                {
                     continue;
+                }
 
                 try
                 {
@@ -108,7 +72,10 @@ namespace Vapor.Blueprints
         /// Load Editor Assemblies from .asmdef Files
         private static void LoadEditorAssemblies()
         {
-            if (s_EditorAssemblies != null) return; // Already loaded
+            if (s_EditorAssemblies != null)
+            {
+                return; // Already loaded
+            }
 
             s_EditorAssemblies = new HashSet<string>();
 
@@ -138,14 +105,177 @@ namespace Vapor.Blueprints
         private static bool IsValidType(Type type)
         {
             if (type == null || type.IsNested || !type.IsPublic)
+            {
                 return false;
-
+            }
+            
             // Support abstract classes and interfaces and generics
             return true;
         }
     }
     
-    [Serializable, DrawWithVapor(UIGroupType.Vertical)]
+    [Serializable, DrawWithVapor(UIGroupType.Box)]
+    public class SubclassOf : FieldWrapper
+    {
+        [SerializeField, TypeSelector("@TypeResolver"), OnValueChanged("OnTypeChanged", true)] 
+        private string _assemblyQualifiedName;
+        public string AssemblyQualifiedName
+        {
+            get => _assemblyQualifiedName;
+            set => _assemblyQualifiedName = value;
+        }
+
+        [SerializeField, ShowIf("@IsGenericTypeDefinition")]
+        private SubclassGeneric[] _genericArguments;
+        
+        // ReSharper disable once UnusedMember.Global
+        public bool IsGenericTypeDefinition => !AssemblyQualifiedName.EmptyOrNull() && Type.GetType(AssemblyQualifiedName) is { IsGenericTypeDefinition: true };
+        private void OnTypeChanged(string current)
+        {
+            if (current.EmptyOrNull())
+            {
+                return;
+            }
+            
+            var type = Type.GetType(current);
+            _genericArguments = type is { IsGenericType: true } 
+                ? new SubclassGeneric[type.GetGenericArguments().Length] 
+                : Array.Empty<SubclassGeneric>();
+        }
+        
+        // Cached resolved type for performance
+        [NonSerialized]
+        private Type _cachedType;
+
+        public SubclassOf()
+        {
+            
+        }
+        public SubclassOf(Type assignedType)
+        {
+            SetType(assignedType);
+        }
+        public SubclassOf(string assemblyQualifiedName)
+        {
+            if (assemblyQualifiedName.EmptyOrNull())
+            {
+                AssemblyQualifiedName = null;
+                _genericArguments = null;
+                return;
+            }
+
+            Type type = Type.GetType(assemblyQualifiedName);
+        
+            if (type == null)
+            {
+                Debug.LogError($"Invalid type: {assemblyQualifiedName}");
+                AssemblyQualifiedName = null;
+                _genericArguments = null;
+                return;
+            }
+
+            SetType(type); // Use the existing method to handle generics
+        }
+        
+        public override object Get() => AssemblyQualifiedName;
+
+        public override void Set(object value)
+        {
+            if (value == null)
+            {
+                AssemblyQualifiedName = null;
+                _genericArguments = null;
+                return;
+            }
+
+            if (value is Type type)
+            {
+                SetType(type);
+            }
+            else if (value is string assemblyQualifiedName)
+            {
+                SetType(Type.GetType(assemblyQualifiedName));
+            }
+            else
+            {
+                SetType(value.GetType());
+            }
+        }
+
+        public override Type GetPinType()
+        {
+            if (_cachedType != null)
+            {
+                return _cachedType; // Return cached type if already resolved
+            }
+
+            _cachedType = ResolveType();
+            return _cachedType;
+        }
+        
+        // Resolves the actual type, handling generics correctly
+        private Type ResolveType()
+        {
+            if (AssemblyQualifiedName.EmptyOrNull())
+            {
+                return null;
+            }
+
+            Type baseType = Type.GetType(AssemblyQualifiedName);
+            if (baseType == null)
+            {
+                return null; // Invalid type
+            }
+
+            if (!baseType.IsGenericTypeDefinition || _genericArguments == null || _genericArguments.Length == 0)
+            {
+                return baseType; // Non-generic type, return it directly
+            }
+
+            // Build out full generic type using MakeGenericType
+            var genericArgs = _genericArguments
+                .Select(arg => arg.ResolveType())
+                .Where(t => t != null)
+                .ToArray();
+
+            Assert.IsTrue(genericArgs.Length == _genericArguments.Length,
+                $"Generic Argument Count Mismatch. Expected: {_genericArguments.Length}, Actual: {genericArgs.Length} for Type: {baseType.Name}");
+            return baseType.MakeGenericType(genericArgs);
+        }
+
+        // Properly assigns type and extracts generic parameters
+        private void SetType(Type type)
+        {
+            if (type == null)
+            {
+                AssemblyQualifiedName = null;
+                _genericArguments = null;
+                return;
+            }
+
+            AssemblyQualifiedName = type.IsGenericType ? type.GetGenericTypeDefinition().AssemblyQualifiedName : type.AssemblyQualifiedName;
+
+            if (type.IsGenericType)
+            {
+                _genericArguments = type.GetGenericArguments()
+                    .Select(t => new SubclassGeneric(t))
+                    .ToArray();
+            }
+            else
+            {
+                _genericArguments = null;
+            }
+            
+            _cachedType = type; // Cache the resolved type immediately
+        }
+        
+        protected virtual IEnumerable<Type> TypeResolver()
+        {
+            return RuntimeSubclassUtility.GetCachedTypes();
+        }
+    }
+    
+    [Serializable, DrawWithVapor(UIGroupType.Box)]
     public class SubclassOf<T> : SubclassOf
     {
         // ReSharper disable once StaticMemberInGenericType
@@ -170,11 +300,138 @@ namespace Vapor.Blueprints
                 return s_FilteredTypes;
             }
 
-            s_FilteredTypes = GetFilteredTypes<T>().ToList();
+            s_FilteredTypes = RuntimeSubclassUtility.GetFilteredTypes<T>().ToList();
             return s_FilteredTypes;
         }
     }
 
+    [Serializable, DrawWithVapor(UIGroupType.Box)]
+    public class SubclassGeneric
+    {
+        [SerializeField, TypeSelector("@TypeResolver"), OnValueChanged("OnTypeChanged", true)] 
+        private string _assemblyQualifiedName;
+        public string AssemblyQualifiedName
+        {
+            get => _assemblyQualifiedName;
+            set => _assemblyQualifiedName = value;
+        }
+        
+        [SerializeField, TypeSelector("@TypeResolverNoGeneric"), ShowIf("@IsGenericTypeDefinition")] 
+        private List<string> _genericArguments;
+        public List<string> GenericArguments => _genericArguments;
+        
+        [NonSerialized]
+        private Type _cachedType;
+
+        public bool IsGenericTypeDefinition => !AssemblyQualifiedName.EmptyOrNull() && Type.GetType(AssemblyQualifiedName) is { IsGenericTypeDefinition: true };
+
+        private void OnTypeChanged(string current)
+        {
+            if (current.EmptyOrNull())
+            {
+                return;
+            }
+
+            var type = Type.GetType(current);
+            _genericArguments = type is { IsGenericType: true }
+                ? new List<string>(type.GetGenericArguments().Length)
+                : new List<string>();
+        }
+
+        public SubclassGeneric()
+        {
+            
+        }
+        public SubclassGeneric(Type type)
+        {
+            SetType(type);
+        }
+        public SubclassGeneric(string assemblyQualifiedName)
+        {
+            if (assemblyQualifiedName.EmptyOrNull())
+            {
+                AssemblyQualifiedName = null;
+                _genericArguments = null;
+                return;
+            }
+
+            Type type = Type.GetType(assemblyQualifiedName);
+        
+            if (type == null)
+            {
+                Debug.LogError($"Invalid type: {assemblyQualifiedName}");
+                AssemblyQualifiedName = null;
+                _genericArguments = null;
+                return;
+            }
+
+            SetType(type); // Use the existing method to handle generics
+        }
+
+        public Type ResolveType()
+        {
+            if (AssemblyQualifiedName.EmptyOrNull())
+            {
+                return null;
+            }
+
+            Type baseType = Type.GetType(AssemblyQualifiedName);
+            if (baseType == null)
+            {
+                return null; // Invalid type
+            }
+
+            if (!baseType.IsGenericTypeDefinition || _genericArguments == null || _genericArguments.Count == 0)
+            {
+                return baseType; // Non-generic type, return it directly
+            }
+
+            // Build out full generic type using MakeGenericType
+            var genericArgs = _genericArguments
+                .Select(Type.GetType)
+                .Where(t => t != null)
+                .ToArray();
+
+            Assert.IsTrue(genericArgs.Length == _genericArguments.Count,
+                $"Generic Argument Count Mismatch. Expected: {_genericArguments.Count}, Actual: {genericArgs.Length} for Type: {baseType.Name}");
+            return baseType.MakeGenericType(genericArgs);
+        }
+        
+        public void SetType(Type type)
+        {
+            if (type == null)
+            {
+                AssemblyQualifiedName = null;
+                _genericArguments = null;
+                return;
+            }
+
+            AssemblyQualifiedName = type.IsGenericType ? type.GetGenericTypeDefinition().AssemblyQualifiedName : type.AssemblyQualifiedName;
+
+            if (type.IsGenericType)
+            {
+                _genericArguments = type.GetGenericArguments()
+                    .Select(t => t.AssemblyQualifiedName)
+                    .ToList();
+            }
+            else
+            {
+                _genericArguments = null;
+            }
+            
+            _cachedType = type; // Cache the resolved type immediately
+        }
+        
+        private IEnumerable<Type> TypeResolver()
+        {
+            return RuntimeSubclassUtility.GetCachedTypes();
+        }
+        
+        private IEnumerable<Type> TypeResolverNoGeneric()
+        {
+            return RuntimeSubclassUtility.GetCachedTypes().Where(t => !t.IsGenericType).ToArray();
+        }
+    }
 
     public abstract class FieldWrapper
     {
@@ -184,13 +441,28 @@ namespace Vapor.Blueprints
     }
 
     [Serializable]
-    public abstract class FieldWrapper<T> : FieldWrapper /*where T : new()*/
+    public class FieldWrapper<T> : FieldWrapper
     {
-        public abstract T WrappedObject { get; }
+        public virtual T WrappedObject { get; protected set; }
 
+        public override void Set(object value) => WrappedObject = (T)value;
         public override object Get() => WrappedObject;
         public override Type GetPinType() => typeof(T);
         public override string ToString() => WrappedObject.ToString();
+    }
+
+    [Serializable]
+    public class GenericWrapper<T> : FieldWrapper<T>
+    {
+        [JsonProperty, SerializeField] private T _value;
+
+        public override T WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
+        public override void Set(object value) => _value = (T)value;
     }
 
     [Serializable]
@@ -198,7 +470,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private bool _value;
 
-        public override bool WrappedObject => _value;
+        public override bool WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (bool)value;
     }
 
@@ -207,7 +484,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private byte _value;
 
-        public override byte WrappedObject => _value;
+        public override byte WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (byte)value;
     }
 
@@ -216,7 +498,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private sbyte _value;
 
-        public override sbyte WrappedObject => _value;
+        public override sbyte WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (sbyte)value;
     }
 
@@ -225,7 +512,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private short _value;
 
-        public override short WrappedObject => _value;
+        public override short WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (short)value;
     }
 
@@ -234,7 +526,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private ushort _value;
 
-        public override ushort WrappedObject => _value;
+        public override ushort WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (ushort)value;
     }
 
@@ -243,7 +540,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private int _value;
 
-        public override int WrappedObject => _value;
+        public override int WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (int)value;
     }
 
@@ -252,7 +554,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private uint _value;
 
-        public override uint WrappedObject => _value;
+        public override uint WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (uint)value;
     }
 
@@ -261,7 +568,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private long _value;
 
-        public override long WrappedObject => _value;
+        public override long WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (long)value;
     }
 
@@ -270,7 +582,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private ulong _value;
 
-        public override ulong WrappedObject => _value;
+        public override ulong WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (ulong)value;
     }
 
@@ -279,7 +596,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private float _value;
 
-        public override float WrappedObject => _value;
+        public override float WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (float)value;
     }
 
@@ -288,7 +610,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private double _value;
 
-        public override double WrappedObject => _value;
+        public override double WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (double)value;
     }
 
@@ -297,7 +624,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private string _value;
 
-        public override string WrappedObject => _value;
+        public override string WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = value as string;
     }
 
@@ -307,7 +639,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private Vector2 _value;
 
-        public override Vector2 WrappedObject => _value;
+        public override Vector2 WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (Vector2)value;
     }
 
@@ -316,7 +653,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private Vector2Int _value;
 
-        public override Vector2Int WrappedObject => _value;
+        public override Vector2Int WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (Vector2Int)value;
     }
 
@@ -325,7 +667,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private Vector3 _value;
 
-        public override Vector3 WrappedObject => _value;
+        public override Vector3 WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (Vector3)value;
     }
 
@@ -334,7 +681,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private Vector3Int _value;
 
-        public override Vector3Int WrappedObject => _value;
+        public override Vector3Int WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (Vector3Int)value;
     }
 
@@ -343,7 +695,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private Vector4 _value;
 
-        public override Vector4 WrappedObject => _value;
+        public override Vector4 WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (Vector4)value;
     }
 
@@ -352,7 +709,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private Color _value;
 
-        public override Color WrappedObject => _value;
+        public override Color WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (Color)value;
     }
 
@@ -361,7 +723,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private Gradient _value;
 
-        public override Gradient WrappedObject => _value;
+        public override Gradient WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (Gradient)value;
     }
 
@@ -370,7 +737,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private Rect _value;
 
-        public override Rect WrappedObject => _value;
+        public override Rect WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (Rect)value;
     }
 
@@ -379,7 +751,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private RectInt _value;
 
-        public override RectInt WrappedObject => _value;
+        public override RectInt WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (RectInt)value;
     }
 
@@ -388,7 +765,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private Bounds _value;
 
-        public override Bounds WrappedObject => _value;
+        public override Bounds WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (Bounds)value;
     }
 
@@ -397,7 +779,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private BoundsInt _value;
 
-        public override BoundsInt WrappedObject => _value;
+        public override BoundsInt WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (BoundsInt)value;
     }
 
@@ -406,7 +793,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private LayerMask _value;
 
-        public override LayerMask WrappedObject => _value;
+        public override LayerMask WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (LayerMask)value;
     }
 
@@ -415,7 +807,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private RenderingLayerMask _value;
 
-        public override RenderingLayerMask WrappedObject => _value;
+        public override RenderingLayerMask WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (RenderingLayerMask)value;
     }
 
@@ -424,7 +821,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private AnimationCurve _value;
 
-        public override AnimationCurve WrappedObject => _value;
+        public override AnimationCurve WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (AnimationCurve)value;
     }
 
@@ -433,7 +835,12 @@ namespace Vapor.Blueprints
     {
         [JsonProperty, SerializeField] private Hash128 _value;
 
-        public override Hash128 WrappedObject => _value;
+        public override Hash128 WrappedObject
+        {
+            get => _value;
+            protected set => _value = value;
+        }
+
         public override void Set(object value) => _value = (Hash128)value;
     }
 
@@ -470,7 +877,11 @@ namespace Vapor.Blueprints
         [JsonProperty, SerializeField, ValueDropdown("EventKeys", ValueDropdownAttribute.FilterType.Category), IgnoreCustomDrawer]
         private KeyDropdownValue _key;
 
-        public override KeyDropdownValue WrappedObject => _key;
+        public override KeyDropdownValue WrappedObject
+        {
+            get => _key;
+            protected set => _key = value;
+        }
 
         public override void Set(object value)
         {
@@ -484,7 +895,11 @@ namespace Vapor.Blueprints
         [JsonProperty, SerializeField, ValueDropdown("ProviderKeys", ValueDropdownAttribute.FilterType.Category), IgnoreCustomDrawer]
         private KeyDropdownValue _key;
 
-        public override KeyDropdownValue WrappedObject => _key;
+        public override KeyDropdownValue WrappedObject
+        {
+            get => _key;
+            protected set => _key = value;
+        }
 
         public override void Set(object value)
         {

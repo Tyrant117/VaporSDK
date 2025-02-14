@@ -239,7 +239,7 @@ namespace Vapor.Blueprints
                     new LayerMaskConverter(), new RenderingLayerMaskConverter(),
                     new AnimationCurveConverter(), new KeyframeConverter(),
                     new GradientConverter(), new GradientColorKeyConverter(), new GradientAlphaKeyConverter(),
-                    new Hash128Converter()
+                    new Hash128Converter(), new SerializedObjectConverter(),
                 },
                 TypeNameHandling = TypeNameHandling.Auto,
                 Formatting = Formatting.Indented,
@@ -335,7 +335,7 @@ namespace Vapor.Blueprints
                     new LayerMaskConverter(), new RenderingLayerMaskConverter(),
                     new AnimationCurveConverter(), new KeyframeConverter(),
                     new GradientConverter(), new GradientColorKeyConverter(), new GradientAlphaKeyConverter(),
-                    new Hash128Converter()
+                    new Hash128Converter(), new SerializedObjectConverter(),
                 },
                 TypeNameHandling = TypeNameHandling.Auto,
                 Formatting = Formatting.Indented

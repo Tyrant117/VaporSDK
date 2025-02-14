@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -24,6 +25,10 @@ namespace VaporEditor.Blueprints
         {
             View = view;
             GraphObject = graphObject;
+
+            // EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+            //
+            // SetupZoom(0.125f, 8);
         }
 
         #region - Nodes -

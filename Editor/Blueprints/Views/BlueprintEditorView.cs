@@ -633,10 +633,13 @@ namespace VaporEditor.Blueprints
                 }
                 case BlueprintNodeType.Reroute:
                 {
-                    var type = tuple.entry.TypeData[0];
-                    if (m_SearchWindowProvider.ConnectedPort != null)
+                    var type = m_SearchWindowProvider.ConnectedPort != null 
+                        ? m_SearchWindowProvider.ConnectedPort.Pin.Type 
+                        : tuple.entry.TypeData?[0];
+
+                    if (type == null)
                     {
-                        type = m_SearchWindowProvider.ConnectedPort.Pin.Type;
+                        return;
                     }
                     Debug.Log($"Reroute {type}");
                     node = BlueprintNodeDataModelUtility.CreateOrUpdateRerouteNode(null, type);

@@ -11,13 +11,13 @@ namespace Vapor.Blueprints
     {
         [OnValueChanged("OnChanged", false, true)]
         public string FieldName = string.Empty;
-        [OnValueChanged("OnSubclassChanged", true)]
+        // [OnValueChanged("OnSubclassChanged", true)]
         public SubclassOf FieldType;
-        [ShowIf("@IsGenericType")]
-        public SubclassOf[] GenericValueType;
+        // [ShowIf("@IsGenericType")]
+        // public SubclassOf[] GenericValueType;
         //TODO Add an OnChanged for field type and update the respective nodes field types
         
-        public bool IsGenericTypeDefinition => FieldType.GetPinType().IsGenericTypeDefinition;
+        // public bool IsGenericTypeDefinition => FieldType.GetPinType().IsGenericTypeDefinition;
 
         [SerializeField, HideInInspector] private string _previousName;
         public string PreviousName
@@ -31,18 +31,18 @@ namespace Vapor.Blueprints
             _previousName = old;
         }
 
-        private void OnSubclassChanged(SubclassOf current)
-        {
-            if (current == null)
-            {
-                return;
-            }
-            
-            if (current.GetPinType().IsGenericType)
-            {
-                GenericValueType = new SubclassOf[current.GetPinType().GetGenericArguments().Length];
-            }
-        }
+        // private void OnSubclassChanged(SubclassOf current)
+        // {
+        //     if (current == null)
+        //     {
+        //         return;
+        //     }
+        //     
+        //     if (current.GetPinType().IsGenericType)
+        //     {
+        //         GenericValueType = new SubclassOf[current.GetPinType().GetGenericArguments().Length];
+        //     }
+        // }
         
         public static IEnumerable<Type> GetValidTypes()
         {
@@ -101,9 +101,10 @@ namespace Vapor.Blueprints
                 return (string.Empty, typeof(ExecutePin));
             }
 
-            return IsGenericTypeDefinition 
-                ? (FieldName, FieldType.GetPinType().MakeGenericType(GenericValueType.Select(s => s.GetPinType()).ToArray())) 
-                : (FieldName, FieldType.GetPinType());
+            return (FieldName, FieldType.GetPinType());
+            // return IsGenericTypeDefinition 
+            //     ? (FieldName, FieldType.GetPinType().MakeGenericType(GenericValueType.Select(s => s.GetPinType()).ToArray())) 
+            //     : (FieldName, FieldType.GetPinType());
         }
     }
 }

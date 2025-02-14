@@ -182,7 +182,7 @@ namespace VaporEditor.Blueprints
 
                 if (slot.HasInlineValue)
                 {
-                    var ve = SerializedDrawerUtility.DrawFieldFromFieldInfo(slot.InlineValue, slot.InlineValue.GetType()); //SerializedDrawerUtility.DrawFieldFromType(slot, slot.ContentType, slot.ContentFieldInfo, true);
+                    var ve = SerializedDrawerUtility.DrawFieldFromObject(slot.InlineValue, slot.InlineValue.GetType()); //SerializedDrawerUtility.DrawFieldFromType(slot, slot.ContentType, slot.ContentFieldInfo, true);
                     ve.Q<Label>()?.Hide();
                     inputContainer.Add(ve);
                     ConnectedPort += (p) =>
@@ -370,7 +370,7 @@ namespace VaporEditor.Blueprints
 
                 if (slot.HasInlineValue)
                 {
-                    var ve = SerializedDrawerUtility.DrawFieldFromFieldInfo(slot.InlineValue, slot.InlineValue.GetType()); //SerializedDrawerUtility.DrawFieldFromType(slot, slot.ContentType, slot.ContentFieldInfo, true);//DrawerUtility.DrawVaporFieldFromType(slot, slot.ContentType, slot.ContentFieldInfo, true);
+                    var ve = SerializedDrawerUtility.DrawFieldFromObject(slot.InlineValue, slot.InlineValue.GetType()); //SerializedDrawerUtility.DrawFieldFromType(slot, slot.ContentType, slot.ContentFieldInfo, true);//DrawerUtility.DrawVaporFieldFromType(slot, slot.ContentType, slot.ContentFieldInfo, true);
                     ve.Q<Label>()?.Hide();
                     inputContainer.Add(ve);
                     ConnectedPort += (p) =>

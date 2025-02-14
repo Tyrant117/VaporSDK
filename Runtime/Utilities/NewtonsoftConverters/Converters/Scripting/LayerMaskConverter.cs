@@ -1,7 +1,9 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace Vapor.NewtonsoftConverters
 {
@@ -148,4 +150,77 @@ namespace Vapor.NewtonsoftConverters
             }
         }
     }
+
+    public class SerializedObjectConverter : JsonConverter
+    {
+        public override bool CanConvert(Type objectType)
+        {
+            return typeof(GameObject).IsAssignableFrom(objectType) ||
+                   typeof(ScriptableObject).IsAssignableFrom(objectType);
+        }
+
+        [return: MaybeNull]
+        public override object ReadJson(JsonReader reader, Type objectType, [AllowNull] object existingValue, JsonSerializer serializer)
+        {
+            if (reader.TokenType == JsonToken.Null)
+            {
+                return null;
+            }
+            
+#if UNITY_EDITOR
+            if (reader.TokenType == JsonToken.StartObject)
+            {
+                JObject obj = JObject.Load(reader);
+
+                if (!(obj.TryGetValue("guid", out JToken guidToken) && obj.TryGetValue("type", out JToken typeToken)))
+                {
+                    return obj.ToObject(objectType, serializer); // Handle non-Unity objects normally
+                }
+
+                string guid = guidToken.ToString();
+                string typeName = typeToken.ToString();
+                Type targetType = Type.GetType(typeName);
+
+                if (targetType == null || !typeof(Object).IsAssignableFrom(targetType))
+                {
+                    throw new JsonReaderException($"Unknown or unsupported type: {typeName}");
+                }
+
+                string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+                return UnityEditor.AssetDatabase.LoadAssetAtPath(path, targetType);
+            }
+#endif
+            return serializer.Deserialize(reader, objectType);
+        }
+
+        public override void WriteJson(JsonWriter writer, [AllowNull] object value, JsonSerializer serializer)
+        {
+            if (value is null)
+            {
+                writer.WriteNull();
+            }
+            else
+            {
+                #if UNITY_EDITOR
+                if (UnityEditor.AssetDatabase.TryGetGUIDAndLocalFileIdentifier((Object)value, out var guid, out var localFile))
+                {
+                    writer.WriteStartObject();
+                    writer.WritePropertyName("type");
+                    writer.WriteValue(value.GetType().AssemblyQualifiedName); // Store type info
+                    writer.WritePropertyName("guid");
+                    writer.WriteValue(guid);
+                    writer.WriteEndObject();
+                }
+                else
+                {
+                    writer.WriteNull();
+                }
+                #else
+                    writer.WriteNull();
+                #endif
+            }
+        }
+    }
+    
+    
 }
