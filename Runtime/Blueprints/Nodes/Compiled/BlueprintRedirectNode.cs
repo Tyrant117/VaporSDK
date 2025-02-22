@@ -31,7 +31,24 @@ namespace Vapor.Blueprints
                 _rightNodeGuid = outEdge.RightSidePin.NodeGuid;
             }
         }
-        
+
+        public BlueprintRedirectNode(BlueprintCompiledNodeDto dto)
+        {
+            Guid = dto.Guid;
+            var inEdge = dto.InputWires.FirstOrDefault(x => x.RightSidePin.PinName == PinNames.EXECUTE_IN);
+            _isExecuteRedirect = inEdge.RightSidePin.IsExecutePin;
+            if (inEdge.LeftSidePin.IsValid())
+            {
+                _leftPortName = inEdge.LeftSidePin.PinName;
+                _leftNodeGuid = inEdge.LeftSidePin.NodeGuid;
+            }
+
+            if (dto.Properties.TryGetValue(NEXT_NODE_GUID, out var nextNodeGuid))
+            {
+                _rightNodeGuid = nextNodeGuid as string;
+            }
+        }
+
         public override void Init(IBlueprintGraph graph)
         {
             Graph = graph;

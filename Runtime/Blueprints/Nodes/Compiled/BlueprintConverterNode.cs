@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Reflection;
 
 namespace Vapor.Blueprints
 {
@@ -11,8 +12,21 @@ namespace Vapor.Blueprints
         public BlueprintConverterNode(BlueprintNodeDataModel dataModel)
         {
             Guid = dataModel.Guid;
-            _function = MathLibrary.GetDelegateForMethod(dataModel.MethodInfo);
+            _function = MethodDelegateHelper.GetDelegateForMethod(dataModel.MethodInfo);
             InEdges = dataModel.InEdges;
+            
+            _parameterValues = new object[1];
+            InPortValues = new Dictionary<string, object>(1);
+            OutPortValues = new Dictionary<string, object>(1);
+            InPortValues[PinNames.EXECUTE_IN] = null;
+            OutPortValues[PinNames.RETURN] = null;
+        }
+
+        public BlueprintConverterNode(BlueprintCompiledNodeDto dto, MethodInfo methodInfo)
+        {
+            Guid = dto.Guid;
+            _function = MethodDelegateHelper.GetDelegateForMethod(methodInfo);
+            InEdges = dto.InputWires;
             
             _parameterValues = new object[1];
             InPortValues = new Dictionary<string, object>(1);

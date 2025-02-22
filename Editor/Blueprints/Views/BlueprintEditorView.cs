@@ -42,20 +42,23 @@ namespace VaporEditor.Blueprints
         {
             Debug.Log($"{TooltipMarkup.ClassMethod(nameof(EdgeConnectorListener), nameof(OnDropOutsidePort))} - Edge [{edge}] - Pos [{position}])");
 
-            var draggedPort = (edge.output != null ? edge.output.edgeConnector.edgeDragHelper.draggedPort : null) ?? (edge.input != null ? edge.input.edgeConnector.edgeDragHelper.draggedPort : null);
-            _searchWindowProvider.Target = null;
-            _searchWindowProvider.ConnectedPort = (BlueprintEditorPort)draggedPort;
-            _searchWindowProvider.RegenerateEntries = true;//need to be sure the entries are relevant to the edge we are dragging
-            SearcherWindow.Show(_editorWindow, _searchWindowProvider.LoadSearchWindow(false, out var items),
-                item => (_searchWindowProvider).OnSearcherSelectEntry(item, position),
-                _view.SearchClosed,
-                position, null);
-            _searchWindowProvider.RegenerateEntries = true;//entries no longer necessarily relevant, need to regenerate
+            var draggedPort = edge.output?.edgeConnector.edgeDragHelper.draggedPort ?? edge.input?.edgeConnector.edgeDragHelper.draggedPort;
+            // _searchWindowProvider.Target = null;
+            // _searchWindowProvider.ConnectedPort = (BlueprintEditorPort)draggedPort;
+            // _searchWindowProvider.RegenerateEntries = true;//need to be sure the entries are relevant to the edge we are dragging
+            // SearcherWindow.Show(_editorWindow, _searchWindowProvider.LoadSearchWindow(false, out var items),
+            //     item => (_searchWindowProvider).OnSearcherSelectEntry(item, position),
+            //     _view.SearchClosed,
+            //     position, null);
+            // _searchWindowProvider.RegenerateEntries = true;//entries no longer necessarily relevant, need to regenerate
+
+            var displayPosition = position + _editorWindow.position.position;
+            BlueprintSearchWindow.Show(position, displayPosition, new ContextSearchProvider(draggedPort.GetPin().Type, true, _view.OnSpawnNode));
         }
 
         public void OnDrop(GraphView graphView, Edge edge)
         {
-            Debug.Log($"{TooltipMarkup.ClassMethod(nameof(EdgeConnectorListener), nameof(OnDropOutsidePort))} - ({graphView}, {edge})");
+            Debug.Log($"{TooltipMarkup.ClassMethod(nameof(EdgeConnectorListener), nameof(OnDrop))} - ({graphView}, {edge})");
 
             _edgesToCreate.Clear();
             _edgesToCreate.Add(edge);
@@ -125,14 +128,14 @@ namespace VaporEditor.Blueprints
         public BlueprintEditorWindow Window { get; set; }
         public BlueprintGraphSo GraphObject { get; set; }
         public string AssetName { get; set; }
-        public BlueprintGraphView GraphView { get; private set; }
+        public BlueprintView GraphView { get; private set; }
         public List<IBlueprintEditorNode> EditorNodes { get; } = new();
         
         private BlueprintSearchWindowProvider m_SearchWindowProvider;
         private EdgeConnectorListener _edgeConnectorListener;
         private bool _maximized;
         private bool _debugMode;
-        private readonly Dictionary<Type, Dictionary<Type, MethodInfo>> _canConvertMap = new();
+        
         
         // Events
         public event Action SaveRequested = delegate { };
@@ -151,19 +154,6 @@ namespace VaporEditor.Blueprints
             styleSheets.Add(Resources.Load<StyleSheet>("Styles/BlueprintEditorView"));
             ColorUtility.TryParseHtmlString("#07070D", out var bgColor);
             style.backgroundColor = bgColor;
-            
-            var converters = TypeCache.GetMethodsWithAttribute<BlueprintPinConverterAttribute>();
-            foreach (var converter in converters)
-            {
-                var atr = converter.GetCustomAttribute<BlueprintPinConverterAttribute>();
-                if (!_canConvertMap.TryGetValue(atr.SourceType, out var map))
-                {
-                    map = new Dictionary<Type, MethodInfo>();
-                    _canConvertMap.Add(atr.SourceType, map);
-                }
-
-                map.Add(atr.TargetType, converter);
-            }
 
             CreateToolbar();
             var content = CreateContent();
@@ -180,18 +170,6 @@ namespace VaporEditor.Blueprints
             Add(content);
         }
         
-        private void OnRedrawNode(BlueprintNodeDataModel model)
-        {
-            if (model == null)
-            {
-                Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintEditorView), nameof(OnRedrawNode))} - Moduel Null");
-                return;
-            }
-            var editorNode = EditorNodes.FirstOrDefault(n => n.Node == model);
-            Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintEditorView), nameof(OnRedrawNode))} - Redrawing [{editorNode}]");
-            editorNode?.RedrawPorts(_edgeConnectorListener);
-            AddEdges();
-        }
         private void NodeCreationRequest(NodeCreationContext context)
         {
             Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintEditorView), nameof(NodeCreationRequest))} - Target [{context.target}]");
@@ -205,12 +183,11 @@ namespace VaporEditor.Blueprints
             m_SearchWindowProvider.Target = context.target;
             //var displayPosition = RuntimePanelUtils.ScreenToPanel(this.panel, context.screenMousePosition);
             var displayPosition = context.screenMousePosition - Window.position.position;
-            Debug.Log(displayPosition);
-            Debug.Log(Window.position);
+            BlueprintSearchWindow.Show(displayPosition, this.LocalToWorld(context.screenMousePosition), new DefaultSearchProvider(OnSpawnNode));
 
-            SearcherWindow.Show(Window, m_SearchWindowProvider.LoadSearchWindow(false, out var items),
-                item => m_SearchWindowProvider.OnSearcherSelectEntry(item, displayPosition), SearchClosed,
-                displayPosition, null, new SearcherWindow.Alignment(SearcherWindow.Alignment.Vertical.Top, SearcherWindow.Alignment.Horizontal.Left));
+            // SearcherWindow.Show(Window, m_SearchWindowProvider.LoadSearchWindow(false, out var items),
+            //     item => m_SearchWindowProvider.OnSearcherSelectEntry(item, displayPosition), SearchClosed,
+            //     displayPosition, null, new SearcherWindow.Alignment(SearcherWindow.Alignment.Vertical.Top, SearcherWindow.Alignment.Horizontal.Left));
         }
 
         public void SearchClosed()
@@ -290,13 +267,13 @@ namespace VaporEditor.Blueprints
         private VisualElement CreateContent()
         {
             var content = new VisualElement { name = "content" };
-            GraphView = new BlueprintGraphView(this, GraphObject)
-                { name = "GraphView", viewDataKey = "BlueprintGraphView" };
-            GraphView.SetupZoom(0.05f, 8);
-            GraphView.AddManipulator(new ContentDragger());
-            GraphView.AddManipulator(new SelectionDragger());
-            GraphView.AddManipulator(new RectangleSelector());
-            GraphView.AddManipulator(new ClickSelector());
+            // GraphView = new BlueprintGraphView(this, GraphObject)
+            //     { name = "GraphView", viewDataKey = "BlueprintGraphView" };
+            // GraphView.SetupZoom(0.05f, 8);
+            // GraphView.AddManipulator(new ContentDragger());
+            // GraphView.AddManipulator(new SelectionDragger());
+            // GraphView.AddManipulator(new RectangleSelector());
+            // GraphView.AddManipulator(new ClickSelector());
 
             RegisterGraphViewCallbacks();
             content.Add(GraphView);
@@ -373,10 +350,10 @@ namespace VaporEditor.Blueprints
             Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintEditorView), nameof(AddEdges))} - EditorNodes:{EditorNodes.Count}");
             foreach (var rightNode in EditorNodes)
             {
-                var edges = rightNode.Node.InEdges;
+                var edges = rightNode.Model.InEdges;
                 foreach (var edge in edges)
                 {
-                    var leftNode = EditorNodes.FirstOrDefault(iNode => edge.LeftSidePin.NodeGuid == iNode.Node.Guid);
+                    var leftNode = EditorNodes.FirstOrDefault(iNode => edge.LeftSidePin.NodeGuid == iNode.Model.Guid);
                     if (leftNode != null)
                     {
                         // Get Connected Pins
@@ -460,7 +437,7 @@ namespace VaporEditor.Blueprints
                     {
                         if (element is IBlueprintEditorNode node)
                         {
-                            node.Node.Position = element.parent.ChangeCoordinatesTo(GraphView.contentViewContainer, element.GetPosition());
+                            node.Model.Position = element.parent.ChangeCoordinatesTo(GraphView.contentViewContainer, element.GetPosition());
                         }
 
                         if (element is StickyNote stickyNote)
@@ -480,8 +457,8 @@ namespace VaporEditor.Blueprints
                     {
                         if (edge.input != null && edge.output != null && edge.input.node is IBlueprintEditorNode rightN && edge.output.node is IBlueprintEditorNode leftN)
                         {
-                            var left = leftN.Node;
-                            var right = rightN.Node;
+                            var left = leftN.Model;
+                            var right = rightN.Model;
                             
                             // NEW
                             var rightSlot = edge.input.GetPin();
@@ -519,7 +496,7 @@ namespace VaporEditor.Blueprints
                     {
                         Debug.Log("Removing Node" + node);
                         EditorNodes.Remove(node);
-                        GraphObject.BlueprintNodes.Remove(node.Node);
+                        GraphObject.BlueprintNodes.Remove(node.Model);
                     }
                 }
             }
@@ -538,9 +515,9 @@ namespace VaporEditor.Blueprints
 
             if (rightNode != null && leftNode != null)
             {
-                var right = rightNode.Node;
+                var right = rightNode.Model;
                 BlueprintPin rightSlot = edge.input.GetPin();
-                var left = leftNode.Node;
+                var left = leftNode.Model;
                 BlueprintPin leftSlot = edge.output.GetPin();
 
                 Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintEditorView), nameof(AddEdge))} - In:{right.GetType().Name} | Out:{left.GetType().Name}");
@@ -561,8 +538,8 @@ namespace VaporEditor.Blueprints
 
         public void Connect(BlueprintPinReference leftPin, BlueprintPinReference rightPin)
         {
-            var leftNode = EditorNodes.FirstOrDefault(n => n.Node.Guid == leftPin.NodeGuid);
-            var rightNode = EditorNodes.FirstOrDefault(n => n.Node.Guid == rightPin.NodeGuid);
+            var leftNode = EditorNodes.FirstOrDefault(n => n.Model.Guid == leftPin.NodeGuid);
+            var rightNode = EditorNodes.FirstOrDefault(n => n.Model.Guid == rightPin.NodeGuid);
             if (leftNode != null && rightNode != null)
             {
                 bool leftValid = leftNode.OutPorts.TryGetValue(leftPin.PinName, out var leftOutPort);
@@ -580,6 +557,24 @@ namespace VaporEditor.Blueprints
         public void DeselectAll()
         {
             m_SearchWindowProvider.ConnectedPort = null;
+        }
+
+        public void OnSpawnNode(BlueprintSearchModel model, Vector2 position)
+        {
+            if (model == null)
+            {
+                return;
+            }
+            
+            position = GraphView.contentViewContainer.WorldToLocal(position);
+            var type = (INodeType)Activator.CreateInstance(model.ModelType);
+            var node = type.CreateDataModel(position, model.Parameters);
+
+            if (node != null)
+            {
+                node.Validate();
+                AddNode(node);
+            }
         }
 
         public void Select(SearcherItem searcherItem)
@@ -708,17 +703,6 @@ namespace VaporEditor.Blueprints
                 GraphView.AddElement(e);
             }
             m_SearchWindowProvider.ConnectedPort = null;
-        }
-
-        public bool CanConvert(Type source, Type target)
-        {
-            return _canConvertMap.TryGetValue(source, out var map) && map.ContainsKey(target);
-        }
-
-        public bool TryGetConvertMethod(Type outputSlotType, Type inputSlotType, out MethodInfo methodInfo)
-        {
-            methodInfo = null;
-            return _canConvertMap.TryGetValue(outputSlotType, out var map) && map.TryGetValue(inputSlotType, out methodInfo);
         }
     }
 }

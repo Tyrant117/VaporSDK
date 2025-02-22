@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using Vapor.Inspector;
@@ -40,6 +41,31 @@ namespace Vapor.Blueprints
             if (outEdge.RightSidePin.IsValid())
             {
                 _nextNodeGuid = outEdge.RightSidePin.NodeGuid;
+            }
+        }
+
+        public BlueprintSetterNode(BlueprintCompiledNodeDto dto, string tempFieldName)
+        {
+            Guid = dto.Guid;
+            _tempFieldName = tempFieldName;
+            InEdges = dto.InputWires;
+            
+            InPortValues = new Dictionary<string, object>(dto.InputPinValues.Count);
+            foreach (var (key, tuple) in dto.InputPinValues)
+            {
+                var val = Convert.ChangeType(tuple.Item2, tuple.Item1);
+                InPortValues[key] = val;
+            }
+
+            OutPortValues = new Dictionary<string, object>(dto.OutputPinNames.Count);
+            foreach (var outPort in dto.OutputPinNames)
+            {
+                OutPortValues[outPort] = null;
+            }
+
+            if (dto.Properties.TryGetValue(NEXT_NODE_GUID, out var nextNodeGuid))
+            {
+                _nextNodeGuid = nextNodeGuid as string;
             }
         }
 

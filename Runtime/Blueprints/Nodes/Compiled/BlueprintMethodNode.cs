@@ -21,7 +21,7 @@ namespace Vapor.Blueprints
         public BlueprintMethodNode(BlueprintNodeDataModel dataModel)
         {
             Guid = dataModel.Guid;
-            _function = MathLibrary.GetDelegateForMethod(dataModel.MethodInfo);
+            _function = MethodDelegateHelper.GetDelegateForMethod(dataModel.MethodInfo);
             InEdges = dataModel.InEdges;
             
             _hasReturnValue = dataModel.MethodInfo.ReturnType != typeof(void);
@@ -58,10 +58,40 @@ namespace Vapor.Blueprints
                 }
             }
 
-            var outEdge = dataModel.OutEdges.FirstOrDefault(x => x.LeftSidePin.PinName == "OUT");
+            var outEdge = dataModel.OutEdges.FirstOrDefault(x => x.LeftSidePin.PinName == PinNames.EXECUTE_OUT);
             if (outEdge.RightSidePin.IsValid())
             {
                 _nextNodeGuid = outEdge.RightSidePin.NodeGuid;
+            }
+        }
+
+        public BlueprintMethodNode(BlueprintCompiledNodeDto dto, MethodInfo methodInfo)
+        {
+            Guid = dto.Guid;
+            _function = MethodDelegateHelper.GetDelegateForMethod(methodInfo);
+            InEdges = dto.InputWires;
+            
+            _hasReturnValue = methodInfo.ReturnType != typeof(void);
+            _isStatic = methodInfo.IsStatic;
+            _parameters = methodInfo.GetParameters();
+            _parameterValues = new object[_parameters.Length + (_isStatic ? 0 : 1)];
+            
+            InPortValues = new Dictionary<string, object>(dto.InputPinValues.Count);
+            foreach (var (key, tuple) in dto.InputPinValues)
+            {
+                var val = Convert.ChangeType(tuple.Item2, tuple.Item1);
+                InPortValues[key] = val;
+            }
+
+            OutPortValues = new Dictionary<string, object>(dto.OutputPinNames.Count);
+            foreach (var outPort in dto.OutputPinNames)
+            {
+                OutPortValues[outPort] = null;
+            }
+
+            if (dto.Properties.TryGetValue(NEXT_NODE_GUID, out var nextNodeGuid))
+            {
+                _nextNodeGuid = nextNodeGuid as string;
             }
         }
 
@@ -145,77 +175,6 @@ namespace Vapor.Blueprints
         }
     }
 
-    public class BlueprintFieldGetterNode : BlueprintBaseNode
-    {
-        private readonly Delegate _function;
-        private readonly bool _isStatic;
-
-        public BlueprintFieldGetterNode(BlueprintNodeDataModel dataModel)
-        {
-            Guid = dataModel.Guid;
-            _function = FieldDelegateHelper.GetDelegateForFieldGetter(dataModel.FieldInfo);
-            _isStatic = dataModel.FieldInfo.IsStatic;
-            InEdges = dataModel.InEdges;
-            
-            InPortValues = new Dictionary<string, object>(dataModel.InPorts.Count)
-            {
-                [PinNames.OWNER] = null
-            };
-            OutPortValues = new Dictionary<string, object>(dataModel.OutPorts.Count)
-            {
-                [PinNames.RETURN] = null
-            };
-        }
-        
-        public override void Init(IBlueprintGraph graph)
-        {
-            Graph = graph;
-        }
-        
-        protected override void CacheInputValues()
-        {
-            foreach (var edge in InEdges)
-            {
-                if (edge.LeftSidePin.IsExecutePin)
-                {
-                    continue;
-                }
-                
-                if (!Graph.TryGetNode(edge.LeftSidePin.NodeGuid, out var leftNode))
-                {
-                    continue;
-                }
-
-                leftNode.Invoke();
-                if (leftNode.TryGetOutputValue(edge.LeftSidePin.PinName, out var outputValue))
-                {
-                    InPortValues[edge.RightSidePin.PinName] = outputValue;
-                }
-            }
-        }
-
-        protected override void WriteOutputValues()
-        {
-            if (_function == null)
-            {
-                return;
-            }
-
-            if (_isStatic)
-            {
-                OutPortValues[PinNames.RETURN] = _function.DynamicInvoke();
-            }
-            else
-            {
-                OutPortValues[PinNames.RETURN] = _function.DynamicInvoke(InPortValues[PinNames.OWNER]);
-            }
-        }
-
-        protected override void Continue()
-        {
-        }
-    }
-
     public class BlueprintFieldSetterNode : BlueprintBaseNode
     {
         private readonly Delegate _function;
@@ -250,7 +209,34 @@ namespace Vapor.Blueprints
                 _nextNodeGuid = outEdge.RightSidePin.NodeGuid;
             }
         }
-        
+
+        public BlueprintFieldSetterNode(BlueprintCompiledNodeDto dto, FieldInfo fieldInfo)
+        {
+            Guid = dto.Guid;
+            _function = FieldDelegateHelper.GetDelegateForFieldSetter(fieldInfo);
+            _isStatic = fieldInfo.IsStatic;
+            InEdges = dto.InputWires;
+
+            InPortValues = new Dictionary<string, object>(dto.InputPinValues.Count);
+            foreach (var (key, tuple) in dto.InputPinValues)
+            {
+                var val = Convert.ChangeType(tuple.Item2, tuple.Item1);
+                _valuePinName = key;
+                InPortValues[key] = val;
+            }
+
+            OutPortValues = new Dictionary<string, object>(dto.OutputPinNames.Count);
+            foreach (var outPort in dto.OutputPinNames)
+            {
+                OutPortValues[outPort] = null;
+            }
+
+            if (dto.Properties.TryGetValue(NEXT_NODE_GUID, out var nextNodeGuid))
+            {
+                _nextNodeGuid = nextNodeGuid as string;
+            }
+        }
+
         public override void Init(IBlueprintGraph graph)
         {
             Graph = graph;

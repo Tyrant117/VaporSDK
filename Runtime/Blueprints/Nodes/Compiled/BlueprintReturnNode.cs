@@ -1,18 +1,11 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using Vapor.Inspector;
+﻿using System;
+using System.Collections.Generic;
 
 namespace Vapor.Blueprints
 {
-    public class BlueprintIfElseNode : BlueprintBaseNode
+    public class BlueprintReturnNode : BlueprintBaseNode
     {
-        private readonly string _trueNodeGuid;
-        private BlueprintBaseNode _trueNode;
-        private readonly string _falseNodeGuid;
-        private BlueprintBaseNode _falseNode;
-        private bool _true;
-        
-        public BlueprintIfElseNode(BlueprintNodeDataModel dataModel)
+        public BlueprintReturnNode(BlueprintNodeDataModel dataModel)
         {
             Guid = dataModel.Guid;
             InEdges = dataModel.InEdges;
@@ -25,31 +18,24 @@ namespace Vapor.Blueprints
                     InPortValues[inPort.PortName] = inPort.GetContent();
                 }
             }
+        }
+
+        public BlueprintReturnNode(BlueprintCompiledNodeDto dto)
+        {
+            Guid = dto.Guid;
+            InEdges = dto.InputWires;
             
-            var trueEdge = dataModel.OutEdges.FirstOrDefault(x => x.LeftSidePin.PinName == "True");
-            if (trueEdge.RightSidePin.IsValid())
+            InPortValues = new Dictionary<string, object>(dto.InputPinValues.Count);
+            foreach (var (key, tuple) in dto.InputPinValues)
             {
-                _trueNodeGuid = trueEdge.RightSidePin.NodeGuid;
-            }
-            
-            var falseEdge = dataModel.OutEdges.FirstOrDefault(x => x.LeftSidePin.PinName == "False");
-            if (falseEdge.RightSidePin.IsValid())
-            {
-                _falseNodeGuid = falseEdge.RightSidePin.NodeGuid;
+                var val = Convert.ChangeType(tuple.Item2, tuple.Item1);
+                InPortValues[key] = val;
             }
         }
-        
+
         public override void Init(IBlueprintGraph graph)
         {
             Graph = graph;
-            if (!_trueNodeGuid.EmptyOrNull())
-            {
-                Graph.TryGetNode(_trueNodeGuid, out _trueNode);
-            }
-            if (!_falseNodeGuid.EmptyOrNull())
-            {
-                Graph.TryGetNode(_falseNodeGuid, out _falseNode);
-            }
         }
 
         protected override void CacheInputValues()
@@ -76,7 +62,7 @@ namespace Vapor.Blueprints
 
         protected override void WriteOutputValues()
         {
-            _true = (bool)InPortValues["Value"];
+            Graph.WriteReturnValues(InPortValues);
         }
 
         protected override void Continue()
@@ -86,14 +72,7 @@ namespace Vapor.Blueprints
                 return;
             }
             
-            if (_true)
-            {
-                _trueNode?.InvokeAndContinue();
-            }
-            else
-            {
-                _falseNode?.InvokeAndContinue();
-            }
+            Graph.Return();
         }
     }
 }

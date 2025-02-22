@@ -1,9 +1,23 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace Vapor.Blueprints
 {
+    [Serializable]
+    public struct BlueprintCompiledNodeDto
+    {
+        public Type NodeType;
+        public string Guid;
+        public List<BlueprintWireReference> InputWires;
+        public Dictionary<string, (Type, object)> InputPinValues;
+        public List<string> OutputPinNames;
+        public Dictionary<string, object> Properties;
+    }
+
     public abstract class BlueprintBaseNode
     {
+        public const string NEXT_NODE_GUID = "NextNodeGuid";
+        
         protected IBlueprintGraph Graph { get; set; }
         public string Guid { get; protected set; }
         protected List<BlueprintWireReference> InEdges { get; set; }

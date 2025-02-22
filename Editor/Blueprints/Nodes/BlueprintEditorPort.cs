@@ -6,6 +6,8 @@ using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
 using Vapor.Blueprints;
+using Vapor.Inspector;
+using Vapor.ModelViewController;
 using VaporEditor.Inspector;
 using Object = UnityEngine.Object;
 
@@ -19,8 +21,9 @@ namespace VaporEditor.Blueprints
         }
     }
     
-    public class BlueprintEditorPort : Port
+    public class BlueprintEditorPort : Port, IEdgeConnectorListener
     {
+        private static readonly StyleSheet s_PortColors = Resources.Load<StyleSheet>("Styles/PortColors");
         
         private static StyleSheet s_StyleSheet;
 
@@ -55,8 +58,10 @@ namespace VaporEditor.Blueprints
         public bool IsClass { get; set; }
 
         public IBlueprintEditorNode Node { get; }
+        public VisualElement DrawnField { get; private set; }
 
-        public Action<Port> OnDisconnect;
+        public event Action<BlueprintEditorPort> Connected;
+        public event Action<BlueprintEditorPort> Disconnected;
 
         private BlueprintEditorPort(IBlueprintEditorNode blueprintEditorNode, Orientation portOrientation, Direction portDirection, Capacity portCapacity, BlueprintPin pin) : base(portOrientation, portDirection, portCapacity, pin.Type)
         {
@@ -64,8 +69,10 @@ namespace VaporEditor.Blueprints
             Pin = pin;
             s_StyleSheet = s_StyleSheet != null ? s_StyleSheet : Resources.Load<StyleSheet>("Styles/BlueprintEditorPort");
             styleSheets.Add(s_StyleSheet);
+            styleSheets.Add(s_PortColors);
             RemoveFromClassList("port");
             PropertyType = TypeToSerializedPropertyType(Pin.Type);
+            tooltip = Pin.CreateTooltipForPin();
             
             IsArray = IsArrayOrList(Pin.Type);
             if (IsArray)
@@ -83,8 +90,24 @@ namespace VaporEditor.Blueprints
             }
 
             visualClass = GetVisualClass();
+
+            DrawnField = new VisualElement();
+            DrawField();
             
-            this.AddManipulator((IManipulator) new ContextualMenuManipulator(new Action<ContextualMenuPopulateEvent>(this.BuildContextualMenu)));
+            this.AddManipulator(new ContextualMenuManipulator(BuildContextualMenu));
+        }
+
+        private void DrawField()
+        {
+            DrawnField.Clear();
+            if (!Pin.HasInlineValue)
+            {
+                return;
+            }
+            
+            var ve = SerializedDrawerUtility.DrawFieldFromObject(Pin.InlineValue, Pin.InlineValue.GetType());
+            ve.Q<Label>()?.Hide();
+            DrawnField.Add(ve);
         }
 
         private void BuildContextualMenu(ContextualMenuPopulateEvent evt)
@@ -97,46 +120,52 @@ namespace VaporEditor.Blueprints
             evt.menu.AppendAction("Disconnect", CTX_DisconnectAll, CTX_DisconnectAllStatus);
             evt.menu.AppendSeparator();
             evt.menu.AppendAction("Promote to Variable", CTX_PromoteToVariable, CTX_PromoteToVariableStatus);
+
+            if (Pin.IsWildcard)
+            {
+                evt.menu.AppendSeparator();
+                foreach (var wcType in Pin.WildcardTypes)
+                {
+                    evt.menu.AppendAction($"Change Type To {wcType.Name}", c => CTX_ChangeType(c, wcType), CTX_ChangeTypeStatus);
+                }
+            }
         }
 
-        public static BlueprintEditorPort Create(IBlueprintEditorNode node, BlueprintPin pin, IEdgeConnectorListener connectorListener)
+        public static BlueprintEditorPort Create(IBlueprintEditorNode node, BlueprintPin pin)
         {
             var port = new BlueprintEditorPort(node, Orientation.Horizontal, pin.Direction == PinDirection.In ? Direction.Input : Direction.Output,
-                pin.AllowMultipleWires ? Capacity.Multi : Capacity.Single, pin)
-            {
-                m_EdgeConnector = new EdgeConnector<Edge>(connectorListener),
-            };
+                pin.AllowMultipleWires ? Capacity.Multi : Capacity.Single, pin);
+            port.m_EdgeConnector = new EdgeConnector<Edge>(port);
             port.AddManipulator(port.m_EdgeConnector);
             return port;
-        }
-
-        public void Dispose()
-        {
-            this.RemoveManipulator(m_EdgeConnector);
-            m_EdgeConnector = null;
-            _pin = null;
-            styleSheets.Clear();
-            DisconnectAll();
-            OnDisconnect = null;
         }
 
         public override void Connect(Edge edge)
         {
             base.Connect(edge);
             AddToClassList("connected");
+            if (connected)
+            {
+                DrawnField.Hide();
+            }
+            Connected?.Invoke(this);
         }
 
         public override void Disconnect(Edge edge)
         {
             base.Disconnect(edge);
-            RemoveFromClassList("connected");
-            OnDisconnect?.Invoke(this);
+            if (!connected)
+            {
+                RemoveFromClassList("connected");
+                DrawnField.Show();
+            }
+            Disconnected?.Invoke(this);
         }
 
         #region - Context Menu -
         private void CTX_DisconnectAll(DropdownMenuAction obj)
         {
-            Node.View.GraphView.DeleteElements(connections);
+            Node.View.DeleteElements(connections);
         }
         
         private DropdownMenuAction.Status CTX_DisconnectAllStatus(DropdownMenuAction arg)
@@ -166,36 +195,31 @@ namespace VaporEditor.Blueprints
 
             if (direction == Direction.Output)
             {
-                var sr = new SearcherItem("");
-                var bse = new BlueprintSearchEntry.Builder().WithFullName(fieldName).WithNodeType(BlueprintNodeType.Setter).WithNameData(fieldName).Build();
-                sr.UserData = (bse, parent.LocalToWorld(layout.position) + new Vector2(106, 16));
-                Node.View.Select(sr);
+                var position = parent.LocalToWorld(layout.position) + new Vector2(106, 16);
+                Node.View.OnSpawnNodeDirect<TemporaryDataSetterNodeType>(position, (INodeType.GRAPH_PARAM, Node.View.GraphObject), (INodeType.NAME_DATA_PARAM, fieldName));
 
                 var last = Node.View.EditorNodes[^1];
-
                 if (last.InPorts.TryGetValue(fieldName, out var inPort))
                 {
-                    var e = inPort.ConnectTo(this);
-                    Node.View.AddEdge(e);
-                    Node.OnConnectedInputEdge(this.GetPin().PortName);
-                    Node.View.GraphView.AddElement(e);
+                    Node.View.CreateEdge(this, inPort, true);
+                    // var e = inPort.ConnectTo(this);
+                    // Node.OnConnectedInputEdge(this.GetPin().PortName);
+                    // Node.View.AddElement(e);
                 }
             }
             else
             {
-                var sr = new SearcherItem("");
-                var bse = new BlueprintSearchEntry.Builder().WithFullName(fieldName).WithNodeType(BlueprintNodeType.Getter).WithNameData(fieldName).Build();
-                sr.UserData = (bse, parent.LocalToWorld(layout.position) + new Vector2(-176, 16));
-                Node.View.Select(sr);
+                var position = parent.LocalToWorld(layout.position) + new Vector2(-176, 16);
+                Node.View.OnSpawnNodeDirect<TemporaryDataGetterNodeType>(position, (INodeType.GRAPH_PARAM, Node.View.GraphObject), (INodeType.NAME_DATA_PARAM, fieldName));
 
                 var last = Node.View.EditorNodes[^1];
-
                 if (last.OutPorts.TryGetValue(fieldName, out var outPort))
                 {
-                    var e = outPort.ConnectTo(this);
-                    Node.View.AddEdge(e);
-                    Node.OnConnectedInputEdge(this.GetPin().PortName);
-                    Node.View.GraphView.AddElement(e);
+                    Node.View.CreateEdge(outPort, this, true);
+                    // var e = outPort.ConnectTo(this);
+                    // Node.View.AddEdge(e);
+                    // Node.OnConnectedInputEdge(this.GetPin().PortName);
+                    // Node.View.AddElement(e);
                 }
             }
 
@@ -204,6 +228,75 @@ namespace VaporEditor.Blueprints
         private DropdownMenuAction.Status CTX_PromoteToVariableStatus(DropdownMenuAction arg)
         {
             return portType == typeof(ExecutePin) ? DropdownMenuAction.Status.Hidden : DropdownMenuAction.Status.Normal;
+        }
+
+        private void CTX_ChangeType(DropdownMenuAction arg, Type newType)
+        {
+            Pin.Type = newType;
+            portType = Pin.Type;
+            PropertyType = TypeToSerializedPropertyType(Pin.Type);
+            visualClass = GetVisualClass();
+            tooltip = Pin.CreateTooltipForPin();
+            DrawField();
+        }
+        
+        private DropdownMenuAction.Status CTX_ChangeTypeStatus(DropdownMenuAction arg)
+        {
+            return connected ? DropdownMenuAction.Status.Disabled : DropdownMenuAction.Status.Normal;
+        }
+        #endregion
+
+        #region - Edge Connection -
+
+        void IEdgeConnectorListener.OnDropOutsidePort(Edge edge, Vector2 position)
+        {
+            // var draggedPort = edge.output?.edgeConnector.edgeDragHelper.draggedPort ?? edge.input?.edgeConnector.edgeDragHelper.draggedPort;
+            var screenPosition = position + Node.View.Window.position.position;
+            BlueprintSearchWindow.Show(position, screenPosition, new ContextSearchProvider(Pin.Type, true, Node.View.OnSpawnNode).WithPin(this));
+        }
+
+        void IEdgeConnectorListener.OnDrop(GraphView graphView, Edge edge)
+        {
+            var edgesToDelete = new List<Edge>();
+            if (edge.input.capacity == Capacity.Single)
+            {
+                foreach (Edge connection in edge.input.connections)
+                {
+                    if (connection != edge)
+                    {
+                        edgesToDelete.Add(connection);
+                    }
+                }
+            }
+
+            if (edge.output.capacity == Capacity.Single)
+            {
+                foreach (Edge connection2 in edge.output.connections)
+                {
+                    if (connection2 != edge)
+                    {
+                        edgesToDelete.Add(connection2);
+                    }
+                }
+            }
+
+            if (edgesToDelete.Count > 0)
+            {
+                graphView.DeleteElements(edgesToDelete);
+            }
+
+            if (Node.View.IsCompatiblePort(edge.output, edge.input))
+            {
+                if (Node.View.CanConvert(edge.output.portType, edge.input.portType))
+                {
+                    // Create Converter
+                    Node.View.CreateConverterNode(edge);
+                }
+                else
+                {
+                    Node.View.CreateEdge((BlueprintEditorPort)edge.output, (BlueprintEditorPort)edge.input, true);
+                }
+            }
         }
         #endregion
 
@@ -394,6 +487,7 @@ namespace VaporEditor.Blueprints
             {
                 return true;
             }
+            
 
             // Check if the type is a List<> or a derived type
             return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>);

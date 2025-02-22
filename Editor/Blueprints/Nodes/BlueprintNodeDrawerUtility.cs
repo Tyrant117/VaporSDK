@@ -19,7 +19,20 @@ namespace VaporEditor.Blueprints
             return true;
         }
         
-        public static IBlueprintEditorNode GetNodeOrToken(BlueprintEditorView editorView, BlueprintNodeDataModel node, EdgeConnectorListener edgeConnectorListener)
+        public static bool AddNode(BlueprintNodeDataModel node, BlueprintView view, List<IBlueprintEditorNode> editorNodes, List<BlueprintNodeDataModel> refNodes)
+        {
+            if (node == null)
+            {
+                return false;
+            }
+
+            var editorNode = GetNodeOrToken(view, node);
+            editorNodes.Add(editorNode);
+            refNodes?.Add(node);
+            return true;
+        }
+
+        private static IBlueprintEditorNode GetNodeOrToken(BlueprintEditorView editorView, BlueprintNodeDataModel node, EdgeConnectorListener edgeConnectorListener)
         {
             switch (node.NodeType)
             {
@@ -48,6 +61,28 @@ namespace VaporEditor.Blueprints
             }
 
             return null;
+        }
+
+        private static IBlueprintEditorNode GetNodeOrToken(BlueprintView view, BlueprintNodeDataModel node)
+        {
+            switch (node.NodeType)
+            {
+                default:
+                    var editorNode = new BlueprintEditorNode(view, node);
+                    editorNode.SetPosition(node.Position);
+                    view.AddElement(editorNode);
+                    return editorNode;
+                case BlueprintNodeType.Reroute:
+                    var redirectNode = new BlueprintRedirectNode(view, node);
+                    redirectNode.SetPosition(node.Position);
+                    view.AddElement(redirectNode);
+                    return redirectNode;
+                case BlueprintNodeType.Converter:
+                    var converterNode = new BlueprintRedirectNode(view, node);
+                    converterNode.SetPosition(node.Position);
+                    view.AddElement(converterNode);
+                    return converterNode;
+            }
         }
     }
 }

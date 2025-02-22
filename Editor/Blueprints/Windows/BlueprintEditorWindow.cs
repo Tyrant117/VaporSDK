@@ -29,8 +29,8 @@ namespace VaporEditor.Blueprints
             }
         }
         
-        private BlueprintEditorView _graphEditorView;
-        public BlueprintEditorView GraphEditorView
+        private BlueprintView _graphEditorView;
+        public BlueprintView GraphEditorView
         {
             get => _graphEditorView;
             private set
@@ -45,8 +45,6 @@ namespace VaporEditor.Blueprints
 
                 if (_graphEditorView != null)
                 {
-                    _graphEditorView.SaveRequested += () => SaveAsset();
-                    _graphEditorView.ShowInProjectRequested += PingAsset;
                     _graphEditorView.RegisterCallbackOnce<GeometryChangedEvent>(OnGeometryChanged);
                     _frameAllAfterLayout = true;
                     rootVisualElement.Add(_graphEditorView);
@@ -89,7 +87,7 @@ namespace VaporEditor.Blueprints
             EditorUtility.CopySerialized(asset, GraphObject);
             GraphObject.Validate();
 
-            GraphEditorView = new(this, GraphObject, graphName)
+            GraphEditorView = new(this, GraphObject)
             {
                 viewDataKey = SelectedGuid,
             };
@@ -149,7 +147,7 @@ namespace VaporEditor.Blueprints
 
             if (_frameAllAfterLayout)
             {
-                GraphEditorView?.GraphView?.FrameAll();
+                GraphEditorView?.FrameAll();
             }
 
             _frameAllAfterLayout = false;
@@ -203,10 +201,9 @@ namespace VaporEditor.Blueprints
             return File.Exists(assetPath);
         }
 
-        public bool SaveAsset()
+        public void SaveAsset()
         {
-            bool saved = false;
-            if (SelectedGuid != null && GraphObject != null)
+            if (SelectedGuid != null && GraphObject)
             {
                 Debug.Log("Save Called");
                 var mainAsset = AssetDatabase.LoadAssetAtPath<BlueprintGraphSo>(AssetDatabase.GUIDToAssetPath(SelectedGuid));
@@ -219,22 +216,26 @@ namespace VaporEditor.Blueprints
 
                 EditorUtility.ClearDirty(GraphObject);
                 hasUnsavedChanges = false;
-                saved = true;
             }
 
             UpdateTitle();
+        }
 
-            return saved;
+        public void CompileAsset()
+        {
+            
         }
 
         public void PingAsset()
         {
-            if (SelectedGuid != null)
+            if (SelectedGuid == null)
             {
-                var path = AssetDatabase.GUIDToAssetPath(SelectedGuid);
-                var asset = AssetDatabase.LoadAssetAtPath<Object>(path);
-                EditorGUIUtility.PingObject(asset);
+                return;
             }
+
+            var path = AssetDatabase.GUIDToAssetPath(SelectedGuid);
+            var asset = AssetDatabase.LoadAssetAtPath<Object>(path);
+            EditorGUIUtility.PingObject(asset);
         }
 
         private string GetSaveChangesMessage()

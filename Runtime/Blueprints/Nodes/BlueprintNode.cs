@@ -35,15 +35,193 @@ namespace Vapor.Blueprints
         Graph,
         FieldGetter,
         FieldSetter,
+        Sequence,
+        For,
+        While,
+        Switch,
     }
 
     public static class PinNames
     {
         public const string EXECUTE_IN = "IN";
         public const string EXECUTE_OUT = "OUT";
+        
+        public const string TRUE_OUT = "True";
+        public const string FALSE_OUT = "False";
+
+        public const string VALUE_IN = "Value";
 
         public const string OWNER = "Owner";
         public const string RETURN = "Return";
+        
+        // Array
+        public const string BREAK_IN = "Break";
+        public const string ARRAY_IN = "Array";
+        
+        public const string LOOP_OUT = "Loop";
+        public const string INDEX_OUT = "Index";
+        public const string ELEMENT_OUT = "Element";
+        public const string COMPLETE_OUT= "Complete";
+        
+    }
+
+    [Serializable]
+    public struct BlueprintDesignNodeDto
+    {
+        public string Guid;
+        public Type NodeType;
+        public Rect Position;
+        public List<BlueprintWireReference> InputWires;
+        public List<BlueprintWireReference> OutputWires;
+        public List<BlueprintPinDto> Pins;
+        public Dictionary<string, object> Properties;
+    }
+
+    [Serializable]
+    public struct BlueprintPinDto
+    {
+        public string PinName;
+        public Type PinType;
+        public object Content;
+    }
+
+    [Serializable]
+    public class BlueprintDesignNode
+    {
+        private static Color s_DefaultTextColor = new(0.7568628f, 0.7568628f, 0.7568628f);
+        
+        public const string k_MethodDeclaringType = "MethodDeclaringType";
+        public const string k_MethodName = "MethodName";
+        public const string k_MethodParameterTypes = "MethodParameterTypes";
+        public const string k_MethodInfo = "MethodInfo";
+        public const string TEMP_FIELD_NAME = "TempFieldName";
+        public const string CONNECTION_TYPE = "ConnectionType";
+        
+        public const string FIELD_TYPE = "FieldType";
+        public const string FIELD_NAME = "FieldName";
+        
+        public string Guid { get; }
+        public Type NodeType { get; }
+        public Rect Position { get; set; }
+        public List<BlueprintWireReference> InputWires { get; }
+        public List<BlueprintWireReference> OutputWires { get; }
+
+        private Dictionary<string, object> _properties;
+        private Dictionary<string, object> _nonSerializedProperties;
+        
+        // Non Serialized
+        public BlueprintGraphSo Graph { get; set; }
+        public string NodeName { get; set; }
+        public Dictionary<string, BlueprintPin> InPorts { get; }
+        public Dictionary<string, BlueprintPin> OutPorts { get; }
+        private INodeType _nodeType;
+
+        public BlueprintDesignNode(INodeType nodeType)
+        {
+            Guid = System.Guid.NewGuid().ToString();
+            NodeType = nodeType.GetType();
+            InputWires = new List<BlueprintWireReference>();
+            OutputWires = new List<BlueprintWireReference>();
+            _properties = new Dictionary<string, object>();
+            _nonSerializedProperties = new Dictionary<string, object>();
+            InPorts = new Dictionary<string, BlueprintPin>();
+            OutPorts = new Dictionary<string, BlueprintPin>();
+            
+            _nodeType = nodeType;
+        }
+        
+        public BlueprintDesignNode(BlueprintDesignNodeDto dataTransferObject, BlueprintGraphSo graph)
+        {
+            Guid = dataTransferObject.Guid;
+            NodeType = dataTransferObject.NodeType;
+            InputWires = dataTransferObject.InputWires;
+            OutputWires = dataTransferObject.OutputWires;
+            _properties = dataTransferObject.Properties;
+            _nonSerializedProperties = new Dictionary<string, object>();
+            
+            Graph = graph;
+            InPorts = new Dictionary<string, BlueprintPin>();
+            OutPorts = new Dictionary<string, BlueprintPin>();
+            _nodeType = Activator.CreateInstance(NodeType) as INodeType;
+            Assert.IsNotNull(_nodeType, $"{NodeType} is not a subclass of NodeTypeBase");
+            _nodeType.UpdateDesignNode(this);
+            
+            foreach (var pinDto in dataTransferObject.Pins)
+            {
+                var content = pinDto.Content;
+                if (InPorts.TryGetValue(pinDto.PinName, out var inPort) && inPort.HasInlineValue)
+                {
+                    inPort.SetDefaultValue(content);
+                }
+            }
+        }
+
+        #region - Data -
+        public bool TryGetProperty<T>(string propertyName, out T value)
+        {
+            if (_properties.TryGetValue(propertyName, out var serializedValue))
+            {
+                value = (T)serializedValue;
+                return true;
+            }
+            
+            if (_nonSerializedProperties.TryGetValue(propertyName, out var nonSerializedValue))
+            {
+                value = (T)nonSerializedValue;
+                return true;
+            }
+            
+            value = default(T);
+            return false;
+        }
+        
+        public bool TryAddProperty<T>(string propertyName, T value, bool shouldSerialize)
+        {
+            return shouldSerialize ? _properties.TryAdd(propertyName, value) : _nonSerializedProperties.TryAdd(propertyName, value); 
+        }
+        #endregion
+
+        #region - Drawing -
+        public (string, Color) GetNodeName() => (NodeName, s_DefaultTextColor);
+        public (Sprite, Color) GetNodeNameIcon() => (null, Color.white);
+        #endregion
+        
+        #region - Serialization -
+
+        public string Serialize()
+        {
+            var dto = new BlueprintDesignNodeDto
+            {
+                Guid = Guid,
+                NodeType = NodeType,
+                Position = Position,
+                InputWires = InputWires,
+                OutputWires = OutputWires,
+                Pins = new List<BlueprintPinDto>(),
+                Properties = _properties,
+            };
+
+            foreach (var port in InPorts.Where(port => !port.Value.IsExecutePin)
+                         .Where(port => port.Value.HasInlineValue))
+            {
+                dto.Pins.Add(new BlueprintPinDto
+                {
+                    PinName = port.Key,
+                    PinType = port.Value.InlineValue.GetPinType(),
+                    Content = port.Value.InlineValue,
+                });
+            }
+
+            return JsonConvert.SerializeObject(dto, NewtonsoftUtility.SerializerSettings);
+        }
+
+        public string Compile()
+        {
+            var dto = _nodeType.Compile(this);
+            return JsonConvert.SerializeObject(dto, NewtonsoftUtility.SerializerSettings);
+        }
+        #endregion
+        
     }
 
     [Serializable, ArrayEntryName("@GetArrayName")]
@@ -365,7 +543,6 @@ namespace Vapor.Blueprints
 
     public static class BlueprintNodeDataModelUtility
     {
-
         public static BlueprintNodeDataModel CreateOrUpdateEntryNode(BlueprintNodeDataModel entry, List<BlueprintIOParameter> parameters)
         {
             entry ??= new BlueprintNodeDataModel();
@@ -475,6 +652,7 @@ namespace Vapor.Blueprints
                 {
                     // Out Ports
                     var paramAttribute = pi.GetCustomAttribute<BlueprintParamAttribute>();
+                    bool isWildcard = false;
                     string portName = pi.Name;
                     string displayName = pi.Name;
 #if UNITY_EDITOR
@@ -482,6 +660,7 @@ namespace Vapor.Blueprints
 #endif
                     if (paramAttribute != null)
                     {
+                        isWildcard = paramAttribute.WildcardTypes != null;
                         if (!paramAttribute.Name.EmptyOrNull())
                         {
                             displayName = paramAttribute.Name;
@@ -497,12 +676,17 @@ namespace Vapor.Blueprints
                     var slot = new BlueprintPin(portName, PinDirection.Out, type, false)
                         .WithDisplayName(displayName)
                         .WithAllowMultipleWires();
+                    if (isWildcard)
+                    {
+                        slot.WithWildcardTypes(paramAttribute.WildcardTypes);
+                    }
                     node.OutPorts.Add(portName, slot);
                 }
                 else
                 {
                     // In Ports
                     var paramAttribute = pi.GetCustomAttribute<BlueprintParamAttribute>();
+                    bool isWildcard = false;
                     string portName = pi.Name;
                     string displayName = pi.Name;
 #if UNITY_EDITOR
@@ -510,6 +694,7 @@ namespace Vapor.Blueprints
 #endif
                     if (paramAttribute != null)
                     {
+                        isWildcard = paramAttribute.WildcardTypes != null;
                         if (!paramAttribute.Name.EmptyOrNull())
                         {
                             displayName = paramAttribute.Name;
@@ -519,6 +704,10 @@ namespace Vapor.Blueprints
                     var slot = new BlueprintPin(portName, PinDirection.In, pi.ParameterType, false)
                         .WithDisplayName(displayName)
                         .WithIsOptional();
+                    if (isWildcard)
+                    {
+                        slot.WithWildcardTypes(paramAttribute.WildcardTypes);
+                    }
                     if (pi.HasDefaultValue && slot.HasInlineValue)
                     {
                         slot.SetDefaultValue(pi.DefaultValue);

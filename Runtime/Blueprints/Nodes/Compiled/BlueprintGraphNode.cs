@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using Vapor.Inspector;
@@ -65,7 +66,51 @@ namespace Vapor.Blueprints
                 _nextNodeGuid = outEdge.RightSidePin.NodeGuid;
             }
         }
-        
+
+        public BlueprintGraphNode(BlueprintCompiledNodeDto dto, int graphKey, string assetGuid, string nextNodeGuid)
+        {
+            Guid = dto.Guid;
+            InEdges = dto.InputWires;
+#if UNITY_EDITOR
+            if (Application.isPlaying)
+            {
+                _graph = RuntimeDataStore<IBlueprintGraph>.Get(graphKey);
+            }
+            else
+            {
+                var path = UnityEditor.AssetDatabase.GUIDToAssetPath(assetGuid);
+                var found = UnityEditor.AssetDatabase.LoadAssetAtPath<BlueprintGraphSo>(path);
+                found.Validate();
+                _graph = new BlueprintFunctionGraph(found);
+            }
+#else
+            _graph = RuntimeDataStore<IBlueprintGraph>.Get(graphKey);
+#endif
+
+            InPortValues = new Dictionary<string, object>(dto.InputPinValues.Count);
+            int paramCount = 0;
+            foreach (var (key, tuple) in dto.InputPinValues)
+            {
+                if (!key.EmptyOrNull())
+                {
+                    var val = Convert.ChangeType(tuple.Item2, tuple.Item1);
+                    InPortValues[key] = val;
+                }
+
+                paramCount++;
+            }
+
+            _parameterValues = new object[paramCount];
+
+            OutPortValues = new Dictionary<string, object>(dto.OutputPinNames.Count);
+            foreach (var outPort in dto.OutputPinNames)
+            {
+                OutPortValues[outPort] = null;
+            }
+
+            _nextNodeGuid = nextNodeGuid;
+        }
+
         public override void Init(IBlueprintGraph graph)
         {
             Graph = graph;

@@ -70,7 +70,7 @@ namespace VaporEditor.VisualScripting
 
         public void OnDrop(GraphView graphView, Edge edge)
         {
-            Debug.Log($"{TooltipMarkup.ClassMethod(nameof(EdgeConnectorListener), nameof(OnDropOutsidePort))} - ({graphView}, {edge})");
+            Debug.Log($"{TooltipMarkup.ClassMethod(nameof(EdgeConnectorListener), nameof(OnDrop))} - ({graphView}, {edge})");
 
             m_EdgesToCreate.Clear();
             m_EdgesToCreate.Add(edge);

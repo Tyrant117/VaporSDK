@@ -21,6 +21,18 @@ namespace Vapor.Blueprints
             }
         }
 
+        public BlueprintGetterNode(BlueprintCompiledNodeDto dto, string tempFieldName)
+        {
+            Guid = dto.Guid;
+            _tempFieldName = tempFieldName;
+            
+            OutPortValues = new Dictionary<string, object>(dto.OutputPinNames.Count);
+            foreach (var outPort in dto.OutputPinNames)
+            {
+                OutPortValues[outPort] = null;
+            }
+        }
+
         public override void Init(IBlueprintGraph graph)
         {
             Graph = graph;

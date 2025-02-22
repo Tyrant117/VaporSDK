@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Vapor.Inspector;
@@ -7,6 +8,9 @@ namespace Vapor.Blueprints
 {
     public class BlueprintForEachNode : BlueprintBaseNode
     {
+        public const string LOOP_NODE_GUID = "LoopNodeGuid";
+        public const string COMPLETE_NODE_GUID = "CompleteNodeGuid";
+        
         private bool _looping;
         
         private readonly string _loopNodeGuid;
@@ -51,7 +55,36 @@ namespace Vapor.Blueprints
                 _completedNodeGuid = falseEdge.RightSidePin.NodeGuid;
             }
         }
-        
+
+        public BlueprintForEachNode(BlueprintCompiledNodeDto dto)
+        {
+            Guid = dto.Guid;
+            InEdges = dto.InputWires;
+            
+            InPortValues = new Dictionary<string, object>(dto.InputPinValues.Count);
+            foreach (var (key, tuple) in dto.InputPinValues)
+            {
+                var val = Convert.ChangeType(tuple.Item2, tuple.Item1);
+                InPortValues[key] = val;
+            }
+            
+            OutPortValues = new Dictionary<string, object>(dto.OutputPinNames.Count);
+            foreach (var outPort in dto.OutputPinNames)
+            {
+                OutPortValues[outPort] = null;
+            }
+
+            if (dto.Properties.TryGetValue(LOOP_NODE_GUID, out var tNodeGuid))
+            {
+                _loopNodeGuid = tNodeGuid as string;
+            }
+            
+            if (dto.Properties.TryGetValue(COMPLETE_NODE_GUID, out var fNodeGuid))
+            {
+                _completedNodeGuid = fNodeGuid as string;
+            }
+        }
+
         public override void Init(IBlueprintGraph graph)
         {
             Graph = graph;

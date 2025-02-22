@@ -7,72 +7,78 @@ using UnityEngine.UIElements;
 using Vapor.Blueprints;
 using Vapor.Inspector;
 using VaporEditor.Inspector;
+using PointerType = UnityEngine.UIElements.PointerType;
 
 namespace VaporEditor.Blueprints
 {
 
     public class BlueprintRedirectNode : Node, IBlueprintEditorNode
     {
-        private static readonly StyleSheet s_PortColors = Resources.Load<StyleSheet>("Styles/PortColors");
-        
-        public BlueprintNodeDataModel Node { get; }
-        public Dictionary<string, Port> InPorts { get; private set; } = new();
-        public Dictionary<string, Port> OutPorts { get; private set; } = new();
-        public BlueprintEditorView View { get; }
+        public BlueprintNodeDataModel Model { get; }
+        public Dictionary<string, BlueprintEditorPort> InPorts { get; private set; } = new();
+        public Dictionary<string, BlueprintEditorPort> OutPorts { get; private set; } = new();
+        public BlueprintView View { get; }
         
         public event Action<string> ConnectedPort;
         public event Action<string> DisconnectedPort;
         
         public BlueprintRedirectNode(BlueprintEditorView view, BlueprintNodeDataModel node, EdgeConnectorListener edgeConnectorListener)
         {
-            View = view;
-            Node = node;
+            View = view.GraphView;
+            Model = node;
             
             styleSheets.Add(Resources.Load<StyleSheet>("Styles/RedirectNode"));
             
-            CreateFlowInPorts(edgeConnectorListener);
-            CreateFlowOutPorts(edgeConnectorListener);
+            CreateFlowInPorts();
+            CreateFlowOutPorts();
         }
-        
-        private void CreateFlowInPorts(EdgeConnectorListener edgeConnectorListener)
+
+        public BlueprintRedirectNode(BlueprintView view, BlueprintNodeDataModel node)
         {
-            if (Node.InPorts == null)
+            View = view;
+            Model = node;
+            
+            styleSheets.Add(Resources.Load<StyleSheet>("Styles/RedirectNode"));
+            
+            CreateFlowInPorts();
+            CreateFlowOutPorts();
+        }
+
+        private void CreateFlowInPorts()
+        {
+            if (Model.InPorts == null)
             {
                 return;
             }
-            InPorts = new(Node.InPorts.Count);
-            foreach (var slot in Node.InPorts.Values)
+            InPorts = new(Model.InPorts.Count);
+            foreach (var slot in Model.InPorts.Values)
             {
-                var port = BlueprintEditorPort.Create(this, slot, edgeConnectorListener);
+                var port = BlueprintEditorPort.Create(this, slot);
                 if (slot.IsOptional)
                 {
                     port.AddToClassList("optionalPort");
                 }
-                port.tooltip = IBlueprintEditorNode.CreateTooltipForPin(slot);
-                port.styleSheets.Add(s_PortColors);
                 InPorts.Add(slot.PortName, port);
                 port.Q<Label>().Hide();
                 inputContainer.Add(port);
             }
         }
 
-        private void CreateFlowOutPorts(EdgeConnectorListener edgeConnectorListener)
+        private void CreateFlowOutPorts()
         {
-            if (Node.OutPorts == null)
+            if (Model.OutPorts == null)
             {
                 return;
             }
             
-            OutPorts = new(Node.OutPorts.Count);
-            foreach (var slot in Node.OutPorts.Values)
+            OutPorts = new(Model.OutPorts.Count);
+            foreach (var slot in Model.OutPorts.Values)
             {
-                var port = BlueprintEditorPort.Create(this, slot, edgeConnectorListener);
+                var port = BlueprintEditorPort.Create(this, slot);
                 if (slot.IsOptional)
                 {
                     port.AddToClassList("optionalPort");
                 }
-                port.tooltip = IBlueprintEditorNode.CreateTooltipForPin(slot);
-                port.styleSheets.Add(s_PortColors);
                 OutPorts.Add(slot.PortName, port);
                 port.Q<Label>().Hide();
                 outputContainer.Add(port);
@@ -99,20 +105,18 @@ namespace VaporEditor.Blueprints
     
     public class BlueprintEditorToken : TokenNode, IBlueprintEditorNode
     {
-        private static readonly StyleSheet s_PortColors = Resources.Load<StyleSheet>("Styles/PortColors");
-
-        public BlueprintNodeDataModel Node { get; }
-        public Dictionary<string, Port> InPorts { get; private set; } = new();
-        public Dictionary<string, Port> OutPorts { get; private set; } = new();
-        public BlueprintEditorView View { get; }
+        public BlueprintNodeDataModel Model { get; }
+        public Dictionary<string, BlueprintEditorPort> InPorts { get; private set; } = new();
+        public Dictionary<string, BlueprintEditorPort> OutPorts { get; private set; } = new();
+        public BlueprintView View { get; }
         
         public event Action<string> ConnectedPort;
         public event Action<string> DisconnectedPort;
         
         public BlueprintEditorToken(BlueprintEditorView view, BlueprintNodeDataModel node, EdgeConnectorListener edgeConnectorListener) : base(null, null)
         {
-            View = view;
-            Node = node;
+            View = view.GraphView;
+            Model = node;
             
             var nameTuple = node.GetNodeName();
             var iconTuple = node.GetNodeNameIcon();
@@ -122,8 +126,8 @@ namespace VaporEditor.Blueprints
             top.style.alignSelf = Align.Stretch;
             top.style.justifyContent = Justify.SpaceBetween;
             
-            CreateFlowInPorts(edgeConnectorListener);
-            CreateFlowOutPorts(edgeConnectorListener);
+            CreateFlowInPorts();
+            CreateFlowOutPorts();
             
             RefreshExpandedState();
         }
@@ -159,22 +163,20 @@ namespace VaporEditor.Blueprints
             }
         }
 
-        private void CreateFlowInPorts(EdgeConnectorListener edgeConnectorListener)
+        private void CreateFlowInPorts()
         {
-            if (Node.InPorts == null)
+            if (Model.InPorts == null)
             {
                 return;
             }
-            InPorts = new(Node.InPorts.Count);
-            foreach (var slot in Node.InPorts.Values)
+            InPorts = new(Model.InPorts.Count);
+            foreach (var slot in Model.InPorts.Values)
             {
-                var port = BlueprintEditorPort.Create(this, slot, edgeConnectorListener);
+                var port = BlueprintEditorPort.Create(this, slot);
                 if (slot.IsOptional)
                 {
                     port.AddToClassList("optionalPort");
                 }
-                port.tooltip = IBlueprintEditorNode.CreateTooltipForPin(slot);
-                port.styleSheets.Add(s_PortColors);
                 InPorts.Add(slot.PortName, port);
                 var pill = this.Q<Pill>("pill");
                 port.Q<Label>().Hide();
@@ -205,22 +207,20 @@ namespace VaporEditor.Blueprints
             }
         }
 
-        private void CreateFlowOutPorts(EdgeConnectorListener edgeConnectorListener)
+        private void CreateFlowOutPorts()
         {
-            if (Node.OutPorts == null)
+            if (Model.OutPorts == null)
             {
                 return;
             }
-            OutPorts = new(Node.OutPorts.Count);
-            foreach (var slot in Node.OutPorts.Values)
+            OutPorts = new(Model.OutPorts.Count);
+            foreach (var slot in Model.OutPorts.Values)
             {
-                var port = BlueprintEditorPort.Create(this, slot, edgeConnectorListener);
+                var port = BlueprintEditorPort.Create(this, slot);
                 if (slot.IsOptional)
                 {
                     port.AddToClassList("optionalPort");
                 }
-                port.tooltip = IBlueprintEditorNode.CreateTooltipForPin(slot);
-                port.styleSheets.Add(s_PortColors);
                 OutPorts.Add(slot.PortName, port);
                 var pill = this.Q<Pill>("pill");
                 port.Q<Label>().Hide();
@@ -248,14 +248,12 @@ namespace VaporEditor.Blueprints
     
     public class BlueprintEditorNode : Node, IBlueprintEditorNode
     {
-        private static readonly StyleSheet s_PortColors = Resources.Load<StyleSheet>("Styles/PortColors");
+        public BlueprintNodeDataModel Model { get; protected set; }
         
-        public BlueprintNodeDataModel Node { get; protected set; }
+        public Dictionary<string, BlueprintEditorPort> InPorts { get; private set; } = new();
+        public Dictionary<string, BlueprintEditorPort> OutPorts { get; private set; } = new();
         
-        public Dictionary<string, Port> InPorts { get; private set; } = new();
-        public Dictionary<string, Port> OutPorts { get; private set; } = new();
-        
-        public BlueprintEditorView View { get; protected set; }
+        public BlueprintView View { get; protected set; }
         
         private List<FieldInfo> _nodeContentData;
 
@@ -264,8 +262,8 @@ namespace VaporEditor.Blueprints
         
         public BlueprintEditorNode(BlueprintEditorView view, BlueprintNodeDataModel node, EdgeConnectorListener edgeConnectorListener)
         {
-            View = view;
-            Node = node;
+            View = view.GraphView;
+            Model = node;
 
             m_CollapseButton.RemoveFromHierarchy();
             StyleNode();
@@ -273,12 +271,42 @@ namespace VaporEditor.Blueprints
             var iconTuple = node.GetNodeNameIcon();
             CreateTitle(nameTuple.Item1, nameTuple.Item2, iconTuple.Item1, iconTuple.Item2);
 
-            CreateFlowInPorts(edgeConnectorListener);
-            CreateFlowOutPorts(edgeConnectorListener);
+            CreateFlowInPorts();
+            CreateFlowOutPorts();
 
             RefreshExpandedState();
         }
+
+        public BlueprintEditorNode(BlueprintView view, BlueprintNodeDataModel node)
+        {
+            View = view;
+            Model = node;
+
+            m_CollapseButton.RemoveFromHierarchy();
+            StyleNode();
+            var nameTuple = node.GetNodeName();
+            var iconTuple = node.GetNodeNameIcon();
+            CreateTitle(nameTuple.Item1, nameTuple.Item2, iconTuple.Item1, iconTuple.Item2);
+
+            CreateFlowInPorts();
+            CreateFlowOutPorts();
+
+            RefreshExpandedState();
+
+            ConnectedPort += OnConnectedPort;
+            DisconnectedPort += OnDisconnectedPort;
+        }
+
+        private void OnConnectedPort(string portName)
+        {
+            
+        }
         
+        private void OnDisconnectedPort(string portName)
+        {
+            
+        }
+
         private void StyleNode()
         {
             // var nodeType = Node.GetType();
@@ -318,7 +346,7 @@ namespace VaporEditor.Blueprints
             }
         }
         
-        public void RedrawPorts(EdgeConnectorListener edgeConnectorListener)
+        public void RedrawPorts()
         {
             List<Edge> edgesToRemove = new();
             foreach (var port in InPorts.Values)
@@ -345,72 +373,51 @@ namespace VaporEditor.Blueprints
             inputContainer.DisconnectChildren();
             outputContainer.DisconnectChildren();
 
-            CreateFlowInPorts(edgeConnectorListener);
-            CreateFlowOutPorts(edgeConnectorListener);
+            CreateFlowInPorts();
+            CreateFlowOutPorts();
         }
         
-        private void CreateFlowInPorts(EdgeConnectorListener edgeConnectorListener)
+        private void CreateFlowInPorts()
         {
-            if (Node.InPorts == null)
+            if (Model.InPorts == null)
             {
                 return;
             }
-            InPorts = new(Node.InPorts.Count);
-            foreach (var slot in Node.InPorts.Values)
+            InPorts = new Dictionary<string, BlueprintEditorPort>(Model.InPorts.Count);
+            foreach (var pin in Model.InPorts.Values)
             {
-                var port = BlueprintEditorPort.Create(this, slot, edgeConnectorListener);
-                if (slot.IsOptional)
+                var port = BlueprintEditorPort.Create(this, pin);
+                if (pin.IsOptional)
                 {
                     port.AddToClassList("optionalPort");
                 }
-                port.tooltip = IBlueprintEditorNode.CreateTooltipForPin(slot);
-                port.styleSheets.Add(s_PortColors);
-                InPorts.Add(slot.PortName, port);
+                InPorts.Add(pin.PortName, port);
                 inputContainer.Add(port);
 
-                if (slot.HasInlineValue)
+                if (pin.HasInlineValue)
                 {
-                    var ve = SerializedDrawerUtility.DrawFieldFromObject(slot.InlineValue, slot.InlineValue.GetType()); //SerializedDrawerUtility.DrawFieldFromType(slot, slot.ContentType, slot.ContentFieldInfo, true);//DrawerUtility.DrawVaporFieldFromType(slot, slot.ContentType, slot.ContentFieldInfo, true);
-                    ve.Q<Label>()?.Hide();
-                    inputContainer.Add(ve);
-                    ConnectedPort += (p) =>
-                    {
-                        if (p != slot.PortName)
-                        {
-                            return;
-                        }
-                        ve.Hide();
-                    };
-                    DisconnectedPort += (p) =>
-                    {
-                        if (p != slot.PortName)
-                        {
-                            return;
-                        }
-                        ve.Show();
-                    };
+                    inputContainer.Add(port.DrawnField);
                 }
             }
         }
 
-        private void CreateFlowOutPorts(EdgeConnectorListener edgeConnectorListener)
+        private void CreateFlowOutPorts()
         {
-            if (Node.OutPorts == null)
+            if (Model.OutPorts == null)
             {
                 return;
             }
-            OutPorts = new(Node.OutPorts.Count);
-            foreach (var slot in Node.OutPorts.Values)
+            OutPorts = new Dictionary<string, BlueprintEditorPort>(Model.OutPorts.Count);
+            foreach (var pin in Model.OutPorts.Values)
             {
-                var port = BlueprintEditorPort.Create(this, slot, edgeConnectorListener);
-                if (slot.IsOptional)
+                var port = BlueprintEditorPort.Create(this, pin);
+                if (pin.IsOptional)
                 {
                     port.AddToClassList("optionalPort");
                 }
 
-                port.tooltip = IBlueprintEditorNode.CreateTooltipForPin(slot);
-                port.styleSheets.Add(s_PortColors);
-                OutPorts.Add(slot.PortName, port);
+                
+                OutPorts.Add(pin.PortName, port);
                 outputContainer.Add(port);
             }
         }
