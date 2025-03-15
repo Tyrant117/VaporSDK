@@ -7,12 +7,14 @@ namespace VaporEditor.Blueprints
 {
     public interface IBlueprintEditorNode
     {
-        BlueprintNodeDataModel Model { get; }
+        BlueprintDesignNode Model { get; }
         Dictionary<string, BlueprintEditorPort> InPorts { get; }
         Dictionary<string, BlueprintEditorPort> OutPorts { get; }
         BlueprintView View { get; }
         
         void OnConnectedInputEdge(string portName);
         void OnDisconnectedInputEdge(string portName);
+        void InvalidateName();
+        void InvalidateType();
     }
 }

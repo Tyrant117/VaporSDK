@@ -67,11 +67,11 @@ namespace VaporEditor.Blueprints
             var idx = Parameters.FindIndex(v => v.Item1 == INodeType.GRAPH_PARAM);
             if (idx != -1)
             {
-                Parameters[idx] = (INodeType.GRAPH_PARAM, graph);
+                Parameters[idx] = (INodeType.GRAPH_PARAM, graph.DesignGraph.Current);
             }
             else
             {
-                Parameters.Add((INodeType.GRAPH_PARAM, graph));
+                Parameters.Add((INodeType.GRAPH_PARAM, graph.DesignGraph.Current));
             }
             
             return this;
@@ -192,6 +192,11 @@ namespace VaporEditor.Blueprints
                 var methods = lib.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
                 foreach (var methodInfo in methods)
                 {
+                    if (methodInfo.IsDefined(typeof(ObsoleteAttribute), false))
+                    {
+                        continue;
+                    }
+                    
                     var callableAtr = methodInfo.GetCustomAttribute<BlueprintCallableAttribute>();
                     modelDescs.Add(new BlueprintSearchModel(string.Join('/', callableAtr.MenuName), callableAtr.NodeName.EmptyOrNull() ? methodInfo.Name : callableAtr.NodeName, typeof(MethodNodeType))
                         .WithSynonyms(callableAtr.Synonyms)
@@ -217,34 +222,85 @@ namespace VaporEditor.Blueprints
                 .WithSynonyms("Loop"));
             modelDescs.Add(new BlueprintSearchModel("Utilities/Array", "ForEach", typeof(ForEachNodeType))
                 .WithSynonyms("Loop"));
+            
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Float", typeof(MakeSerializableNodeType))
+                .WithParameters((INodeType.CONNECTION_TYPE_PARAM, typeof(float))));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Double", typeof(MakeSerializableNodeType))
+                .WithParameters((INodeType.CONNECTION_TYPE_PARAM, typeof(double))));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Int", typeof(MakeSerializableNodeType))
+                .WithParameters((INodeType.CONNECTION_TYPE_PARAM, typeof(int))));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Long", typeof(MakeSerializableNodeType))
+                .WithParameters((INodeType.CONNECTION_TYPE_PARAM, typeof(long))));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make String", typeof(MakeSerializableNodeType))
+                .WithParameters((INodeType.CONNECTION_TYPE_PARAM, typeof(string))));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Color", typeof(MakeSerializableNodeType))
+                .WithParameters((INodeType.CONNECTION_TYPE_PARAM, typeof(Color))));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Gradient", typeof(MakeSerializableNodeType))
+                .WithParameters((INodeType.CONNECTION_TYPE_PARAM, typeof(Gradient))));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make LayerMask", typeof(MakeSerializableNodeType))
+                .WithParameters((INodeType.CONNECTION_TYPE_PARAM, typeof(LayerMask))));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make RenderingLayerMask", typeof(MakeSerializableNodeType))
+                .WithParameters((INodeType.CONNECTION_TYPE_PARAM, typeof(RenderingLayerMask))));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Vector2", typeof(MakeSerializableNodeType))
+                .WithParameters((INodeType.CONNECTION_TYPE_PARAM, typeof(Vector2))));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Vector3", typeof(MakeSerializableNodeType))
+                .WithParameters((INodeType.CONNECTION_TYPE_PARAM, typeof(Vector3))));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Vector4", typeof(MakeSerializableNodeType))
+                .WithParameters((INodeType.CONNECTION_TYPE_PARAM, typeof(Vector4))));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Vector2Int", typeof(MakeSerializableNodeType))
+                .WithParameters((INodeType.CONNECTION_TYPE_PARAM, typeof(Vector2Int))));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Vector3Int", typeof(MakeSerializableNodeType))
+                .WithParameters((INodeType.CONNECTION_TYPE_PARAM, typeof(Vector3Int))));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Rect", typeof(MakeSerializableNodeType))
+                .WithParameters((INodeType.CONNECTION_TYPE_PARAM, typeof(Rect))));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make RectInt", typeof(MakeSerializableNodeType))
+                .WithParameters((INodeType.CONNECTION_TYPE_PARAM, typeof(RectInt))));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Bounds", typeof(MakeSerializableNodeType))
+                .WithParameters((INodeType.CONNECTION_TYPE_PARAM, typeof(Bounds))));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make BoundsInt", typeof(MakeSerializableNodeType))
+                .WithParameters((INodeType.CONNECTION_TYPE_PARAM, typeof(BoundsInt))));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make AnimationCurve", typeof(MakeSerializableNodeType))
+                .WithParameters((INodeType.CONNECTION_TYPE_PARAM, typeof(AnimationCurve))));
             return modelDescs;
         }
 
         private static List<BlueprintSearchModel> LoadUnityLibraries()
         {
             var modelDescs = new List<BlueprintSearchModel>();
-            modelDescs.AddRange(GetStaticsForType(typeof(Object), "Unity Object"));
-            modelDescs.AddRange(GetStaticsForType(typeof(Debug), "Debug"));
+            var unityCoreAssemTypes = typeof(Object).Assembly.GetTypes();
+            foreach (var unityType in unityCoreAssemTypes)
+            {
+                if (unityType.IsPublic && !unityType.IsNestedPublic && !unityType.IsAbstract)
+                {
+                    modelDescs.AddRange(GetStaticsForType(unityType, $"Unity/{unityType.Name}"));
+                }
+            }
+            
             return modelDescs;
         }
         
         private static IEnumerable<BlueprintSearchModel> GetStaticsForType(Type type, string category)
         {
-            var staticFields = ReflectionUtility.GetAllFieldsThatMatch(type, ReflectionUtility.IsPublicStatic, false);
+            var staticFields = ReflectionUtility.GetAllFieldsThatMatch(type, ReflectionUtility.IsPublicStatic, false, true);
             foreach (var fieldInfo in staticFields)
             {
                 yield return new BlueprintSearchModel($"{category}/Fields", $"Get {ObjectNames.NicifyVariableName(fieldInfo.Name)}", typeof(FieldGetterNodeType))
-                    .WithSynonyms(fieldInfo.Name)
+                    .WithSynonyms(fieldInfo.Name, type.Name, $"{type.Name}.{fieldInfo.Name}")
                     .WithParameters((INodeType.FIELD_INFO_PARAM, fieldInfo));
 
                 yield return new BlueprintSearchModel($"{category}/Fields", $"Set {ObjectNames.NicifyVariableName(fieldInfo.Name)}", typeof(FieldSetterNodeType))
-                    .WithSynonyms(fieldInfo.Name)
+                    .WithSynonyms(fieldInfo.Name, type.Name, $"{type.Name}.{fieldInfo.Name}")
                     .WithParameters((INodeType.FIELD_INFO_PARAM, fieldInfo));
             }
 
-            var staticMethods = ReflectionUtility.GetAllMethodsThatMatch(type, ReflectionUtility.IsPublicStatic, false);
+            var staticMethods = ReflectionUtility.GetAllMethodsThatMatch(type, ReflectionUtility.IsPublicStatic, false, true);
             foreach (var methodInfo in staticMethods)
             {
+                if (methodInfo.IsDefined(typeof(ObsoleteAttribute), false))
+                {
+                    continue;
+                }
+                
                 var name = methodInfo.IsGenericMethod ? $"{methodInfo.Name.Split('`')[0]}<{string.Join(",", methodInfo.GetGenericArguments().Select(a => a.Name))}>" : methodInfo.Name;
                 name = methodInfo.IsSpecialName ? BlueprintNodeDataModelUtility.ToTitleCase(name) : name;
                 var parameters = methodInfo.GetParameters();
@@ -256,7 +312,7 @@ namespace VaporEditor.Blueprints
                     : string.Empty;
 
                 yield return new BlueprintSearchModel($"{category}/Methods", $"{name}({paramNames})", typeof(MethodNodeType))
-                    .WithSynonyms(name)
+                    .WithSynonyms(name, type.Name, $"{type.Name}.{methodInfo.Name}")
                     .WithParameters((INodeType.METHOD_INFO_PARAM, methodInfo));
             }
         }

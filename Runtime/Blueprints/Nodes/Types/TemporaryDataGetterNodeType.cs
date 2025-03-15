@@ -8,49 +8,44 @@ namespace Vapor.Blueprints
 {
     public struct TemporaryDataGetterNodeType : INodeType
     {
-        public BlueprintNodeDataModel CreateDataModel(Vector2 position, List<(string, object)> parameters)
-        {
-            var graph = this.FindParam<BlueprintGraphSo>(parameters, INodeType.GRAPH_PARAM);
-            var name = this.FindParam<string>(parameters, INodeType.NAME_DATA_PARAM);
-            var tempData = graph.TempData.FirstOrDefault(x => x.FieldName == name);
-            var node = BlueprintNodeDataModelUtility.CreateOrUpdateGetterNode(null, tempData);
-            node.Position = new Rect(position, Vector2.zero);
-            return node;
-        }
-
         public BlueprintDesignNode CreateDesignNode(Vector2 position, List<(string, object)> parameters)
         {
-            var graph = this.FindParam<BlueprintGraphSo>(parameters, INodeType.GRAPH_PARAM);
+            var graph = this.FindParam<BlueprintMethodGraph>(parameters, INodeType.GRAPH_PARAM);
             var name = this.FindParam<string>(parameters, INodeType.NAME_DATA_PARAM);
             var node = new BlueprintDesignNode(this)
             {
                 Graph = graph,
                 Position = new Rect(position, Vector2.zero)
             };
-            node.TryAddProperty(BlueprintDesignNode.TEMP_FIELD_NAME, name, true);
+            node.AddOrUpdateProperty(BlueprintDesignNode.VARIABLE_NAME, name, true);
             UpdateDesignNode(node);
             return node;
         }
         public void UpdateDesignNode(BlueprintDesignNode node)
         {
-            node.TryGetProperty<string>(BlueprintDesignNode.TEMP_FIELD_NAME, out var tempFieldName);
-            var tempData = node.Graph.TempData.FirstOrDefault(x => x.FieldName == tempFieldName);
-            Assert.IsNotNull(tempData, $"{tempFieldName} not found in graph");
+            node.TryGetProperty<string>(BlueprintDesignNode.VARIABLE_NAME, out var tempFieldName);
+            var tempData = node.Graph.TemporaryVariables.FirstOrDefault(x => x.Name == tempFieldName);
+            if (tempData == null)
+            {
+                Debug.LogError($"{tempFieldName} not found in graph, was the variable deleted?");
+                node.SetError($"{tempFieldName} not found in graph, was the variable deleted?");
+                node.NodeName = $"Get <b><i>{tempFieldName}</i></b>";
+                return;
+            }
             
-            var tuple = tempData.ToParameter();
-            node.NodeName = $"Get <b><i>{tuple.Item1}</i></b>";
+            node.NodeName = $"Get <b><i>{tempData.Name}</i></b>";
             
-            var slot = new BlueprintPin(tuple.Item1, PinDirection.Out, tuple.Item2, false)
+            var slot = new BlueprintPin(tempData.Name, PinDirection.Out, tempData.Type, false)
                 .WithDisplayName(string.Empty)
                 .WithAllowMultipleWires();
-            node.OutPorts.Add(tuple.Item1, slot);
+            node.OutPorts.Add(tempData.Name, slot);
         }
 
         public BlueprintCompiledNodeDto Compile(BlueprintDesignNode node)
         {
             var dto = new BlueprintCompiledNodeDto
             {
-                NodeType = node.NodeType,
+                NodeType = node.Type,
                 Guid = node.Guid,
                 InputWires = node.InputWires,
                 InputPinValues = new Dictionary<string, (Type, object)>(node.InPorts.Count),
@@ -58,8 +53,8 @@ namespace Vapor.Blueprints
                 Properties = new Dictionary<string, object>(),
             };
             
-            node.TryGetProperty<string>(BlueprintDesignNode.TEMP_FIELD_NAME, out var tempFieldName);
-            dto.Properties.TryAdd(BlueprintDesignNode.TEMP_FIELD_NAME, tempFieldName);
+            node.TryGetProperty<string>(BlueprintDesignNode.VARIABLE_NAME, out var tempFieldName);
+            dto.Properties.TryAdd(BlueprintDesignNode.VARIABLE_NAME, tempFieldName);
             
             foreach (var inPort in node.InPorts.Values.Where(inPort => inPort.HasInlineValue))
             {
@@ -76,7 +71,7 @@ namespace Vapor.Blueprints
 
         public BlueprintBaseNode Decompile(BlueprintCompiledNodeDto dto)
         {
-            dto.Properties.TryGetValue(BlueprintDesignNode.TEMP_FIELD_NAME, out var tempFieldName);
+            dto.Properties.TryGetValue(BlueprintDesignNode.VARIABLE_NAME, out var tempFieldName);
             return new BlueprintGetterNode(dto, (string)tempFieldName);
         }
     }

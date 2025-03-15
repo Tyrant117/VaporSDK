@@ -6,6 +6,13 @@ using UnityEngine.Assertions;
 
 namespace Vapor.Blueprints
 {
+    [Serializable]
+    public struct BlueprintPinDto
+    {
+        public string PinName;
+        public Type PinType;
+        public object Content;
+    }
    
     public class BlueprintPin
     {
@@ -45,7 +52,7 @@ namespace Vapor.Blueprints
             typeof(Hash128),
         };
         
-        public string PortName { get; }
+        public string PortName { get; private set; }
         public string DisplayName { get; private set; }
         public PinDirection Direction { get; }
         public bool IsExecutePin { get; private set; }
@@ -75,6 +82,7 @@ namespace Vapor.Blueprints
         public bool HasInlineValue { get; private set; }
         public FieldWrapper InlineValue { get; private set; }
         private readonly bool _blockInlineContent;
+        private bool _hasCustomDisplayName;
         
         public BlueprintPin(string portName, PinDirection direction, Type type, bool blockInlineContent)
         {
@@ -152,6 +160,7 @@ namespace Vapor.Blueprints
 
         public BlueprintPin WithDisplayName(string displayName)
         {
+            _hasCustomDisplayName = true;
             DisplayName = displayName;
             return this;
         }
@@ -181,13 +190,13 @@ namespace Vapor.Blueprints
             {
                 InlineValue = (FieldWrapper)value;
             }
-            else if(InlineValue.GetPinType() == value.GetType())
+            else if(InlineValue.GetResolvedType() == value.GetType())
             {
                 InlineValue.Set(value);
             }
             else
             {
-                Debug.LogError($"Value type [{value.GetType()}] is not the content type [{InlineValue.GetType()}] or the pin type [{InlineValue.GetPinType()}]");
+                Debug.LogError($"Value type [{value.GetType()}] is not the content type [{InlineValue.GetType()}] or the pin type [{InlineValue.GetResolvedType()}]");
             }
         }
 
@@ -248,6 +257,15 @@ namespace Vapor.Blueprints
             }
 
             return Type.IsGenericType ? $"{Type.Name.Split('`')[0]}<{string.Join(",", Type.GetGenericArguments().Select(a => a.Name))}>" : Type.Name;
+        }
+
+        public void RenamePort(string newName)
+        {
+            PortName = newName;
+            if (!_hasCustomDisplayName)
+            {
+                DisplayName = newName;
+            }
         }
     }
 }

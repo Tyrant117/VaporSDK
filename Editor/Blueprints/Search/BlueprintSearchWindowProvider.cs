@@ -40,21 +40,21 @@ namespace VaporEditor.Blueprints
 
         private void ConstructGetterSetterNodes()
         {
-            foreach (var temp in Graph.TempData)
+            foreach (var temp in Graph.DesignGraph.Variables)
             {
                 BlueprintSearchEntry getterEntry = new BlueprintSearchEntry.Builder()
-                    .WithCategoryAndName(new[] { "Variables" }, $"Get {temp.FieldName}")
+                    .WithCategoryAndName(new[] { "Variables" }, $"Get {temp.Name}")
                     .WithSynonyms("Get")
                     .WithNodeType(BlueprintNodeType.Getter)
-                    .WithNameData(temp.FieldName)
+                    .WithNameData(temp.Name)
                     .Build();
                 Entries.Add(getterEntry);
                 
                 BlueprintSearchEntry setterEntry = new BlueprintSearchEntry.Builder()
-                    .WithCategoryAndName(new[] { "Variables" }, $"Set {temp.FieldName}")
+                    .WithCategoryAndName(new[] { "Variables" }, $"Set {temp.Name}")
                     .WithSynonyms("Set")
                     .WithNodeType(BlueprintNodeType.Setter)
-                    .WithNameData(temp.FieldName)
+                    .WithNameData(temp.Name)
                     .Build();
                 Entries.Add(setterEntry);
             }

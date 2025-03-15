@@ -10,17 +10,6 @@ namespace Vapor.Blueprints
 {
     public struct MethodNodeType : INodeType
     {
-        public BlueprintNodeDataModel CreateDataModel(Vector2 position, List<(string, object)> parameters)
-        {
-            var methodInfo = this.FindParam<MethodInfo>(parameters, INodeType.METHOD_INFO_PARAM);
-            var node = BlueprintNodeDataModelUtility.CreateOrUpdateMethodNode(null, 
-                methodInfo.DeclaringType?.AssemblyQualifiedName, 
-                methodInfo.Name, 
-                methodInfo.GetParameters().Select(p => p.ParameterType.AssemblyQualifiedName).ToArray());
-            node.Position = new Rect(position, Vector2.zero);
-            return node;
-        }
-
         public BlueprintDesignNode CreateDesignNode(Vector2 position, List<(string, object)> parameters)
         {
             var methodInfo = this.FindParam<MethodInfo>(parameters, INodeType.METHOD_INFO_PARAM);
@@ -28,21 +17,21 @@ namespace Vapor.Blueprints
             {
                 Position = new Rect(position, Vector2.zero)
             };
-            node.TryAddProperty(BlueprintDesignNode.k_MethodDeclaringType, methodInfo.DeclaringType, true);
-            node.TryAddProperty(BlueprintDesignNode.k_MethodName, methodInfo.Name, true);
-            node.TryAddProperty(BlueprintDesignNode.k_MethodParameterTypes, methodInfo.GetParameters().Select(p => p.ParameterType.AssemblyQualifiedName).ToArray(), true);
+            node.AddOrUpdateProperty(BlueprintDesignNode.K_METHOD_DECLARING_TYPE, methodInfo.DeclaringType, true);
+            node.AddOrUpdateProperty(BlueprintDesignNode.K_METHOD_NAME, methodInfo.Name, true);
+            node.AddOrUpdateProperty(BlueprintDesignNode.K_METHOD_PARAMETER_TYPES, methodInfo.GetParameters().Select(p => p.ParameterType.AssemblyQualifiedName).ToArray(), true);
             UpdateDesignNode(node);
             return node;
         }
         public void UpdateDesignNode(BlueprintDesignNode node)
         {
 #if UNITY_EDITOR
-            node.TryGetProperty<Type>(BlueprintDesignNode.k_MethodDeclaringType, out var methodAssemblyType);
-            node.TryGetProperty<string>(BlueprintDesignNode.k_MethodName, out var methodName);
-            node.TryGetProperty<string[]>(BlueprintDesignNode.k_MethodParameterTypes, out var methodParameterTypes);
+            node.TryGetProperty<Type>(BlueprintDesignNode.K_METHOD_DECLARING_TYPE, out var methodAssemblyType);
+            node.TryGetProperty<string>(BlueprintDesignNode.K_METHOD_NAME, out var methodName);
+            node.TryGetProperty<string[]>(BlueprintDesignNode.K_METHOD_PARAMETER_TYPES, out var methodParameterTypes);
             
             var methodInfo = GetMethodInfo(methodAssemblyType, methodName, methodParameterTypes);
-            node.TryAddProperty(BlueprintDesignNode.k_MethodInfo, methodInfo, false);
+            node.AddOrUpdateProperty(BlueprintDesignNode.K_METHOD_INFO, methodInfo, false);
             var paramInfos = methodInfo.GetParameters();
             bool hasOutParameter = paramInfos.Any(p => p.IsOut);
             var callableAttribute = methodInfo.GetCustomAttribute<BlueprintCallableAttribute>();
@@ -155,7 +144,7 @@ namespace Vapor.Blueprints
         {
             var dto = new BlueprintCompiledNodeDto
             {
-                NodeType = node.NodeType,
+                NodeType = node.Type,
                 Guid = node.Guid,
                 InputWires = node.InputWires,
                 InputPinValues = new Dictionary<string, (Type, object)>(node.InPorts.Count),
@@ -163,13 +152,13 @@ namespace Vapor.Blueprints
                 Properties = new Dictionary<string, object>(),
             };
             
-            node.TryGetProperty<Type>(BlueprintDesignNode.k_MethodDeclaringType, out var methodAssemblyType);
-            node.TryGetProperty<string>(BlueprintDesignNode.k_MethodName, out var methodName);
-            node.TryGetProperty<string[]>(BlueprintDesignNode.k_MethodParameterTypes, out var methodParameterTypes);
+            node.TryGetProperty<Type>(BlueprintDesignNode.K_METHOD_DECLARING_TYPE, out var methodAssemblyType);
+            node.TryGetProperty<string>(BlueprintDesignNode.K_METHOD_NAME, out var methodName);
+            node.TryGetProperty<string[]>(BlueprintDesignNode.K_METHOD_PARAMETER_TYPES, out var methodParameterTypes);
             
-            dto.Properties.TryAdd(BlueprintDesignNode.k_MethodDeclaringType, methodAssemblyType);
-            dto.Properties.TryAdd(BlueprintDesignNode.k_MethodName, methodName);
-            dto.Properties.TryAdd(BlueprintDesignNode.k_MethodParameterTypes, methodParameterTypes);
+            dto.Properties.TryAdd(BlueprintDesignNode.K_METHOD_DECLARING_TYPE, methodAssemblyType);
+            dto.Properties.TryAdd(BlueprintDesignNode.K_METHOD_NAME, methodName);
+            dto.Properties.TryAdd(BlueprintDesignNode.K_METHOD_PARAMETER_TYPES, methodParameterTypes);
             
             foreach (var inPort in node.InPorts.Values)
             {
@@ -181,7 +170,7 @@ namespace Vapor.Blueprints
                 {
                     if (inPort.Type.IsClass)
                     {
-                        dto.InputPinValues[inPort.PortName] = (null, null);
+                        dto.InputPinValues[inPort.PortName] = (inPort.Type, null);
                     }
                     else
                     {
@@ -206,9 +195,9 @@ namespace Vapor.Blueprints
 
         public BlueprintBaseNode Decompile(BlueprintCompiledNodeDto dto)
         {
-            dto.Properties.TryGetValue(BlueprintDesignNode.k_MethodDeclaringType, out var methodAssemblyType);
-            dto.Properties.TryGetValue(BlueprintDesignNode.k_MethodName, out var methodName);
-            dto.Properties.TryGetValue(BlueprintDesignNode.k_MethodParameterTypes, out var methodParameterTypes);
+            dto.Properties.TryGetValue(BlueprintDesignNode.K_METHOD_DECLARING_TYPE, out var methodAssemblyType);
+            dto.Properties.TryGetValue(BlueprintDesignNode.K_METHOD_NAME, out var methodName);
+            dto.Properties.TryGetValue(BlueprintDesignNode.K_METHOD_PARAMETER_TYPES, out var methodParameterTypes);
             var methodInfo = GetMethodInfo((Type)methodAssemblyType, (string)methodName, (string[])methodParameterTypes);
             return new BlueprintMethodNode(dto, methodInfo);
         }

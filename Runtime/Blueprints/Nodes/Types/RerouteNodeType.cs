@@ -7,14 +7,6 @@ namespace Vapor.Blueprints
 {
     public struct RerouteNodeType : INodeType
     {
-        public BlueprintNodeDataModel CreateDataModel(Vector2 position, List<(string, object)> parameters)
-        {
-            var type = this.FindParam<Type>(parameters, INodeType.CONNECTION_TYPE_PARAM);
-            var node = BlueprintNodeDataModelUtility.CreateOrUpdateRerouteNode(null, type);
-            node.Position = new Rect(position, Vector2.zero);
-            return node;
-        }
-
         public BlueprintDesignNode CreateDesignNode(Vector2 position, List<(string, object)> parameters)
         {
             var type = this.FindParam<Type>(parameters, INodeType.CONNECTION_TYPE_PARAM);
@@ -23,7 +15,7 @@ namespace Vapor.Blueprints
                 NodeName = string.Empty,
                 Position = new Rect(position, Vector2.zero)
             };
-            node.TryAddProperty(BlueprintDesignNode.CONNECTION_TYPE, type, true);
+            node.AddOrUpdateProperty(BlueprintDesignNode.CONNECTION_TYPE, type, true);
             UpdateDesignNode(node);
             return node;
         }
@@ -58,7 +50,7 @@ namespace Vapor.Blueprints
         {
             var dto = new BlueprintCompiledNodeDto
             {
-                NodeType = node.NodeType,
+                NodeType = node.Type,
                 Guid = node.Guid,
                 InputWires = node.InputWires,
                 InputPinValues = new Dictionary<string, (Type, object)>(node.InPorts.Count),

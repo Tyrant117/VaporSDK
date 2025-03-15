@@ -30,7 +30,23 @@ namespace Vapor.Blueprints
                 _nextNodeGuid = outEdge.RightSidePin.NodeGuid;
             }
         }
-        
+
+        public BlueprintEntryNode(BlueprintCompiledNodeDto dto)
+        {
+            Guid = dto.Guid;
+            
+            OutPortValues = new Dictionary<string, object>(dto.OutputPinNames.Count);
+            foreach (var outPort in dto.OutputPinNames)
+            {
+                OutPortValues[outPort] = null;
+            }
+
+            if (dto.Properties.TryGetValue(NEXT_NODE_GUID, out var nextNodeGuid))
+            {
+                _nextNodeGuid = nextNodeGuid as string;
+            }
+        }
+
         public override void Init(IBlueprintGraph graph)
         {
             Graph = graph;

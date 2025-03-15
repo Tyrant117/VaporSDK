@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Serialization;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.Assertions;
 using Vapor.Inspector;
@@ -53,6 +54,7 @@ namespace Vapor.Blueprints
 
         public const string OWNER = "Owner";
         public const string RETURN = "Return";
+        public const string IGNORE = "Ignore";
         
         // Array
         public const string BREAK_IN = "Break";
@@ -74,55 +76,64 @@ namespace Vapor.Blueprints
         public List<BlueprintWireReference> InputWires;
         public List<BlueprintWireReference> OutputWires;
         public List<BlueprintPinDto> Pins;
-        public Dictionary<string, object> Properties;
+        public Dictionary<string, (Type, object)> Properties;
     }
 
     [Serializable]
-    public struct BlueprintPinDto
+    public struct BlueprintVariableDto
     {
-        public string PinName;
-        public Type PinType;
-        public object Content;
+        public string Name;
+        public Type Type;
+        public BlueprintVariable.VariableType VariableType;
+        public object Value;
     }
 
-    [Serializable]
     public class BlueprintDesignNode
     {
-        private static Color s_DefaultTextColor = new(0.7568628f, 0.7568628f, 0.7568628f);
+        private static readonly Color s_DefaultTextColor = new(0.7568628f, 0.7568628f, 0.7568628f);
+        private static readonly Color s_ErrorTextColor = new(0.7568628f, 0f, 0f);
         
-        public const string k_MethodDeclaringType = "MethodDeclaringType";
-        public const string k_MethodName = "MethodName";
-        public const string k_MethodParameterTypes = "MethodParameterTypes";
-        public const string k_MethodInfo = "MethodInfo";
-        public const string TEMP_FIELD_NAME = "TempFieldName";
+        public const string K_METHOD_DECLARING_TYPE = "MethodDeclaringType";
+        public const string K_METHOD_NAME = "MethodName";
+        public const string K_METHOD_PARAMETER_TYPES = "MethodParameterTypes";
+        public const string K_METHOD_INFO = "MethodInfo";
         public const string CONNECTION_TYPE = "ConnectionType";
         
         public const string FIELD_TYPE = "FieldType";
         public const string FIELD_NAME = "FieldName";
         
+        public const string VARIABLE_NAME = "VariableName";
+        
         public string Guid { get; }
-        public Type NodeType { get; }
+        public uint Uuid { get; }
+        public Type Type { get; }
         public Rect Position { get; set; }
         public List<BlueprintWireReference> InputWires { get; }
         public List<BlueprintWireReference> OutputWires { get; }
 
-        private Dictionary<string, object> _properties;
-        private Dictionary<string, object> _nonSerializedProperties;
+        private readonly Dictionary<string, (Type, object)> _properties;
+        private readonly Dictionary<string, object> _nonSerializedProperties;
         
         // Non Serialized
-        public BlueprintGraphSo Graph { get; set; }
+        public BlueprintMethodGraph Graph { get; set; }
         public string NodeName { get; set; }
         public Dictionary<string, BlueprintPin> InPorts { get; }
         public Dictionary<string, BlueprintPin> OutPorts { get; }
-        private INodeType _nodeType;
+        
+        public bool HasError { get; private set; }
+        public string ErrorText { get; private set; }
+        
+        private readonly INodeType _nodeType;
+        public INodeType NodeType => _nodeType;
 
         public BlueprintDesignNode(INodeType nodeType)
         {
             Guid = System.Guid.NewGuid().ToString();
-            NodeType = nodeType.GetType();
+            Uuid = Guid.GetStableHashU32();
+            Type = nodeType.GetType();
             InputWires = new List<BlueprintWireReference>();
             OutputWires = new List<BlueprintWireReference>();
-            _properties = new Dictionary<string, object>();
+            _properties = new Dictionary<string, (Type, object)>();
             _nonSerializedProperties = new Dictionary<string, object>();
             InPorts = new Dictionary<string, BlueprintPin>();
             OutPorts = new Dictionary<string, BlueprintPin>();
@@ -130,10 +141,12 @@ namespace Vapor.Blueprints
             _nodeType = nodeType;
         }
         
-        public BlueprintDesignNode(BlueprintDesignNodeDto dataTransferObject, BlueprintGraphSo graph)
+        public BlueprintDesignNode(BlueprintDesignNodeDto dataTransferObject, BlueprintMethodGraph graph)
         {
             Guid = dataTransferObject.Guid;
-            NodeType = dataTransferObject.NodeType;
+            Uuid = Guid.GetStableHashU32();
+            Type = dataTransferObject.NodeType;
+            Position = dataTransferObject.Position;
             InputWires = dataTransferObject.InputWires;
             OutputWires = dataTransferObject.OutputWires;
             _properties = dataTransferObject.Properties;
@@ -142,15 +155,16 @@ namespace Vapor.Blueprints
             Graph = graph;
             InPorts = new Dictionary<string, BlueprintPin>();
             OutPorts = new Dictionary<string, BlueprintPin>();
-            _nodeType = Activator.CreateInstance(NodeType) as INodeType;
-            Assert.IsNotNull(_nodeType, $"{NodeType} is not a subclass of NodeTypeBase");
+            _nodeType = Activator.CreateInstance(Type) as INodeType;
+            Assert.IsNotNull(_nodeType, $"{Type} is not a subclass of NodeTypeBase");
             _nodeType.UpdateDesignNode(this);
             
             foreach (var pinDto in dataTransferObject.Pins)
             {
-                var content = pinDto.Content;
+                var content = TypeUtility.CastToType(pinDto.Content, pinDto.PinType);
                 if (InPorts.TryGetValue(pinDto.PinName, out var inPort) && inPort.HasInlineValue)
                 {
+                    inPort.Type = pinDto.PinType;
                     inPort.SetDefaultValue(content);
                 }
             }
@@ -159,8 +173,9 @@ namespace Vapor.Blueprints
         #region - Data -
         public bool TryGetProperty<T>(string propertyName, out T value)
         {
-            if (_properties.TryGetValue(propertyName, out var serializedValue))
+            if (_properties.TryGetValue(propertyName, out var serializedTuple))
             {
+                var serializedValue = TypeUtility.CastToType(serializedTuple.Item2, serializedTuple.Item1);
                 value = (T)serializedValue;
                 return true;
             }
@@ -171,29 +186,54 @@ namespace Vapor.Blueprints
                 return true;
             }
             
-            value = default(T);
+            value = default;
             return false;
         }
         
-        public bool TryAddProperty<T>(string propertyName, T value, bool shouldSerialize)
+        public void AddOrUpdateProperty<T>(string propertyName, T value, bool shouldSerialize)
         {
-            return shouldSerialize ? _properties.TryAdd(propertyName, value) : _nonSerializedProperties.TryAdd(propertyName, value); 
+            if (shouldSerialize)
+            {
+                _properties[propertyName] = (typeof(T), value);
+            }
+            else
+            {
+                _nonSerializedProperties[propertyName] = value;
+            }
         }
         #endregion
 
         #region - Drawing -
-        public (string, Color) GetNodeName() => (NodeName, s_DefaultTextColor);
-        public (Sprite, Color) GetNodeNameIcon() => (null, Color.white);
+        public (string, Color) GetNodeName()
+        {
+            return HasError ? (NodeName, s_ErrorTextColor) : (NodeName, s_DefaultTextColor);
+        }
+
+        public (string, Color, string) GetNodeNameIcon() => HasError ? ("Error", Color.white, ErrorText) : (null, Color.white, string.Empty);
+
+        public void SetError(string errorText)
+        {
+            HasError = true;
+            ErrorText = errorText;
+        }
+
+        public void ClearError()
+        {
+            HasError = false;
+            ErrorText = string.Empty;
+        }
+        
+        
         #endregion
         
         #region - Serialization -
 
-        public string Serialize()
+        public BlueprintDesignNodeDto Serialize()
         {
             var dto = new BlueprintDesignNodeDto
             {
                 Guid = Guid,
-                NodeType = NodeType,
+                NodeType = Type,
                 Position = Position,
                 InputWires = InputWires,
                 OutputWires = OutputWires,
@@ -207,23 +247,247 @@ namespace Vapor.Blueprints
                 dto.Pins.Add(new BlueprintPinDto
                 {
                     PinName = port.Key,
-                    PinType = port.Value.InlineValue.GetPinType(),
-                    Content = port.Value.InlineValue,
+                    PinType = port.Value.InlineValue.GetResolvedType(),
+                    Content = port.Value.InlineValue.Get(),
                 });
             }
 
-            return JsonConvert.SerializeObject(dto, NewtonsoftUtility.SerializerSettings);
+            return dto;
+            // return JsonConvert.SerializeObject(dto, NewtonsoftUtility.SerializerSettings);
         }
 
-        public string Compile()
+        public BlueprintCompiledNodeDto Compile()
+        {
+            return _nodeType.Compile(this);
+        }
+
+        public BlueprintBaseNode ConvertToRuntime()
         {
             var dto = _nodeType.Compile(this);
-            return JsonConvert.SerializeObject(dto, NewtonsoftUtility.SerializerSettings);
+            return _nodeType.Decompile(dto);
         }
+        #endregion
+
+        #region Helpers
+        public string FormatWithUuid(string prefix) => $"{prefix}_{Uuid}";
+
         #endregion
         
     }
 
+    public class BlueprintVariable
+    {
+        public enum VariableType
+        {
+            Local,
+            Global,
+            Argument,
+            Return
+        }
+        
+        private BlueprintDesignGraph _classGraph;
+        private BlueprintMethodGraph _methodGraph;
+        private string _name;
+        private Type _type;
+        private readonly VariableType _variableType;
+
+        public string Name
+        {
+            get => _name;
+            set
+            {
+                string oldName = _name;
+                _name = value;
+                Rename(oldName, _name);
+            }
+        }
+
+        public Type Type
+        {
+            get => _type;
+            set
+            {
+                Type oldType = _type;
+                _type = value;
+                Retype(oldType, _type);
+            }
+        }
+
+        public object Value { get; set; }
+
+        public BlueprintVariable(string name, Type type, VariableType variableType)
+        {
+            _name = name;
+            _type = type;
+            _variableType = variableType;
+            switch (_variableType)
+            {
+                case VariableType.Local:
+                case VariableType.Global:
+                    Value = type.IsClass ? null : FormatterServices.GetUninitializedObject(type);
+                    break;
+                case VariableType.Argument:
+                    break;
+                case VariableType.Return:
+                    break;
+            }
+        }
+
+        public BlueprintVariable(BlueprintVariableDto dto)
+        {
+            _name = dto.Name;
+            _type = dto.Type;
+            _variableType = dto.VariableType;
+            switch (_variableType)
+            {
+                case VariableType.Local:
+                case VariableType.Global:
+                    Value = TypeUtility.CastToType(dto.Value, _type);
+                    break;
+                case VariableType.Argument:
+                    break;
+                case VariableType.Return:
+                    break;
+            }
+        }
+
+        public BlueprintVariable WithClassGraph(BlueprintDesignGraph graph)
+        {
+            _classGraph = graph;
+            return this;
+        }
+
+        public BlueprintVariable WithMethodGraph(BlueprintMethodGraph graph)
+        {
+            _methodGraph = graph;
+            return this;
+        }
+
+        public BlueprintVariableDto Serialize()
+        {
+            return new BlueprintVariableDto
+            {
+                Name = Name,
+                Type = Type,
+                VariableType = _variableType,
+                Value = Value
+            };
+        }
+
+        private void Rename(string oldName, string newName)
+        {
+            if (_variableType != VariableType.Global)
+            {
+                foreach (var n in _methodGraph.Nodes)
+                {
+                    // Works for Getters and Setters
+                    if ((n.Type == typeof(TemporaryDataGetterNodeType) || n.Type == typeof(TemporaryDataSetterNodeType)) &&
+                        n.TryGetProperty<string>(BlueprintDesignNode.VARIABLE_NAME, out var tempFieldName) && tempFieldName == oldName)
+                    {
+                        n.AddOrUpdateProperty(BlueprintDesignNode.VARIABLE_NAME, newName, true);
+                        n.NodeName = n.Type == typeof(TemporaryDataGetterNodeType) ? $"Get <b><i>{newName}</i></b>" : $"Set <b><i>{newName}</i></b>";
+                        var edges = n.OutputWires.FindAll(e => e.LeftSidePin.PinName == oldName);
+                        foreach (var edge in edges)
+                        {
+                            int idx = n.OutputWires.IndexOf(edge);
+                            var oldPort = n.OutputWires[idx].LeftSidePin;
+                            var newPort = new BlueprintPinReference(newName, oldPort.NodeGuid, oldPort.IsExecutePin);
+                            var newEdge = new BlueprintWireReference(newPort, n.OutputWires[idx].RightSidePin);
+                            n.OutputWires[idx] = newEdge;
+                        }
+
+                        var edgesIn = n.InputWires.FindAll(e => e.RightSidePin.PinName == oldName);
+                        foreach (var edge in edgesIn)
+                        {
+                            int idx = n.InputWires.IndexOf(edge);
+                            var oldPort = n.InputWires[idx].RightSidePin;
+                            var newPort = new BlueprintPinReference(newName, oldPort.NodeGuid, oldPort.IsExecutePin);
+                            var newEdge = new BlueprintWireReference(n.InputWires[idx].LeftSidePin, newPort);
+                            n.InputWires[idx] = newEdge;
+                        }
+                    }
+
+                    if (n.Type == typeof(EntryNodeType))
+                    {
+                        if (n.OutPorts.TryGetValue(oldName, out var pin))
+                        {
+                            pin.RenamePort(newName);
+                            n.OutPorts[newName] = pin;
+                            n.OutPorts.Remove(oldName);
+                        }
+                    }
+
+                    if (n.Type == typeof(ReturnNodeType))
+                    {
+                        if (n.InPorts.TryGetValue(oldName, out var pin))
+                        {
+                            pin.RenamePort(newName);
+                            n.InPorts[newName] = pin;
+                            n.InPorts.Remove(oldName);
+                        }
+                    }
+
+                    var edgeConnections = n.InputWires.FindAll(e => e.LeftSidePin.PinName == oldName);
+                    foreach (var edge in edgeConnections)
+                    {
+                        int idx = n.InputWires.IndexOf(edge);
+                        var oldPort = n.InputWires[idx].LeftSidePin;
+                        var newPort = new BlueprintPinReference(newName, oldPort.NodeGuid, oldPort.IsExecutePin);
+                        var newEdge = new BlueprintWireReference(newPort, n.InputWires[idx].RightSidePin);
+                        n.InputWires[idx] = newEdge;
+                    }
+                }
+            }
+        }
+        
+        private void Retype(Type oldType, Type newType)
+        {
+            Value = newType.IsClass ? null : FormatterServices.GetUninitializedObject(newType);
+            if(_variableType != VariableType.Global)
+            {
+                foreach (var n in _methodGraph.Nodes)
+                {
+                    if (n.Type == typeof(EntryNodeType))
+                    {
+                        if (n.OutPorts.TryGetValue(Name, out var pin))
+                        {
+                            pin.Type = newType;
+                        }
+                    }
+
+                    if (n.Type == typeof(ReturnNodeType))
+                    {
+                        if (n.InPorts.TryGetValue(Name, out var pin))
+                        {
+                            pin.Type = newType;
+                        }
+                    }
+
+                    if (n.Type == typeof(TemporaryDataGetterNodeType))
+                    {
+                        if (n.OutPorts.TryGetValue(Name, out var pin))
+                        {
+                            pin.Type = newType;
+                        }
+                    }
+
+                    if (n.Type == typeof(TemporaryDataSetterNodeType))
+                    {
+                        if (n.InPorts.TryGetValue(Name, out var pin1))
+                        {
+                            pin1.Type = newType;
+                        }
+
+                        if (n.OutPorts.TryGetValue(Name, out var pin2))
+                        {
+                            pin2.Type = newType;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
     [Serializable, ArrayEntryName("@GetArrayName")]
     public class BlueprintNodeDataModel
     {
@@ -497,7 +761,7 @@ namespace Vapor.Blueprints
                 data.Add(new BlueprintPinData()
                 {
                     PinName = port.Key,
-                    PinType = port.Value.InlineValue.GetPinType(),
+                    PinType = port.Value.InlineValue.GetResolvedType(),
                     Content = port.Value.InlineValue,
                 });
             }
@@ -608,7 +872,7 @@ namespace Vapor.Blueprints
             var methodInfo = node.MethodInfo;
             var nodeName = methodInfo.IsSpecialName ? ToTitleCase(methodInfo.Name) : methodInfo.Name;
 #if UNITY_EDITOR
-            node.NodeName = UnityEditor.ObjectNames.NicifyVariableName(nodeName);
+            node.NodeName = ObjectNames.NicifyVariableName(nodeName);
 #endif
 
             var paramInfos = methodInfo.GetParameters();
@@ -656,7 +920,7 @@ namespace Vapor.Blueprints
                     string portName = pi.Name;
                     string displayName = pi.Name;
 #if UNITY_EDITOR
-                    displayName = UnityEditor.ObjectNames.NicifyVariableName(displayName);
+                    displayName = ObjectNames.NicifyVariableName(displayName);
 #endif
                     if (paramAttribute != null)
                     {
@@ -690,7 +954,7 @@ namespace Vapor.Blueprints
                     string portName = pi.Name;
                     string displayName = pi.Name;
 #if UNITY_EDITOR
-                    displayName = UnityEditor.ObjectNames.NicifyVariableName(displayName);
+                    displayName = ObjectNames.NicifyVariableName(displayName);
 #endif
                     if (paramAttribute != null)
                     {
@@ -927,12 +1191,12 @@ namespace Vapor.Blueprints
             node.OutPorts.Clear();
 
 #if UNITY_EDITOR
-            var path = UnityEditor.AssetDatabase.GUIDToAssetPath(assetGuid);
-            var found = UnityEditor.AssetDatabase.LoadAssetAtPath<BlueprintGraphSo>(path);
+            var path = AssetDatabase.GUIDToAssetPath(assetGuid);
+            var found = AssetDatabase.LoadAssetAtPath<BlueprintGraphSo>(path);
             Assert.IsTrue(found, $"Graph With Guid [{assetGuid}] Not Found");
             node.IntData = found.Key;
 
-            node.NodeName = UnityEditor.ObjectNames.NicifyVariableName(found.DisplayName);
+            node.NodeName = ObjectNames.NicifyVariableName(found.DisplayName);
 #endif
 
             // Execute Pins
@@ -947,30 +1211,28 @@ namespace Vapor.Blueprints
             // Value Pins
 
             // Input
-            foreach (var inputParameter in found.InputParameters)
+            foreach (var inputParameter in found.DesignGraph.Current.InputArguments)
             {
-                string portName = inputParameter.FieldName;
-                string displayName = inputParameter.FieldName;
+                string portName = inputParameter.Name;
+                string displayName = inputParameter.Name;
 #if UNITY_EDITOR
-                displayName = UnityEditor.ObjectNames.NicifyVariableName(inputParameter.FieldName);
+                displayName = ObjectNames.NicifyVariableName(inputParameter.Name);
 #endif
 
-                var tuple = inputParameter.ToParameter();
-                var slot = new BlueprintPin(portName, PinDirection.In, tuple.Item2, false)
+                var slot = new BlueprintPin(portName, PinDirection.In, inputParameter.Type, false)
                     .WithDisplayName(displayName);
                 node.InPorts.Add(portName, slot);
             }
 
             // Output
-            foreach (var outputParameter in found.OutputParameters)
+            foreach (var outputParameter in found.DesignGraph.Current.OutputArguments)
             {
-                string portName = outputParameter.FieldName;
-                string displayName = outputParameter.FieldName;
+                string portName = outputParameter.Name;
+                string displayName = outputParameter.Name;
 #if UNITY_EDITOR
-                displayName = UnityEditor.ObjectNames.NicifyVariableName(outputParameter.FieldName);
+                displayName = ObjectNames.NicifyVariableName(outputParameter.Name);
 #endif
-                var tuple = outputParameter.ToParameter();
-                var type = tuple.Item2;
+                var type = outputParameter.Type;
                 if (type.IsByRef)
                 {
                     type = type.GetElementType();
@@ -997,7 +1259,7 @@ namespace Vapor.Blueprints
             var fieldInfo = node.FieldInfo;
             var nodeName = fieldInfo.Name;
 #if UNITY_EDITOR
-            node.NodeName = UnityEditor.ObjectNames.NicifyVariableName(nodeName);
+            node.NodeName = ObjectNames.NicifyVariableName(nodeName);
 #endif
 
             // In Pin
@@ -1024,7 +1286,7 @@ namespace Vapor.Blueprints
             var fieldInfo = node.FieldInfo;
             var nodeName = fieldInfo.Name;
 #if UNITY_EDITOR
-            node.NodeName = UnityEditor.ObjectNames.NicifyVariableName(nodeName);
+            node.NodeName = ObjectNames.NicifyVariableName(nodeName);
 #endif
 
             var inSlot = new BlueprintPin(PinNames.EXECUTE_IN, PinDirection.In, typeof(ExecutePin), false)
@@ -1080,26 +1342,26 @@ namespace Vapor.Blueprints
             return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Dictionary<,>);
         }
 
-        internal static object CastToType(object obj, Type targetType)
-        {
-            if (obj == null)
-            {
-                if (targetType.IsClass || Nullable.GetUnderlyingType(targetType) != null)
-                {
-                    return null; // Null is a valid value for reference types and nullable types
-                }
-
-                throw new ArgumentNullException(nameof(obj), "Cannot cast null to a non-nullable value type.");
-            }
-
-            // Check if the object is already of the target type
-            if (targetType.IsAssignableFrom(obj.GetType()))
-            {
-                return obj; // No casting needed
-            }
-
-            return Convert.ChangeType(obj, targetType);
-        }
+        // internal static object CastToType(object obj, Type targetType)
+        // {
+        //     if (obj == null)
+        //     {
+        //         if (targetType.IsClass || Nullable.GetUnderlyingType(targetType) != null)
+        //         {
+        //             return null; // Null is a valid value for reference types and nullable types
+        //         }
+        //
+        //         throw new ArgumentNullException(nameof(obj), "Cannot cast null to a non-nullable value type.");
+        //     }
+        //
+        //     // Check if the object is already of the target type
+        //     if (targetType.IsAssignableFrom(obj.GetType()))
+        //     {
+        //         return obj; // No casting needed
+        //     }
+        //
+        //     return Convert.ChangeType(obj, targetType);
+        // }
     }
 
     [Serializable]

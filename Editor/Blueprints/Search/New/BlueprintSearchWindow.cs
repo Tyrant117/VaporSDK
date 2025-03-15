@@ -1,7 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using Unity.Profiling;
+using System.Threading.Tasks;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
@@ -114,7 +115,7 @@ namespace VaporEditor.Blueprints
             public void RemoveFavorite(Descriptor descriptor) => _favorites?.Remove(descriptor.GetUniqueIdentifier());
         }
 
-        private static readonly ProfilerMarker s_GetMatchesPerfMarker = new("BlueprintSearchWindow.GetMatches");
+        // private static readonly ProfilerMarker s_GetMatchesPerfMarker = new("BlueprintSearchWindow.GetMatches");
         private static readonly char[] s_MatchingSeparators = { ' ', '|', '_' };
         private static readonly CategoryComparer s_CategoryComparer = new();
         private static readonly List<string> s_PatternMatches = new();
@@ -126,6 +127,8 @@ namespace VaporEditor.Blueprints
         private const float k_MinHeight = 320f;
 
         private ISearchProvider _searchProvider;
+        private bool _groupUncategorized;
+        private bool _hideFavorites;
         private TreeView _treeView;
         private TreeView _variantTreeview;
         private readonly List<TreeViewItemData<Descriptor>> _treeViewData = new();
@@ -143,15 +146,17 @@ namespace VaporEditor.Blueprints
 
         private bool HasSearch => !string.IsNullOrEmpty(GetSearchPattern());
 
-        internal static void Show(Vector2 graphPosition, Vector2 screenPosition, ISearchProvider searchProvider)
+        internal static void Show(Vector2 graphPosition, Vector2 screenPosition, ISearchProvider searchProvider, bool groupUncategorized, bool hideFavorites)
         {
-            CreateInstance<BlueprintSearchWindow>().Init(graphPosition, screenPosition, searchProvider);
+            CreateInstance<BlueprintSearchWindow>().Init(graphPosition, screenPosition, searchProvider, groupUncategorized, hideFavorites);
         }
 
-        private void Init(Vector2 graphPosition, Vector2 screenPosition, ISearchProvider searchProvider)
+        private void Init(Vector2 graphPosition, Vector2 screenPosition, ISearchProvider searchProvider, bool groupUncategorized, bool hideFavorites)
         {
             _searchProvider = searchProvider;
             _searchProvider.Position = graphPosition;
+            _groupUncategorized = groupUncategorized;
+            _hideFavorites = hideFavorites;
 
             RestoreSettings(screenPosition);
 
@@ -208,7 +213,7 @@ namespace VaporEditor.Blueprints
             _variantTreeview.unbindItem += UnbindItem;
             _variantTreeview.viewDataKey = null;
 
-            UpdateTree(_searchProvider.GetDescriptors(), _treeViewData, true, true);
+            UpdateTree(_searchProvider.GetDescriptors(), _treeViewData, true, _groupUncategorized);
             _treeView.SetRootItems(_treeViewData);
             _treeView.RefreshItems();
             _treeView.SetSelectionById(_favoriteCategory.id);
@@ -452,6 +457,8 @@ namespace VaporEditor.Blueprints
         {
             _searchPattern = evt.newValue.Trim().ToLower();
             UpdateSearchResult(false);
+            // UpdateSearchResultAwaitable(false);
+            // UpdateSearchResultAsync(false);
         }
         
         private void OnAddToFavorite(ClickEvent evt)
@@ -521,84 +528,175 @@ namespace VaporEditor.Blueprints
             var favorites = isMainTree ? new List<TreeViewItemData<Descriptor>>() : null;
             treeViewData.Clear();
             var id = 0;
-
-            var searchPattern = GetSearchPattern();
-            var patternTokens = searchPattern?.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-            foreach (var modelDescriptor in modelDescriptors
-                         .OrderBy(x => x.Category, s_CategoryComparer)
-                         .ThenBy(x => x.Name.ToHumanReadable()))
+            
+            if (HasSearch)
             {
-                var category = !string.IsNullOrEmpty(modelDescriptor.Category) ? modelDescriptor.Category : (groupUncategorized ? "Subgraph" : string.Empty);
-                var path = category.Split('/', StringSplitOptions.RemoveEmptyEntries);
-                var currentFolders = treeViewData;
+                var searchPattern = GetSearchPattern();
+                var patternTokens = searchPattern?.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                var max = new SearchScore();
+                var finalResults = new List<Descriptor> { null };
+                SearchMultithreaded(searchPattern, patternTokens, modelDescriptors.ToList().AsReadOnly(), max, finalResults);
+                if (max.Descriptor != null)
+                {
+                    finalResults[0] = max.Descriptor;
+                }
+                else
+                {
+                    finalResults.RemoveAt(0);
+                }
+                treeViewData.AddRange(finalResults.Select(res => new TreeViewItemData<Descriptor>(id++, res)));
+                
+                if (HasSearch && isMainTree)
+                {
+                    foreach (var treeViewItemData in treeViewData)
+                    {
+                        SortSearchResult(treeViewItemData);
+                    }
+                }
+            }
+            else
+            {
+                foreach (var modelDescriptor in modelDescriptors
+                             .OrderBy(x => x.Category, s_CategoryComparer)
+                             .ThenBy(x => x.Name.ToHumanReadable()))
+                {
+                    var category = !string.IsNullOrEmpty(modelDescriptor.Category) ? modelDescriptor.Category : (groupUncategorized ? "Miscellaneous" : string.Empty);
+                    var path = category.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                    var currentFolders = treeViewData;
 
-                var matchingDescriptors = GetMatches(modelDescriptor, searchPattern, patternTokens).ToArray();
-                if (matchingDescriptors.Length == 0)
+                    // var matchingDescriptor = GetDescriptor(modelDescriptor, searchPattern, patternTokens);
+                    // if (matchingDescriptor == null)
+                    // {
+                    //     continue;
+                    // }
+                    var matchingDescriptor = new Descriptor(modelDescriptor, null, null) { MatchingScore = 1f };
+
+                    // var searchPatternLeft = searchPattern;
+                    foreach (var p in path)
+                    {
+                        var containerName = p;
+                        // var isSeparator = containerName.StartsWith('#');
+                        // if (isSeparator)
+                        // containerName = containerName.Substring(2, p.Length - 2); // Skip first two characters because separator code is of the form #1, #2 ...
+                        if (currentFolders.All(x => x.data.Name != containerName))
+                        {
+                            // string categoryMatch = null;
+                            // if (patternTokens != null)
+                            // {
+                            //     GetTextMatchScore(containerName, ref searchPatternLeft, patternTokens, out categoryMatch);
+                            // }
+
+                            // if (!isSeparator)
+                            // {
+                            var newFolder = new TreeViewItemData<Descriptor>(id++, new Descriptor(containerName, containerName), new List<TreeViewItemData<Descriptor>>());
+                            currentFolders.Add(newFolder);
+                            currentFolders = (List<TreeViewItemData<Descriptor>>)newFolder.children;
+                            // }
+                            // else if (!HasSearch) // This is a separator, we skip separators when there's a search because of sorting that would mess up with them
+                            // {
+                            //     currentFolders.Add(new TreeViewItemData<Descriptor>(id++, new Separator(containerName, containerName, null, categoryMatch)));
+                            // }
+                        }
+                        else
+                        {
+                            currentFolders = (List<TreeViewItemData<Descriptor>>)currentFolders.Single(x => x.data.Name == containerName).children;
+                        }
+                        // else if (!isSeparator)
+                        // {
+                        // currentFolders = (List<TreeViewItemData<Descriptor>>)currentFolders.Single(x => x.data.Name == containerName).children;
+                        // }
+                    }
+
+                    // When no search, only add main variant (which is the first one)
+                    currentFolders.Add(new TreeViewItemData<Descriptor>(id++, matchingDescriptor));
+
+                    // But add any matching variant, even sub-variants even when there's no search pattern
+                    if (isMainTree && _settings.IsFavorite(matchingDescriptor))
+                    {
+                        favorites.Add(new TreeViewItemData<Descriptor>(id++, matchingDescriptor));
+                    }
+                }
+                
+                if (isMainTree && !_hideFavorites)
+                {
+                    _favoriteCategory = new TreeViewItemData<Descriptor>(id, new Descriptor("Favorites", string.Empty), favorites);
+                    treeViewData.Insert(0, _favoriteCategory);
+                }
+            }
+        }
+
+        private class SearchScore
+        {
+            public Descriptor Descriptor;
+            public float Score;
+        }
+        
+        private void SearchMultithreaded(string searchPattern, string[] patternTokens, IReadOnlyList<BlueprintSearchModel> modelDescriptors, SearchScore max, List<Descriptor> finalResults)
+        {
+            var count = Environment.ProcessorCount;
+            var tasks = new Task[count];
+            var localResults = new SearchScore[count];
+            var queue = new ConcurrentQueue<SearchScore>();
+            var itemsPerTask = (int)Math.Ceiling(modelDescriptors.Count / (float)count);
+
+            for (var i = 0; i < count; i++)
+            {
+                var i1 = i;
+                localResults[i1] = new SearchScore();
+                tasks[i] = Task.Run(() =>
+                {
+                    var result = localResults[i1];
+                    for (var j = 0; j < itemsPerTask; j++)
+                    {
+                        var index = j + itemsPerTask * i1;
+                        if (index >= modelDescriptors.Count)
+                        {
+                            break;
+                        }
+
+                        var matchingDescriptor = GetDescriptor(modelDescriptors[index], searchPattern, patternTokens);
+                        if (searchPattern.Length != 0 && matchingDescriptor == null)
+                        {
+                            continue;
+                        }
+
+                        var score = matchingDescriptor.MatchingScore;
+                        if (score > result.Score)
+                        {
+                            result.Descriptor = matchingDescriptor;
+                            result.Score = score;
+                        }
+
+                        queue.Enqueue(new SearchScore { Descriptor = matchingDescriptor, Score = score });
+                    }
+                });
+            }
+
+            Task.WaitAll(tasks);
+
+            for (var i = 0; i < count; i++)
+            {
+                if (!(localResults[i].Score > max.Score))
                 {
                     continue;
                 }
 
-                var searchPatternLeft = searchPattern;
-                foreach (var p in path)
-                {
-                    var containerName = p;
-                    var isSeparator = containerName.StartsWith('#');
-                    if (isSeparator)
-                        containerName = containerName.Substring(2, p.Length - 2); // Skip first two characters because separator code is of the form #1, #2 ...
-                    if (currentFolders.All(x => x.data.Name != containerName))
-                    {
-                        string categoryMatch = null;
-                        if (patternTokens != null)
-                        {
-                            GetTextMatchScore(containerName, ref searchPatternLeft, patternTokens, out categoryMatch);
-                        }
-
-                        if (!isSeparator)
-                        {
-                            var newFolder = new TreeViewItemData<Descriptor>(id++, new Descriptor(containerName, containerName, null, categoryMatch), new List<TreeViewItemData<Descriptor>>());
-                            currentFolders.Add(newFolder);
-                            currentFolders = (List<TreeViewItemData<Descriptor>>)newFolder.children;
-                        }
-                        else if (!HasSearch) // This is a separator, we skip separators when there's a search because of sorting that would mess up with them
-                        {
-                            currentFolders.Add(new TreeViewItemData<Descriptor>(id++, new Separator(containerName, containerName, null, categoryMatch)));
-                        }
-                    }
-                    else if (!isSeparator)
-                    {
-                        currentFolders = (List<TreeViewItemData<Descriptor>>)currentFolders.Single(x => x.data.Name == containerName).children;
-                    }
-                }
-
-                for (var i = 0; i < matchingDescriptors.Length; i++)
-                {
-                    var descriptor = matchingDescriptors[i];
-                    // When no search, only add main variant (which is the first one)
-                    if (HasSearch && false || i == 0)
-                    {
-                        currentFolders.Add(new TreeViewItemData<Descriptor>(id++, descriptor));
-                    }
-
-                    // But add any matching variant, even sub-variants even when there's no search pattern
-                    if (i == 0 && isMainTree && _settings.IsFavorite(descriptor))
-                    {
-                        favorites.Add(new TreeViewItemData<Descriptor>(id++, descriptor));
-                    }
-                }
+                max.Descriptor = localResults[i].Descriptor;
+                max.Score = localResults[i].Score;
             }
 
-            if (isMainTree)
+            PostprocessResults(queue, finalResults, max);
+        }
+        
+        private const float k_ScoreCutOff = 0.33f;
+        private static void PostprocessResults(IEnumerable<SearchScore> results, ICollection<Descriptor> items, SearchScore max)
+        {
+            foreach (var result in results)
             {
-                _favoriteCategory = new TreeViewItemData<Descriptor>(id, new Descriptor("Favorites", string.Empty), favorites);
-                treeViewData.Insert(0, _favoriteCategory);
-            }
-
-            if (HasSearch && isMainTree)
-            {
-                foreach (var treeViewItemData in treeViewData)
+                var normalizedScore = result.Score / max.Score;
+                if (result.Descriptor != null && result.Descriptor != max.Descriptor && normalizedScore > k_ScoreCutOff)
                 {
-                    SortSearchResult(treeViewItemData);
+                    items.Add(result.Descriptor);
                 }
             }
         }
@@ -642,7 +740,7 @@ namespace VaporEditor.Blueprints
         private void UpdateSearchResult(bool keepSelection)
         {
             var currentSelectedItem = _treeView.selectedItem as Descriptor;
-            UpdateTree(_searchProvider.GetDescriptors(), _treeViewData, true, true);
+            UpdateTree(_searchProvider.GetDescriptors(), _treeViewData, true, _groupUncategorized);
             _treeView.SetRootItems(_treeViewData);
             _treeView.RefreshItems();
             if (HasSearch)
@@ -659,7 +757,7 @@ namespace VaporEditor.Blueprints
             }
         }
 
-        private void SortSearchResult(TreeViewItemData<Descriptor> treeViewItemData)
+        private static void SortSearchResult(TreeViewItemData<Descriptor> treeViewItemData)
         {
             if (!treeViewItemData.hasChildren)
             {
@@ -674,24 +772,33 @@ namespace VaporEditor.Blueprints
             }
         }
 
-        private IEnumerable<Descriptor> GetMatches(BlueprintSearchModel searchModel, string pattern, string[] patternTokens)
+        private Descriptor GetDescriptor(BlueprintSearchModel searchModel, string pattern, string[] patternTokens)
         {
-            s_GetMatchesPerfMarker.Begin();
-            try
+            var score = GetVariantMatchScore(searchModel, pattern, patternTokens, out var match, out var synonym);
+            if (!(score > 0f))
             {
-                var score = GetVariantMatchScore(searchModel, pattern, patternTokens, out var match, out var synonym);
-                if (!(score > 0f))
-                {
-                    yield break;
-                }
+                return null;
+            }
 
-                var descriptor = new Descriptor(searchModel, match, synonym) { MatchingScore = score };
-                yield return descriptor;
-            }
-            finally
-            {
-                s_GetMatchesPerfMarker.End();
-            }
+            var descriptor = new Descriptor(searchModel, match, synonym) { MatchingScore = score };
+            return descriptor;
+            
+            // s_GetMatchesPerfMarker.Begin();
+            // try
+            // {
+            //     var score = GetVariantMatchScore(searchModel, pattern, patternTokens, out var match, out var synonym);
+            //     if (!(score > 0f))
+            //     {
+            //         yield break;
+            //     }
+            //
+            //     var descriptor = new Descriptor(searchModel, match, synonym) { MatchingScore = score };
+            //     yield return descriptor;
+            // }
+            // finally
+            // {
+            //     s_GetMatchesPerfMarker.End();
+            // }
         }
 
         private float GetVariantMatchScore(BlueprintSearchModel searchModel, string pattern, string[] patternTokens, out string match, out string synonymMatch)

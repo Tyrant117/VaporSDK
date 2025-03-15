@@ -9,6 +9,8 @@ namespace Vapor.Blueprints
         public BlueprintPinReference LeftSidePin;
         public BlueprintPinReference RightSidePin;
         
+        public bool IsExecuteWire => LeftSidePin.IsExecutePin && RightSidePin.IsExecutePin;
+        
         public BlueprintWireReference(BlueprintPinReference leftSidePin, BlueprintPinReference rightSidePin)
         {
             LeftSidePin = leftSidePin;

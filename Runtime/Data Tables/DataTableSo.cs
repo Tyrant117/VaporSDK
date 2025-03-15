@@ -46,7 +46,7 @@ namespace Vapor.DataTables
 
         public Type GetRowType()
         {
-            return _rowType.GetPinType();
+            return _rowType.GetResolvedType();
         }
 
         public override void GenerateAdditionalKeys()

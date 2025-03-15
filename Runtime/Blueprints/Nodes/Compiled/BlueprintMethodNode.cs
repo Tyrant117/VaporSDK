@@ -79,7 +79,7 @@ namespace Vapor.Blueprints
             InPortValues = new Dictionary<string, object>(dto.InputPinValues.Count);
             foreach (var (key, tuple) in dto.InputPinValues)
             {
-                var val = Convert.ChangeType(tuple.Item2, tuple.Item1);
+                var val = TypeUtility.CastToType(tuple.Item2, tuple.Item1);
                 InPortValues[key] = val;
             }
 
@@ -220,7 +220,7 @@ namespace Vapor.Blueprints
             InPortValues = new Dictionary<string, object>(dto.InputPinValues.Count);
             foreach (var (key, tuple) in dto.InputPinValues)
             {
-                var val = Convert.ChangeType(tuple.Item2, tuple.Item1);
+                var val = TypeUtility.CastToType(tuple.Item2, tuple.Item1);
                 _valuePinName = key;
                 InPortValues[key] = val;
             }

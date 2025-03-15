@@ -16,8 +16,7 @@ namespace Vapor.Blueprints
         // Dynamic Fields
         public const string GRAPH_PARAM = "Graph";
         public const string PORT_PARAM = "Port";
-        
-        BlueprintNodeDataModel CreateDataModel(Vector2 position, List<(string, object)> parameters);
+
         BlueprintDesignNode CreateDesignNode(Vector2 position, List<(string, object)> parameters);
         void UpdateDesignNode(BlueprintDesignNode node);
         BlueprintCompiledNodeDto Compile(BlueprintDesignNode node);
@@ -36,11 +35,6 @@ namespace Vapor.Blueprints
     // Not Implemented Yet
     public struct SequenceNodeType : INodeType
     {
-        public BlueprintNodeDataModel CreateDataModel(Vector2 position, List<(string, object)> parameters)
-        {
-            throw new NotImplementedException();
-        }
-
         public BlueprintDesignNode CreateDesignNode(Vector2 position, List<(string, object)> parameters)
         {
             throw new NotImplementedException();
@@ -64,11 +58,6 @@ namespace Vapor.Blueprints
     
     public struct SwitchNodeType : INodeType
     {
-        public BlueprintNodeDataModel CreateDataModel(Vector2 position, List<(string, object)> parameters)
-        {
-            throw new NotImplementedException();
-        }
-
         public BlueprintDesignNode CreateDesignNode(Vector2 position, List<(string, object)> parameters)
         {
             throw new NotImplementedException();
@@ -92,11 +81,6 @@ namespace Vapor.Blueprints
 
     public struct WhileNodeType : INodeType
     {
-        public BlueprintNodeDataModel CreateDataModel(Vector2 position, List<(string, object)> parameters)
-        {
-            throw new NotImplementedException();
-        }
-
         public BlueprintDesignNode CreateDesignNode(Vector2 position, List<(string, object)> parameters)
         {
             throw new NotImplementedException();
@@ -120,11 +104,6 @@ namespace Vapor.Blueprints
 
     public struct ForNodeType : INodeType
     {
-        public BlueprintNodeDataModel CreateDataModel(Vector2 position, List<(string, object)> parameters)
-        {
-            throw new NotImplementedException();
-        }
-
         public BlueprintDesignNode CreateDesignNode(Vector2 position, List<(string, object)> parameters)
         {
             throw new NotImplementedException();

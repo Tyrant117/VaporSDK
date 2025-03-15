@@ -175,7 +175,7 @@ namespace VaporEditor.Blueprints
 
         private void CTX_PromoteToVariable(DropdownMenuAction obj)
         {
-            var baseName = $"Temp{portType.Name}_";
+            var baseName = $"LocalVar_{portType.Name}_";
             int suffix = 0;
             StringBuilder fieldNameBuilder = new StringBuilder(baseName);
 
@@ -184,42 +184,32 @@ namespace VaporEditor.Blueprints
                 fieldNameBuilder.Length = baseName.Length; // Reset to base name length
                 fieldNameBuilder.Append(suffix++);
             } 
-            while (Node.View.GraphObject.TempData.Exists(x => x.FieldName == fieldNameBuilder.ToString()));
+            while (Node.View.GraphObject.DesignGraph.Current.TemporaryVariables.Exists(x => x.Name == fieldNameBuilder.ToString()));
             
             var fieldName = fieldNameBuilder.ToString();
-            Node.View.GraphObject.TempData.Add(new BlueprintIOParameter()
-            {
-                FieldName = fieldName,
-                FieldType = new SubclassOf(portType.AssemblyQualifiedName),
-            });
+            Node.View.GraphObject.DesignGraph.Current.TemporaryVariables.Add(new BlueprintVariable(fieldName, portType, BlueprintVariable.VariableType.Local).WithMethodGraph(Node.View.GraphObject.DesignGraph.Current));
+            Node.View.Blackboard.UpdateTemporaryVariables();
 
             if (direction == Direction.Output)
             {
                 var position = parent.LocalToWorld(layout.position) + new Vector2(106, 16);
-                Node.View.OnSpawnNodeDirect<TemporaryDataSetterNodeType>(position, (INodeType.GRAPH_PARAM, Node.View.GraphObject), (INodeType.NAME_DATA_PARAM, fieldName));
+                Node.View.OnSpawnNodeDirect<TemporaryDataSetterNodeType>(position, (INodeType.GRAPH_PARAM, Node.View.GraphObject.DesignGraph.Current), (INodeType.NAME_DATA_PARAM, fieldName));
 
                 var last = Node.View.EditorNodes[^1];
                 if (last.InPorts.TryGetValue(fieldName, out var inPort))
                 {
                     Node.View.CreateEdge(this, inPort, true);
-                    // var e = inPort.ConnectTo(this);
-                    // Node.OnConnectedInputEdge(this.GetPin().PortName);
-                    // Node.View.AddElement(e);
                 }
             }
             else
             {
                 var position = parent.LocalToWorld(layout.position) + new Vector2(-176, 16);
-                Node.View.OnSpawnNodeDirect<TemporaryDataGetterNodeType>(position, (INodeType.GRAPH_PARAM, Node.View.GraphObject), (INodeType.NAME_DATA_PARAM, fieldName));
+                Node.View.OnSpawnNodeDirect<TemporaryDataGetterNodeType>(position, (INodeType.GRAPH_PARAM, Node.View.GraphObject.DesignGraph.Current), (INodeType.NAME_DATA_PARAM, fieldName));
 
                 var last = Node.View.EditorNodes[^1];
                 if (last.OutPorts.TryGetValue(fieldName, out var outPort))
                 {
                     Node.View.CreateEdge(outPort, this, true);
-                    // var e = outPort.ConnectTo(this);
-                    // Node.View.AddEdge(e);
-                    // Node.OnConnectedInputEdge(this.GetPin().PortName);
-                    // Node.View.AddElement(e);
                 }
             }
 
@@ -233,17 +223,24 @@ namespace VaporEditor.Blueprints
         private void CTX_ChangeType(DropdownMenuAction arg, Type newType)
         {
             Pin.Type = newType;
-            portType = Pin.Type;
-            PropertyType = TypeToSerializedPropertyType(Pin.Type);
-            visualClass = GetVisualClass();
-            tooltip = Pin.CreateTooltipForPin();
-            DrawField();
+            UpdateType();
         }
         
         private DropdownMenuAction.Status CTX_ChangeTypeStatus(DropdownMenuAction arg)
         {
             return connected ? DropdownMenuAction.Status.Disabled : DropdownMenuAction.Status.Normal;
         }
+
+        public void UpdateType()
+        {
+            portType = Pin.Type;
+            PropertyType = TypeToSerializedPropertyType(Pin.Type);
+            visualClass = GetVisualClass();
+            tooltip = Pin.CreateTooltipForPin();
+            portName = Pin.DisplayName;
+            DrawField();
+        }
+
         #endregion
 
         #region - Edge Connection -
@@ -252,7 +249,7 @@ namespace VaporEditor.Blueprints
         {
             // var draggedPort = edge.output?.edgeConnector.edgeDragHelper.draggedPort ?? edge.input?.edgeConnector.edgeDragHelper.draggedPort;
             var screenPosition = position + Node.View.Window.position.position;
-            BlueprintSearchWindow.Show(position, screenPosition, new ContextSearchProvider(Pin.Type, true, Node.View.OnSpawnNode).WithPin(this));
+            BlueprintSearchWindow.Show(position, screenPosition, new ContextSearchProvider(Pin.Type, true, Node.View.OnSpawnNode).WithPin(this), true, false);
         }
 
         void IEdgeConnectorListener.OnDrop(GraphView graphView, Edge edge)

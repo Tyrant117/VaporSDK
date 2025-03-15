@@ -8,14 +8,6 @@ namespace Vapor.Blueprints
 {
     public struct GraphNodeType : INodeType
     {
-        public BlueprintNodeDataModel CreateDataModel(Vector2 position, List<(string, object)> parameters)
-        {
-            var name = this.FindParam<string>(parameters, INodeType.NAME_DATA_PARAM);
-            var node = BlueprintNodeDataModelUtility.CreateOrUpdateGraphNode(null, name);
-            node.Position = new Rect(position, Vector2.zero);
-            return node;
-        }
-
         public BlueprintDesignNode CreateDesignNode(Vector2 position, List<(string, object)> parameters)
         {
             var assetGuid = this.FindParam<string>(parameters, INodeType.NAME_DATA_PARAM);
@@ -23,7 +15,7 @@ namespace Vapor.Blueprints
             {
                 Position = new Rect(position, Vector2.zero)
             };
-            node.TryAddProperty(INodeType.NAME_DATA_PARAM, assetGuid, true);
+            node.AddOrUpdateProperty(INodeType.NAME_DATA_PARAM, assetGuid, true);
             UpdateDesignNode(node);
             return node;
         }
@@ -35,7 +27,7 @@ namespace Vapor.Blueprints
             var path = UnityEditor.AssetDatabase.GUIDToAssetPath(assetGuid);
             var found = UnityEditor.AssetDatabase.LoadAssetAtPath<BlueprintGraphSo>(path);
             Assert.IsTrue(found, $"Graph With Guid [{assetGuid}] Not Found");
-            node.TryAddProperty(INodeType.KEY_DATA_PARAM, assetGuid, false);
+            node.AddOrUpdateProperty(INodeType.KEY_DATA_PARAM, assetGuid, false);
 
             node.NodeName = UnityEditor.ObjectNames.NicifyVariableName(found.DisplayName);
 
@@ -51,29 +43,27 @@ namespace Vapor.Blueprints
             // Value Pins
 
             // Input
-            foreach (var inputParameter in found.InputParameters)
+            foreach (var inputParameter in found.DesignGraph.Current.InputArguments)
             {
-                string portName = inputParameter.FieldName;
-                string displayName = inputParameter.FieldName;
+                string portName = inputParameter.Name;
+                string displayName = inputParameter.Name;
                 
-                displayName = UnityEditor.ObjectNames.NicifyVariableName(inputParameter.FieldName);
+                displayName = UnityEditor.ObjectNames.NicifyVariableName(inputParameter.Name);
 
-                var tuple = inputParameter.ToParameter();
-                var slot = new BlueprintPin(portName, PinDirection.In, tuple.Item2, false)
+                var slot = new BlueprintPin(portName, PinDirection.In, inputParameter.Type, false)
                     .WithDisplayName(displayName);
                 node.InPorts.Add(portName, slot);
             }
 
             // Output
-            foreach (var outputParameter in found.OutputParameters)
+            foreach (var outputParameter in found.DesignGraph.Current.OutputArguments)
             {
-                string portName = outputParameter.FieldName;
-                string displayName = outputParameter.FieldName;
+                string portName = outputParameter.Name;
+                string displayName = outputParameter.Name;
                 
-                displayName = UnityEditor.ObjectNames.NicifyVariableName(outputParameter.FieldName);
+                displayName = UnityEditor.ObjectNames.NicifyVariableName(outputParameter.Name);
                 
-                var tuple = outputParameter.ToParameter();
-                var type = tuple.Item2;
+                var type = outputParameter.Type;
                 if (type.IsByRef)
                 {
                     type = type.GetElementType();
@@ -91,7 +81,7 @@ namespace Vapor.Blueprints
         {
             var dto = new BlueprintCompiledNodeDto
             {
-                NodeType = node.NodeType,
+                NodeType = node.Type,
                 Guid = node.Guid,
                 InputWires = node.InputWires,
                 InputPinValues = new Dictionary<string, (Type, object)>(node.InPorts.Count),

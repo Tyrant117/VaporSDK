@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace VaporEditor.Blueprints
 {
-    internal abstract class SearchProviderBase : ISearchProvider
+    public abstract class SearchProviderBase : ISearchProvider
     {
         public Vector2 Position { get; set; }
             

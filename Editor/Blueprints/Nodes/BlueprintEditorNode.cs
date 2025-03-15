@@ -1,39 +1,28 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
 using Vapor.Blueprints;
 using Vapor.Inspector;
 using VaporEditor.Inspector;
-using PointerType = UnityEngine.UIElements.PointerType;
 
 namespace VaporEditor.Blueprints
 {
 
     public class BlueprintRedirectNode : Node, IBlueprintEditorNode
     {
-        public BlueprintNodeDataModel Model { get; }
+        public BlueprintDesignNode Model { get; }
         public Dictionary<string, BlueprintEditorPort> InPorts { get; private set; } = new();
         public Dictionary<string, BlueprintEditorPort> OutPorts { get; private set; } = new();
         public BlueprintView View { get; }
         
         public event Action<string> ConnectedPort;
         public event Action<string> DisconnectedPort;
-        
-        public BlueprintRedirectNode(BlueprintEditorView view, BlueprintNodeDataModel node, EdgeConnectorListener edgeConnectorListener)
-        {
-            View = view.GraphView;
-            Model = node;
-            
-            styleSheets.Add(Resources.Load<StyleSheet>("Styles/RedirectNode"));
-            
-            CreateFlowInPorts();
-            CreateFlowOutPorts();
-        }
 
-        public BlueprintRedirectNode(BlueprintView view, BlueprintNodeDataModel node)
+        public BlueprintRedirectNode(BlueprintView view, BlueprintDesignNode node)
         {
             View = view;
             Model = node;
@@ -85,11 +74,6 @@ namespace VaporEditor.Blueprints
             }
         }
         
-        public void RedrawPorts(EdgeConnectorListener edgeConnectorListener)
-        {
-            
-        }
-        
         public void OnConnectedInputEdge(string portName)
         {
             Debug.Log($"Connected {portName}");
@@ -101,11 +85,21 @@ namespace VaporEditor.Blueprints
             Debug.Log($"Disconnected {portName}");
             DisconnectedPort?.Invoke(portName);
         }
+
+        public void InvalidateName()
+        {
+            
+        }
+
+        public void InvalidateType()
+        {
+            
+        }
     }
     
     public class BlueprintEditorToken : TokenNode, IBlueprintEditorNode
     {
-        public BlueprintNodeDataModel Model { get; }
+        public BlueprintDesignNode Model { get; }
         public Dictionary<string, BlueprintEditorPort> InPorts { get; private set; } = new();
         public Dictionary<string, BlueprintEditorPort> OutPorts { get; private set; } = new();
         public BlueprintView View { get; }
@@ -113,14 +107,32 @@ namespace VaporEditor.Blueprints
         public event Action<string> ConnectedPort;
         public event Action<string> DisconnectedPort;
         
-        public BlueprintEditorToken(BlueprintEditorView view, BlueprintNodeDataModel node, EdgeConnectorListener edgeConnectorListener) : base(null, null)
+        public BlueprintEditorToken(BlueprintView view, BlueprintDesignNode node) : base(null, null)
         {
-            View = view.GraphView;
+            View = view;
             Model = node;
             
             var nameTuple = node.GetNodeName();
             var iconTuple = node.GetNodeNameIcon();
-            CreateTitle(nameTuple.Item1, nameTuple.Item2, iconTuple.Item1, iconTuple.Item2);
+            Texture2D text;
+            if (iconTuple.Item1.EmptyOrNull())
+            {
+                text = null;
+            }
+            else
+            {
+                MethodInfo method = typeof(EditorGUIUtility).GetMethod(
+                    "IconContent",
+                    BindingFlags.NonPublic | BindingFlags.Static,
+                    null,
+                    new[] { typeof(string), typeof(bool) }, // Explicitly specify parameter types
+                    null
+                );
+                text = ((GUIContent)method?.Invoke(null, new object[] { iconTuple.Item1, false }))?.image as Texture2D;
+            }
+            var s = text != null ? Sprite.Create(text, new Rect(0, 0, 16, 16), Vector2.zero) : Resources.Load<Sprite>($"BlueprintIcons/{iconTuple.Item1}");
+
+            CreateTitle(nameTuple.Item1, nameTuple.Item2, s, iconTuple.Item2, iconTuple.Item3);
             style.width = 80;
             var top = this.Q<VisualElement>("top");
             top.style.alignSelf = Align.Stretch;
@@ -132,7 +144,7 @@ namespace VaporEditor.Blueprints
             RefreshExpandedState();
         }
         
-        private void CreateTitle(string newTitle, Color titleTint, Sprite titleIcon, Color titleIconTint)
+        private void CreateTitle(string newTitle, Color titleTint, Sprite titleIcon, Color titleIconTint, string iconTooltip)
         {
             title = newTitle;
             var label = this.Q<Label>("title-label");
@@ -149,6 +161,7 @@ namespace VaporEditor.Blueprints
             {
                 titleContainer.Insert(0, new Image()
                 {
+                    tooltip = iconTooltip,
                     sprite = titleIcon,
                     tintColor = titleIconTint,
                     scaleMode = ScaleMode.ScaleToFit,
@@ -227,11 +240,6 @@ namespace VaporEditor.Blueprints
                 pill.right = port;
             }
         }
-        
-        public void RedrawPorts(EdgeConnectorListener edgeConnectorListener)
-        {
-            
-        }
 
         public void OnConnectedInputEdge(string portName)
         {
@@ -244,11 +252,20 @@ namespace VaporEditor.Blueprints
             Debug.Log($"Disconnected {portName}");
             DisconnectedPort?.Invoke(portName);
         }
+
+        public void InvalidateName()
+        {
+        }
+
+        public void InvalidateType()
+        {
+            
+        }
     }
     
     public class BlueprintEditorNode : Node, IBlueprintEditorNode
     {
-        public BlueprintNodeDataModel Model { get; protected set; }
+        public BlueprintDesignNode Model { get; protected set; }
         
         public Dictionary<string, BlueprintEditorPort> InPorts { get; private set; } = new();
         public Dictionary<string, BlueprintEditorPort> OutPorts { get; private set; } = new();
@@ -259,25 +276,8 @@ namespace VaporEditor.Blueprints
 
         public event Action<string> ConnectedPort;
         public event Action<string> DisconnectedPort;
-        
-        public BlueprintEditorNode(BlueprintEditorView view, BlueprintNodeDataModel node, EdgeConnectorListener edgeConnectorListener)
-        {
-            View = view.GraphView;
-            Model = node;
 
-            m_CollapseButton.RemoveFromHierarchy();
-            StyleNode();
-            var nameTuple = node.GetNodeName();
-            var iconTuple = node.GetNodeNameIcon();
-            CreateTitle(nameTuple.Item1, nameTuple.Item2, iconTuple.Item1, iconTuple.Item2);
-
-            CreateFlowInPorts();
-            CreateFlowOutPorts();
-
-            RefreshExpandedState();
-        }
-
-        public BlueprintEditorNode(BlueprintView view, BlueprintNodeDataModel node)
+        public BlueprintEditorNode(BlueprintView view, BlueprintDesignNode node)
         {
             View = view;
             Model = node;
@@ -286,7 +286,25 @@ namespace VaporEditor.Blueprints
             StyleNode();
             var nameTuple = node.GetNodeName();
             var iconTuple = node.GetNodeNameIcon();
-            CreateTitle(nameTuple.Item1, nameTuple.Item2, iconTuple.Item1, iconTuple.Item2);
+            Texture2D text;
+            if (iconTuple.Item1.EmptyOrNull())
+            {
+                text = null;
+            }
+            else
+            {
+                MethodInfo method = typeof(EditorGUIUtility).GetMethod(
+                    "IconContent",
+                    BindingFlags.NonPublic | BindingFlags.Static,
+                    null,
+                    new[] { typeof(string), typeof(bool) }, // Explicitly specify parameter types
+                    null
+                );
+                text = ((GUIContent)method?.Invoke(null, new object[] { iconTuple.Item1, false }))?.image as Texture2D;
+            }
+
+            var s = text != null ? Sprite.Create(text, new Rect(0, 0, 16, 16), Vector2.zero) : Resources.Load<Sprite>($"BlueprintIcons/{iconTuple.Item1}");
+            CreateTitle(nameTuple.Item1, nameTuple.Item2, s, iconTuple.Item2, iconTuple.Item3);
 
             CreateFlowInPorts();
             CreateFlowOutPorts();
@@ -318,7 +336,7 @@ namespace VaporEditor.Blueprints
             style.minWidth = 128;
         }
         
-        private void CreateTitle(string newTitle, Color titleTint, Sprite titleIcon, Color titleIconTint)
+        private void CreateTitle(string newTitle, Color titleTint, Sprite titleIcon, Color titleIconTint, string iconTooltip)
         {
             title = newTitle;
             var label = titleContainer.Q<Label>();
@@ -332,6 +350,7 @@ namespace VaporEditor.Blueprints
             {
                 titleContainer.Insert(0, new Image()
                 {
+                    tooltip = iconTooltip,
                     sprite = titleIcon,
                     tintColor = titleIconTint,
                     scaleMode = ScaleMode.ScaleToFit,
@@ -415,7 +434,6 @@ namespace VaporEditor.Blueprints
                 {
                     port.AddToClassList("optionalPort");
                 }
-
                 
                 OutPorts.Add(pin.PortName, port);
                 outputContainer.Add(port);
@@ -432,6 +450,119 @@ namespace VaporEditor.Blueprints
         {
             Debug.Log($"Disconnected {portName}");
             DisconnectedPort?.Invoke(portName);
+        }
+
+        public void InvalidateName()
+        {
+            var nameTuple = Model.GetNodeName();
+            var iconTuple = Model.GetNodeNameIcon();
+            Texture2D text;
+            if (iconTuple.Item1.EmptyOrNull())
+            {
+                text = null;
+            }
+            else
+            {
+                MethodInfo method = typeof(EditorGUIUtility).GetMethod(
+                    "IconContent",
+                    BindingFlags.NonPublic | BindingFlags.Static,
+                    null,
+                    new[] { typeof(string), typeof(bool) }, // Explicitly specify parameter types
+                    null
+                );
+                text = ((GUIContent)method?.Invoke(null, new object[] { iconTuple.Item1, false }))?.image as Texture2D;
+            }
+            var s = text != null ? Sprite.Create(text, new Rect(0, 0, 16, 16), Vector2.zero) : Resources.Load<Sprite>($"BlueprintIcons/{iconTuple.Item1}");
+            CreateTitle(nameTuple.Item1, nameTuple.Item2, s, iconTuple.Item2, iconTuple.Item3);
+            
+            if (Model.Type == typeof(EntryNodeType))
+            {
+                List<string> removed = new();
+                List<BlueprintEditorPort> updated = new();
+                foreach (var ports in OutPorts)
+                {
+                    if (ports.Value.Pin.PortName != ports.Key)
+                    {
+                        removed.Add(ports.Key);
+                        updated.Add(ports.Value);
+                    }
+                }
+
+                foreach (var r in removed)
+                {
+                    OutPorts.Remove(r);
+                }
+
+                foreach (var add in updated)
+                {
+                    add.portName = add.Pin.DisplayName;
+                    OutPorts.Add(add.Pin.PortName, add);
+                }
+            }
+            
+            if (Model.Type == typeof(ReturnNodeType))
+            {
+                List<string> removed = new();
+                List<BlueprintEditorPort> updated = new();
+                foreach (var ports in InPorts)
+                {
+                    if (ports.Value.Pin.PortName != ports.Key)
+                    {
+                        removed.Add(ports.Key);
+                        updated.Add(ports.Value);
+                    }
+                }
+
+                foreach (var r in removed)
+                {
+                    InPorts.Remove(r);
+                }
+
+                foreach (var add in updated)
+                {
+                    add.portName = add.Pin.DisplayName;
+                    InPorts.Add(add.Pin.PortName, add);
+                }
+            }
+        }
+
+        public void InvalidateType()
+        {
+            if (Model.Type == typeof(EntryNodeType))
+            {
+                foreach (var ports in OutPorts.Values)
+                {
+                    ports.UpdateType();
+                }
+            }
+
+            if (Model.Type == typeof(ReturnNodeType))
+            {
+                foreach (var ports in InPorts.Values)
+                {
+                    ports.UpdateType();
+                }
+            }
+            
+            if (Model.Type == typeof(TemporaryDataGetterNodeType))
+            {
+                foreach (var ports in OutPorts.Values)
+                {
+                    ports.UpdateType();
+                }
+            }
+            
+            if (Model.Type == typeof(TemporaryDataSetterNodeType))
+            {
+                foreach (var ports in InPorts.Values)
+                {
+                    ports.UpdateType();
+                }
+                foreach (var ports in OutPorts.Values)
+                {
+                    ports.UpdateType();
+                }
+            }
         }
 
         #region - Helpers -

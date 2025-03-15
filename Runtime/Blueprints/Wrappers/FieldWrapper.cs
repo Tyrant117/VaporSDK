@@ -7,7 +7,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.Assertions;
-using UnityEngine.Serialization;
+using UnityEngineInternal;
 using Vapor.Inspector;
 using Vapor.Keys;
 
@@ -36,6 +36,11 @@ namespace Vapor.Blueprints
             return GetCachedTypes().Where(t => typeof(T).IsAssignableFrom(t) && !t.IsAbstract);
         }
         
+        public static IEnumerable<Type> GetFilteredTypes(Type type)
+        {
+            return GetCachedTypes().Where(t => type.IsAssignableFrom(t) && !t.IsAbstract);
+        }
+        
         /// Loads valid types while filtering out editor-only assemblies
         private static List<Type> LoadValidTypes()
         {
@@ -46,8 +51,14 @@ namespace Vapor.Blueprints
             // Filters for valid types
             foreach (var assembly in assemblies)
             {
+                // Debug.Log(assembly.FullName);
                 // Exclude Editor
-                if (IsEditorAssembly(assembly))
+                if (IsEditorAssembly(assembly) || assembly.IsDefined(typeof(AssemblyIsEditorAssembly), true))
+                {
+                    continue;
+                }
+
+                if (assembly.FullName.Contains("Editor"))
                 {
                     continue;
                 }
@@ -108,6 +119,11 @@ namespace Vapor.Blueprints
             {
                 return false;
             }
+
+            if (type.Namespace != null && type.Namespace.Contains("Editor"))
+            {
+                return false;
+            }
             
             // Support abstract classes and interfaces and generics
             return true;
@@ -117,7 +133,7 @@ namespace Vapor.Blueprints
     [Serializable, DrawWithVapor(UIGroupType.Box)]
     public class SubclassOf : FieldWrapper
     {
-        [SerializeField, TypeSelector("@TypeResolver"), OnValueChanged("OnTypeChanged", true)] 
+        [SerializeField, TypeSelector("@TypeResolver"), OnValueChanged("OnTypeChanged", true), Label("Type")] 
         private string _assemblyQualifiedName;
         public string AssemblyQualifiedName
         {
@@ -126,7 +142,7 @@ namespace Vapor.Blueprints
         }
 
         [SerializeField, ShowIf("@IsGenericTypeDefinition")]
-        private SubclassGeneric[] _genericArguments;
+        private SubclassGeneric[] _genericArguments = Array.Empty<SubclassGeneric>();
         
         // ReSharper disable once UnusedMember.Global
         public bool IsGenericTypeDefinition => !AssemblyQualifiedName.EmptyOrNull() && Type.GetType(AssemblyQualifiedName) is { IsGenericTypeDefinition: true };
@@ -142,10 +158,6 @@ namespace Vapor.Blueprints
                 ? new SubclassGeneric[type.GetGenericArguments().Length] 
                 : Array.Empty<SubclassGeneric>();
         }
-        
-        // Cached resolved type for performance
-        [NonSerialized]
-        private Type _cachedType;
 
         public SubclassOf()
         {
@@ -202,15 +214,9 @@ namespace Vapor.Blueprints
             }
         }
 
-        public override Type GetPinType()
+        public override Type GetResolvedType()
         {
-            if (_cachedType != null)
-            {
-                return _cachedType; // Return cached type if already resolved
-            }
-
-            _cachedType = ResolveType();
-            return _cachedType;
+            return ResolveType();
         }
         
         // Resolves the actual type, handling generics correctly
@@ -265,8 +271,6 @@ namespace Vapor.Blueprints
             {
                 _genericArguments = null;
             }
-            
-            _cachedType = type; // Cache the resolved type immediately
         }
         
         protected virtual IEnumerable<Type> TypeResolver()
@@ -308,7 +312,7 @@ namespace Vapor.Blueprints
     [Serializable, DrawWithVapor(UIGroupType.Box)]
     public class SubclassGeneric
     {
-        [SerializeField, TypeSelector("@TypeResolver"), OnValueChanged("OnTypeChanged", true)] 
+        [SerializeField, TypeSelector("@TypeResolver"), OnValueChanged("OnTypeChanged", true), Label("Type")] 
         private string _assemblyQualifiedName;
         public string AssemblyQualifiedName
         {
@@ -317,12 +321,9 @@ namespace Vapor.Blueprints
         }
         
         [SerializeField, TypeSelector("@TypeResolverNoGeneric"), ShowIf("@IsGenericTypeDefinition")] 
-        private List<string> _genericArguments;
+        private List<string> _genericArguments = new();
         public List<string> GenericArguments => _genericArguments;
         
-        [NonSerialized]
-        private Type _cachedType;
-
         public bool IsGenericTypeDefinition => !AssemblyQualifiedName.EmptyOrNull() && Type.GetType(AssemblyQualifiedName) is { IsGenericTypeDefinition: true };
 
         private void OnTypeChanged(string current)
@@ -418,8 +419,6 @@ namespace Vapor.Blueprints
             {
                 _genericArguments = null;
             }
-            
-            _cachedType = type; // Cache the resolved type immediately
         }
         
         private IEnumerable<Type> TypeResolver()
@@ -437,7 +436,7 @@ namespace Vapor.Blueprints
     {
         public abstract object Get();
         public abstract void Set(object value);
-        public abstract Type GetPinType();
+        public abstract Type GetResolvedType();
     }
 
     [Serializable]
@@ -447,14 +446,14 @@ namespace Vapor.Blueprints
 
         public override void Set(object value) => WrappedObject = (T)value;
         public override object Get() => WrappedObject;
-        public override Type GetPinType() => typeof(T);
+        public override Type GetResolvedType() => typeof(T);
         public override string ToString() => WrappedObject.ToString();
     }
 
     [Serializable]
     public class GenericWrapper<T> : FieldWrapper<T>
     {
-        [JsonProperty, SerializeField] private T _value;
+        [SerializeField] private T _value;
 
         public override T WrappedObject
         {
@@ -463,6 +462,33 @@ namespace Vapor.Blueprints
         }
 
         public override void Set(object value) => _value = (T)value;
+    }
+
+    [Serializable]
+    public class GenericWrapperTuple<T, V> : FieldWrapper
+    {
+        [SerializeField] private T _tValue;
+        [SerializeField] private V _vValue;
+
+
+        public override object Get() => (_tValue, _vValue);
+
+        public override void Set(object value)
+        {
+            if (value is V v)
+            {
+                _vValue = v;
+            }
+
+            if (value is T t)
+            {
+                _tValue = t;
+            }
+        }
+
+        public override Type GetResolvedType() => Get().GetType();
+
+        public override string ToString() => $"({_vValue}, {_tValue})";
     }
 
     [Serializable]
@@ -865,7 +891,7 @@ namespace Vapor.Blueprints
             Value = (TEnum)value;
         }
 
-        public override Type GetPinType()
+        public override Type GetResolvedType()
         {
             return typeof(TEnum);
         }

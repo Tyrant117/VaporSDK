@@ -7,17 +7,9 @@ namespace Vapor.Blueprints
 {
     public struct ReturnNodeType : INodeType
     {
-        public BlueprintNodeDataModel CreateDataModel(Vector2 position, List<(string, object)> parameters)
-        {
-            var graph = this.FindParam<BlueprintGraphSo>(parameters, INodeType.GRAPH_PARAM);
-            var node = BlueprintNodeDataModelUtility.CreateOrUpdateReturnNode(null, graph.OutputParameters);
-            node.Position = new Rect(position, Vector2.zero);
-            return node;
-        }
-
         public BlueprintDesignNode CreateDesignNode(Vector2 position, List<(string, object)> parameters)
         {
-            var graph = this.FindParam<BlueprintGraphSo>(parameters, INodeType.GRAPH_PARAM);
+            var graph = this.FindParam<BlueprintMethodGraph>(parameters, INodeType.GRAPH_PARAM);
             var node = new BlueprintDesignNode(this)
             {
                 Graph = graph,
@@ -30,16 +22,16 @@ namespace Vapor.Blueprints
 
         public void UpdateDesignNode(BlueprintDesignNode node)
         {
+            node.NodeName = "Return";
             var inSlot = new BlueprintPin(PinNames.EXECUTE_IN, PinDirection.In, typeof(ExecutePin), false)
                 .WithDisplayName("")
                 .WithAllowMultipleWires();
             node.InPorts.Add(PinNames.EXECUTE_IN, inSlot);
 
-            foreach (var parameter in node.Graph.InputParameters)
+            foreach (var parameter in node.Graph.OutputArguments)
             {
-                var tuple = parameter.ToParameter();
-                var slot = new BlueprintPin(tuple.Item1, PinDirection.In, tuple.Item2, false);
-                node.InPorts.Add(tuple.Item1, slot);
+                var slot = new BlueprintPin(parameter.Name, PinDirection.In, parameter.Type, false);
+                node.InPorts.Add(parameter.Name, slot);
             }
         }
 
@@ -47,7 +39,7 @@ namespace Vapor.Blueprints
         {
             var dto = new BlueprintCompiledNodeDto
             {
-                NodeType = node.NodeType,
+                NodeType = node.Type,
                 Guid = node.Guid,
                 InputWires = node.InputWires,
                 InputPinValues = new Dictionary<string, (Type, object)>(node.InPorts.Count),
@@ -59,7 +51,7 @@ namespace Vapor.Blueprints
             {
                 dto.InputPinValues[inPort.PortName] = (inPort.Type, inPort.GetContent());
             }
-
+            
             return dto;
         }
 

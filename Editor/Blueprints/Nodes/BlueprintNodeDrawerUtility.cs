@@ -6,83 +6,57 @@ namespace VaporEditor.Blueprints
 {
     public static class BlueprintNodeDrawerUtility
     {
-        public static bool AddNodes(BlueprintNodeDataModel node, BlueprintEditorView editorView, EdgeConnectorListener edgeConnectorListener, List<IBlueprintEditorNode> editorNodes, List<BlueprintNodeDataModel> refNodes)
+        private static readonly Dictionary<Type, Func<BlueprintView, BlueprintDesignNode, IBlueprintEditorNode>> s_NodeFactory = new()
         {
-            if (node == null)
+            { typeof(EntryNodeType), CreateEditorNode },
+            { typeof(ReturnNodeType), CreateEditorNode },
+            { typeof(GraphNodeType), CreateEditorNode },
+            
+            { typeof(MethodNodeType), CreateEditorNode },
+            
+            { typeof(BranchNodeType), CreateEditorNode },
+            { typeof(SwitchNodeType), CreateEditorNode },
+            { typeof(WhileNodeType), CreateEditorNode },
+            { typeof(SequenceNodeType), CreateEditorNode },
+            { typeof(ForEachNodeType), CreateEditorNode },
+            { typeof(ForNodeType), CreateEditorNode },
+            
+            { typeof(TemporaryDataGetterNodeType), CreateEditorNode },
+            { typeof(TemporaryDataSetterNodeType), CreateEditorNode },
+            { typeof(FieldGetterNodeType), CreateEditorNode },
+            { typeof(FieldSetterNodeType), CreateEditorNode },
+            { typeof(MakeSerializableNodeType), CreateEditorNode },
+            
+            { typeof(RerouteNodeType), CreateRerouteNode },
+            { typeof(ConverterNodeType), CreateRerouteNode },
+        };
+        
+        public static void AddNode(BlueprintDesignNode node, BlueprintView view, List<IBlueprintEditorNode> editorNodes, List<BlueprintDesignNode> refNodes)
+        {
+            if (node == null || !s_NodeFactory.TryGetValue(node.Type, out var func))
             {
-                return false;
+                return;
             }
 
-            var editorNode = GetNodeOrToken(editorView, node, edgeConnectorListener);
+            var editorNode = func(view, node);
             editorNodes.Add(editorNode);
             refNodes?.Add(node);
-            return true;
+        }
+
+        private static IBlueprintEditorNode CreateEditorNode(BlueprintView view, BlueprintDesignNode node)
+        {
+            var editorNode = new BlueprintEditorNode(view, node);
+            editorNode.SetPosition(node.Position);
+            view.AddElement(editorNode);
+            return editorNode;
         }
         
-        public static bool AddNode(BlueprintNodeDataModel node, BlueprintView view, List<IBlueprintEditorNode> editorNodes, List<BlueprintNodeDataModel> refNodes)
+        private static IBlueprintEditorNode CreateRerouteNode(BlueprintView view, BlueprintDesignNode node)
         {
-            if (node == null)
-            {
-                return false;
-            }
-
-            var editorNode = GetNodeOrToken(view, node);
-            editorNodes.Add(editorNode);
-            refNodes?.Add(node);
-            return true;
-        }
-
-        private static IBlueprintEditorNode GetNodeOrToken(BlueprintEditorView editorView, BlueprintNodeDataModel node, EdgeConnectorListener edgeConnectorListener)
-        {
-            switch (node.NodeType)
-            {
-                case BlueprintNodeType.Method:
-                case BlueprintNodeType.Entry:
-                case BlueprintNodeType.Return:
-                case BlueprintNodeType.IfElse:
-                case BlueprintNodeType.ForEach:
-                case BlueprintNodeType.Getter:
-                case BlueprintNodeType.Setter:
-                    default:
-                    var editorNode = new BlueprintEditorNode(editorView, node, edgeConnectorListener);
-                    editorNode.SetPosition(node.Position);
-                    editorView.GraphView.AddElement(editorNode);
-                    return editorNode;
-                case BlueprintNodeType.Reroute:
-                    var redirectNode = new BlueprintRedirectNode(editorView, node, edgeConnectorListener);
-                    redirectNode.SetPosition(node.Position);
-                    editorView.GraphView.AddElement(redirectNode);
-                    return redirectNode;
-                case BlueprintNodeType.Converter:
-                    var converterNode = new BlueprintRedirectNode(editorView, node, edgeConnectorListener);
-                    converterNode.SetPosition(node.Position);
-                    editorView.GraphView.AddElement(converterNode);
-                    return converterNode;
-            }
-
-            return null;
-        }
-
-        private static IBlueprintEditorNode GetNodeOrToken(BlueprintView view, BlueprintNodeDataModel node)
-        {
-            switch (node.NodeType)
-            {
-                default:
-                    var editorNode = new BlueprintEditorNode(view, node);
-                    editorNode.SetPosition(node.Position);
-                    view.AddElement(editorNode);
-                    return editorNode;
-                case BlueprintNodeType.Reroute:
-                    var redirectNode = new BlueprintRedirectNode(view, node);
-                    redirectNode.SetPosition(node.Position);
-                    view.AddElement(redirectNode);
-                    return redirectNode;
-                case BlueprintNodeType.Converter:
-                    var converterNode = new BlueprintRedirectNode(view, node);
-                    converterNode.SetPosition(node.Position);
-                    view.AddElement(converterNode);
-                    return converterNode;
-            }
+            var redirectNode = new BlueprintRedirectNode(view, node);
+            redirectNode.SetPosition(node.Position);
+            view.AddElement(redirectNode);
+            return redirectNode;
         }
     }
 }

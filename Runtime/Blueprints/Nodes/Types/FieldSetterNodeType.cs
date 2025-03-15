@@ -8,17 +8,6 @@ namespace Vapor.Blueprints
 {
     public struct FieldSetterNodeType : INodeType
     {
-        public BlueprintNodeDataModel CreateDataModel(Vector2 position, List<(string, object)> parameters)
-        {
-            var fieldInfo = this.FindParam<FieldInfo>(parameters, INodeType.FIELD_INFO_PARAM);
-            var node = BlueprintNodeDataModelUtility.CreateOrUpdateFieldSetterNode(null,
-                fieldInfo.DeclaringType?.AssemblyQualifiedName, 
-                fieldInfo.Name);
-            node.Position = new Rect(position, Vector2.zero);
-            return node;
-        }
-
-        
         public BlueprintDesignNode CreateDesignNode(Vector2 position, List<(string, object)> parameters)
         {
             var fieldInfo = this.FindParam<FieldInfo>(parameters, INodeType.FIELD_INFO_PARAM);
@@ -26,8 +15,8 @@ namespace Vapor.Blueprints
             {
                 Position = new Rect(position, Vector2.zero)
             };
-            node.TryAddProperty(BlueprintDesignNode.FIELD_TYPE, fieldInfo.DeclaringType, true);
-            node.TryAddProperty(BlueprintDesignNode.FIELD_NAME, fieldInfo.Name, true);
+            node.AddOrUpdateProperty(BlueprintDesignNode.FIELD_TYPE, fieldInfo.DeclaringType, true);
+            node.AddOrUpdateProperty(BlueprintDesignNode.FIELD_NAME, fieldInfo.Name, true);
             UpdateDesignNode(node);
             return node;
         }
@@ -59,7 +48,7 @@ namespace Vapor.Blueprints
         {
             var dto = new BlueprintCompiledNodeDto
             {
-                NodeType = node.NodeType,
+                NodeType = node.Type,
                 Guid = node.Guid,
                 InputWires = node.InputWires,
                 InputPinValues = new Dictionary<string, (Type, object)>(node.InPorts.Count),

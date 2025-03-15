@@ -28,7 +28,7 @@ namespace Vapor.Blueprints
             {
                 var path = UnityEditor.AssetDatabase.GUIDToAssetPath(dataModel.MethodName);
                 var found = UnityEditor.AssetDatabase.LoadAssetAtPath<BlueprintGraphSo>(path);
-                found.Validate();
+                found.OpenGraph();
                 _graph = new BlueprintFunctionGraph(found);
             }
 #else
@@ -80,7 +80,7 @@ namespace Vapor.Blueprints
             {
                 var path = UnityEditor.AssetDatabase.GUIDToAssetPath(assetGuid);
                 var found = UnityEditor.AssetDatabase.LoadAssetAtPath<BlueprintGraphSo>(path);
-                found.Validate();
+                found.OpenGraph();
                 _graph = new BlueprintFunctionGraph(found);
             }
 #else
@@ -93,7 +93,7 @@ namespace Vapor.Blueprints
             {
                 if (!key.EmptyOrNull())
                 {
-                    var val = Convert.ChangeType(tuple.Item2, tuple.Item1);
+                    var val = TypeUtility.CastToType(tuple.Item2, tuple.Item1);
                     InPortValues[key] = val;
                 }
 

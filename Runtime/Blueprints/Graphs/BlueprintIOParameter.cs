@@ -101,7 +101,7 @@ namespace Vapor.Blueprints
                 return (string.Empty, typeof(ExecutePin));
             }
 
-            return (FieldName, FieldType.GetPinType());
+            return (FieldName, FieldType.GetResolvedType());
             // return IsGenericTypeDefinition 
             //     ? (FieldName, FieldType.GetPinType().MakeGenericType(GenericValueType.Select(s => s.GetPinType()).ToArray())) 
             //     : (FieldName, FieldType.GetPinType());

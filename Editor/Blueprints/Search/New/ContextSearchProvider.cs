@@ -2,9 +2,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Unity.Properties;
 using UnityEditor;
 using UnityEngine;
+using Vapor;
 using Vapor.Blueprints;
+using VaporEditor.Inspector;
 
 namespace VaporEditor.Blueprints
 {
@@ -45,6 +48,11 @@ namespace VaporEditor.Blueprints
             var methods = _contextType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
             foreach (var methodInfo in methods)
             {
+                if (methodInfo.IsDefined(typeof(ObsoleteAttribute), false))
+                {
+                    continue;
+                }
+                
                 var name = methodInfo.IsGenericMethod ? $"{methodInfo.Name.Split('`')[0]}<{string.Join(",", methodInfo.GetGenericArguments().Select(a => a.Name))}>" : methodInfo.Name;
                 name = methodInfo.IsSpecialName ? BlueprintNodeDataModelUtility.ToTitleCase(name) : name;
                 var parameters = methodInfo.GetParameters();
@@ -98,6 +106,11 @@ namespace VaporEditor.Blueprints
             var staticMethods = _contextType.GetMethods(BindingFlags.Public | BindingFlags.Static);
             foreach (var methodInfo in staticMethods)
             {
+                if (methodInfo.IsDefined(typeof(ObsoleteAttribute), false))
+                {
+                    continue;
+                }
+                
                 var name = methodInfo.IsGenericMethod ? $"{methodInfo.Name.Split('`')[0]}<{string.Join(",", methodInfo.GetGenericArguments().Select(a => a.Name))}>" : methodInfo.Name;
                 name = methodInfo.IsSpecialName ? BlueprintNodeDataModelUtility.ToTitleCase(name) : name;
                 var parameters = methodInfo.GetParameters();
@@ -159,16 +172,171 @@ namespace VaporEditor.Blueprints
         
         private IEnumerable<BlueprintSearchModel> ConstructGetterSetterNodes()
         {
-            foreach (var temp in _graph.TempData)
+            foreach (var temp in _graph.DesignGraph.Variables)
             {
-                yield return new BlueprintSearchModel("Variables", $"Get {temp.FieldName}", typeof(TemporaryDataGetterNodeType))
-                    .WithParameters((INodeType.NAME_DATA_PARAM, temp.FieldName))
+                yield return new BlueprintSearchModel("Variables", $"Get {temp.Name}", typeof(TemporaryDataGetterNodeType))
+                    .WithParameters((INodeType.NAME_DATA_PARAM, temp.Name))
                     .WithGraph(_graph);
                 
-                yield return new BlueprintSearchModel("Variables", $"Set {temp.FieldName}", typeof(TemporaryDataSetterNodeType))
-                    .WithParameters((INodeType.NAME_DATA_PARAM, temp.FieldName))
+                yield return new BlueprintSearchModel("Variables", $"Set {temp.Name}", typeof(TemporaryDataSetterNodeType))
+                    .WithParameters((INodeType.NAME_DATA_PARAM, temp.Name))
                     .WithGraph(_graph);
             }
+        }
+    }
+
+    internal class TypeSearchProvider : SearchProviderBase
+    {
+        private static List<BlueprintSearchModel> s_CachedDescriptors;
+        public TypeSearchProvider(Action<BlueprintSearchModel, Vector2> onSpawnNode) : base(onSpawnNode)
+        {
+            if (s_CachedDescriptors != null)
+            {
+                return;
+            }
+
+            var typeIterator = RuntimeSubclassUtility.GetCachedTypes().ToArray();
+            s_CachedDescriptors = new List<BlueprintSearchModel>(typeIterator.Length);
+            foreach (var t in typeIterator)
+            {
+                var typeName = t.IsGenericType ? $"{t.Name.Split('`')[0]}<{string.Join(",", t.GetGenericArguments().Select(a => a.Name))}>" : t.Name;
+                s_CachedDescriptors.Add(new BlueprintSearchModel(t.Namespace?.Replace('.', '/'), typeName, t).WithSynonyms($"{t.Namespace}.{typeName}"));
+            }
+        }
+
+        public override IEnumerable<BlueprintSearchModel> GetDescriptors()
+        {
+            return s_CachedDescriptors;
+        }
+    }
+    
+    internal class TypeSearchProvider<T> : SearchProviderBase
+    {
+        // ReSharper disable once StaticMemberInGenericType
+        private static List<BlueprintSearchModel> s_CachedDescriptors;
+        public TypeSearchProvider(Action<BlueprintSearchModel, Vector2> onSpawnNode) : base(onSpawnNode)
+        {
+            if (s_CachedDescriptors != null)
+            {
+                return;
+            }
+
+            var typeIterator = RuntimeSubclassUtility.GetFilteredTypes<T>().ToArray();
+            s_CachedDescriptors = new List<BlueprintSearchModel>(typeIterator.Length);
+            foreach (var t in typeIterator)
+            {
+                var typeName = t.IsGenericType ? $"{t.Name.Split('`')[0]}<{string.Join(",", t.GetGenericArguments().Select(a => a.Name))}>" : t.Name;
+                s_CachedDescriptors.Add(new BlueprintSearchModel(t.Namespace?.Replace('.','/'), typeName, t).WithSynonyms($"{t.Namespace}.{typeName}"));
+            }
+        }
+
+        public override IEnumerable<BlueprintSearchModel> GetDescriptors()
+        {
+            return s_CachedDescriptors;
+        }
+    }
+    
+    internal class TypeSearchProvider<T1 ,T2> : SearchProviderBase
+    {
+        // ReSharper disable once StaticMemberInGenericType
+        private static List<BlueprintSearchModel> s_CachedDescriptors;
+        public TypeSearchProvider(Action<BlueprintSearchModel, Vector2> onSpawnNode) : base(onSpawnNode)
+        {
+            if (s_CachedDescriptors != null)
+            {
+                return;
+            }
+
+            var validTypes = new HashSet<Type>();
+            var typeIteratorT1 = TypeCache.GetTypesDerivedFrom<T1>();
+            var typeIteratorT2 = TypeCache.GetTypesDerivedFrom<T2>();
+            s_CachedDescriptors = new List<BlueprintSearchModel>(typeIteratorT1.Count + typeIteratorT2.Count);
+            foreach (var t in typeIteratorT1.Where(t => t is { IsNested: false, IsPublic: true }))
+            {
+                var typeName = t.IsGenericType ? $"{t.Name.Split('`')[0]}<{string.Join(",", t.GetGenericArguments().Select(a => a.Name))}>" : t.Name;
+                s_CachedDescriptors.Add(new BlueprintSearchModel(t.Namespace?.Replace('.','/'), typeName, t).WithSynonyms($"{t.Namespace}.{typeName}"));
+                validTypes.Add(t);
+            }
+            foreach (var t in typeIteratorT2.Where(t => t is { IsNested: false, IsPublic: true } && !validTypes.Contains(t)))
+            {
+                var typeName = t.IsGenericType ? $"{t.Name.Split('`')[0]}<{string.Join(",", t.GetGenericArguments().Select(a => a.Name))}>" : t.Name;
+                s_CachedDescriptors.Add(new BlueprintSearchModel(t.Namespace?.Replace('.','/'), typeName, t).WithSynonyms($"{t.Namespace}.{typeName}"));
+            }
+        }
+
+        public override IEnumerable<BlueprintSearchModel> GetDescriptors()
+        {
+            return s_CachedDescriptors;
+        }
+    }
+    
+    internal class TypeSearchProvider<T1, T2, T3> : SearchProviderBase
+    {
+        // ReSharper disable once StaticMemberInGenericType
+        private static List<BlueprintSearchModel> s_CachedDescriptors;
+        public TypeSearchProvider(Action<BlueprintSearchModel, Vector2> onSpawnNode) : base(onSpawnNode)
+        {
+            if (s_CachedDescriptors != null)
+            {
+                return;
+            }
+
+            var validTypes = new HashSet<Type>();
+            var typeIteratorT1 = TypeCache.GetTypesDerivedFrom<T1>();
+            var typeIteratorT2 = TypeCache.GetTypesDerivedFrom<T2>();
+            var typeIteratorT3 = TypeCache.GetTypesDerivedFrom<T3>();
+            s_CachedDescriptors = new List<BlueprintSearchModel>(typeIteratorT1.Count + typeIteratorT2.Count + typeIteratorT3.Count);
+            foreach (var t in typeIteratorT1.Where(t => t is { IsNested: false, IsPublic: true }))
+            {
+                var typeName = t.IsGenericType ? $"{t.Name.Split('`')[0]}<{string.Join(",", t.GetGenericArguments().Select(a => a.Name))}>" : t.Name;
+                s_CachedDescriptors.Add(new BlueprintSearchModel(t.Namespace?.Replace('.','/'), typeName, t).WithSynonyms($"{t.Namespace}.{typeName}"));
+                validTypes.Add(t);
+            }
+            foreach (var t in typeIteratorT2.Where(t => t is { IsNested: false, IsPublic: true } && !validTypes.Contains(t)))
+            {
+                var typeName = t.IsGenericType ? $"{t.Name.Split('`')[0]}<{string.Join(",", t.GetGenericArguments().Select(a => a.Name))}>" : t.Name;
+                s_CachedDescriptors.Add(new BlueprintSearchModel(t.Namespace?.Replace('.','/'), typeName, t).WithSynonyms($"{t.Namespace}.{typeName}"));
+                validTypes.Add(t);
+            }
+            foreach (var t in typeIteratorT2.Where(t => t is { IsNested: false, IsPublic: true } && !validTypes.Contains(t)))
+            {
+                var typeName = t.IsGenericType ? $"{t.Name.Split('`')[0]}<{string.Join(",", t.GetGenericArguments().Select(a => a.Name))}>" : t.Name;
+                s_CachedDescriptors.Add(new BlueprintSearchModel(t.Namespace?.Replace('.','/'), typeName, t).WithSynonyms($"{t.Namespace}.{typeName}"));
+            }
+        }
+
+        public override IEnumerable<BlueprintSearchModel> GetDescriptors()
+        {
+            return s_CachedDescriptors;
+        }
+    }
+
+    public struct GenericDescriptor
+    {
+        public string Category;
+        public string Name;
+        public object UserData;
+    }
+    
+    public class GenericSearchProvider : SearchProviderBase
+    {
+        public const string PARAM_USER_DATA = "Index";
+        
+        private readonly List<BlueprintSearchModel> _cachedDescriptors;
+
+        public GenericSearchProvider(Action<BlueprintSearchModel, Vector2> onSpawnNode, List<GenericDescriptor> descriptors) : base(onSpawnNode)
+        {
+            _cachedDescriptors = new List<BlueprintSearchModel>(descriptors.Count);
+            foreach (var desc in descriptors)
+            {
+                _cachedDescriptors.Add(new BlueprintSearchModel(desc.Category, desc.Name, null)
+                    .WithParameters((PARAM_USER_DATA, desc.UserData)));
+            }
+        }
+
+        public override IEnumerable<BlueprintSearchModel> GetDescriptors()
+        {
+            return _cachedDescriptors;
         }
     }
 }

@@ -25,6 +25,6 @@ namespace Vapor.NewtonsoftConverters
             // Error = (sender, args) => { args.ErrorContext.Handled = true; }
         };
 
-        public static JsonSerializer JsonSerializer = JsonSerializer.Create(SerializerSettings);
+        public static readonly JsonSerializer JsonSerializer = JsonSerializer.Create(SerializerSettings);
     }
 }

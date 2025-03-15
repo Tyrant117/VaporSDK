@@ -5,6 +5,7 @@ using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 using Vapor.Blueprints;
+using Vapor.Inspector;
 using VaporEditor.VisualScripting;
 using Object = UnityEngine.Object;
 
@@ -45,16 +46,34 @@ namespace VaporEditor.Blueprints
 
                 if (_graphEditorView != null)
                 {
-                    _graphEditorView.RegisterCallbackOnce<GeometryChangedEvent>(OnGeometryChanged);
                     _frameAllAfterLayout = true;
-                    rootVisualElement.Add(_graphEditorView);
+                    // TODO need to supply a viewDataKey for these dimensions
+                    _splitView = new TwoPaneSplitView(0, 300, TwoPaneSplitViewOrientation.Horizontal);
+                    _blackboardView = new BlueprintBlackboardView(this);
+                    var ve = new VisualElement()
+                    {
+                        style =
+                        {
+                            flexGrow = 1f,
+                        }
+                    };
+                    ve.Add(_graphEditorView);
+                    _graphEditorView.Blackboard = _blackboardView;
+                    _splitView.Add(_blackboardView);
+                    _splitView.Add(ve);
+                    rootVisualElement.Add(_splitView);
                 }
             }
         }
         
+        
         [NonSerialized]
         private bool _frameAllAfterLayout;
-        
+        [NonSerialized]
+        private TwoPaneSplitView _splitView;
+        [NonSerialized]
+        private BlueprintBlackboardView _blackboardView;
+
         public void Initialize(string assetGuid)
         {
             var asset = AssetDatabase.LoadAssetAtPath<BlueprintGraphSo>(AssetDatabase.GUIDToAssetPath(assetGuid));
@@ -84,10 +103,11 @@ namespace VaporEditor.Blueprints
 
             GraphObject = CreateInstance<BlueprintGraphSo>();
             GraphObject.hideFlags = HideFlags.HideAndDontSave;
+            GraphObject.name = graphName;
             EditorUtility.CopySerialized(asset, GraphObject);
-            GraphObject.Validate();
+            GraphObject.OpenGraph();
 
-            GraphEditorView = new(this, GraphObject)
+            GraphEditorView = new BlueprintView(this, GraphObject)
             {
                 viewDataKey = SelectedGuid,
             };
@@ -147,7 +167,11 @@ namespace VaporEditor.Blueprints
 
             if (_frameAllAfterLayout)
             {
-                GraphEditorView?.FrameAll();
+                GraphEditorView.FrameAll();
+                var vt = GraphEditorView.viewTransform;
+                var pos = vt.position + new Vector3(-150, 0, 0); // Account for blackboard, half size
+                var scl = vt.scale;
+                GraphEditorView.UpdateViewTransform(pos, scl);
             }
 
             _frameAllAfterLayout = false;
@@ -207,9 +231,10 @@ namespace VaporEditor.Blueprints
             {
                 Debug.Log("Save Called");
                 var mainAsset = AssetDatabase.LoadAssetAtPath<BlueprintGraphSo>(AssetDatabase.GUIDToAssetPath(SelectedGuid));
-                GraphObject.Serialize();
+                GraphObject.SaveGraph();
+                mainAsset.DesignGraphJson = GraphObject.DesignGraphJson;
                 
-                EditorUtility.CopySerialized(GraphObject, mainAsset);
+                // EditorUtility.CopySerialized(GraphObject, mainAsset);
 
                 EditorUtility.SetDirty(mainAsset);
                 AssetDatabase.SaveAssetIfDirty(mainAsset);
@@ -223,7 +248,40 @@ namespace VaporEditor.Blueprints
 
         public void CompileAsset()
         {
-            
+            if (SelectedGuid != null && GraphObject)
+            {
+                var mainAsset = AssetDatabase.LoadAssetAtPath<BlueprintGraphSo>(AssetDatabase.GUIDToAssetPath(SelectedGuid));
+                GraphObject.CompileGraph();
+                mainAsset.CompiledGraphJson = GraphObject.CompiledGraphJson;
+
+                EditorUtility.SetDirty(mainAsset);
+                AssetDatabase.SaveAssetIfDirty(mainAsset);
+            }
+        }
+
+        public void CompileToScript()
+        {
+            if (SelectedGuid != null && GraphObject)
+            {
+                if (!GraphObject.DesignGraph.Validate())
+                {
+                    Debug.LogError("Unable To Validate Graph");
+                    return;
+                }
+                
+                //TODO Create a BlueprintScriptCompiler, that takes the design graph and creates a class from it.
+                var mainAsset = AssetDatabase.LoadAssetAtPath<BlueprintGraphSo>(AssetDatabase.GUIDToAssetPath(SelectedGuid));
+                var path = BlueprintScriptWriter.GetFullCSharpPath(mainAsset);
+                if (path.EmptyOrNull())
+                {
+                    Debug.LogError("Invalid CSharp Path");
+                    return;
+                }
+
+                SaveAsset();
+                BlueprintScriptWriter.WriteScript(GraphObject, path);
+                AssetDatabase.Refresh();
+            }
         }
 
         public void PingAsset()
@@ -236,6 +294,18 @@ namespace VaporEditor.Blueprints
             var path = AssetDatabase.GUIDToAssetPath(SelectedGuid);
             var asset = AssetDatabase.LoadAssetAtPath<Object>(path);
             EditorGUIUtility.PingObject(asset);
+        }
+
+        public void SetBlackboardVisibility(bool visible)
+        {
+            if (visible)
+            {
+                _splitView.UnCollapse();
+            }
+            else
+            {
+                _splitView.CollapseChild(0);
+            }
         }
 
         private string GetSaveChangesMessage()

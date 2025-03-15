@@ -49,85 +49,77 @@ namespace Vapor.Blueprints
             _tempData = new Dictionary<string, object>();
             _returnParameters = new Dictionary<string, object>();
 
-            foreach (var temp in so.TempData)
+            foreach (var temp in so.DesignGraph.Variables)
             {
-                var pair = temp.ToParameter();
-                if (pair.Item2 == typeof(string))
+                if (temp.Type == typeof(string))
                 {
-                    _tempData.Add(pair.Item1, string.Empty);
+                    _tempData.Add(temp.Name, string.Empty);
                 }
                 else
                 {
-                    if (!pair.Item2.IsSubclassOf(typeof(Object)))
+                    if (!temp.Type.IsSubclassOf(typeof(Object)))
                     {
-                        _tempData.Add(pair.Item1, Activator.CreateInstance(pair.Item2));
+                        _tempData.Add(temp.Name, Activator.CreateInstance(temp.Type));
                     }
                     else
                     {
                         if (!_isMock)
                         {
-                            _tempData.Add(pair.Item1, null);
+                            _tempData.Add(temp.Name, null);
                         }
                         else
                         {
-                            if (pair.Item2.IsSubclassOf(typeof(ScriptableObject)))
+                            if (temp.Type.IsSubclassOf(typeof(ScriptableObject)))
                             {
-                                var tmpSo = ScriptableObject.CreateInstance(pair.Item2);
+                                var tmpSo = ScriptableObject.CreateInstance(temp.Type);
                                 tmpSo.hideFlags = HideFlags.HideAndDontSave;
-                                _tempData.Add(pair.Item1, tmpSo);
+                                _tempData.Add(temp.Name, tmpSo);
                             }
-                            else if(pair.Item2.IsSubclassOf(typeof(Component)))
+                            else if(temp.Type.IsSubclassOf(typeof(Component)))
                             {
-                                var go = new GameObject(pair.Item1)
+                                var go = new GameObject(temp.Name)
                                 {
                                     hideFlags = HideFlags.HideAndDontSave
                                 };
-                                _tempData.Add(pair.Item1, go.AddComponent(pair.Item2));
+                                _tempData.Add(temp.Name, go.AddComponent(temp.Type));
                             }
                             else
                             {
-                                _tempData.Add(pair.Item1, null);
+                                _tempData.Add(temp.Name, null);
                             }
                         }
                     }
                 }
             }
-            
-            foreach (var blueprintNode in so.BlueprintNodes)
+
+            foreach (var blueprintNode in so.DesignGraph.Current.Nodes)
             {
-                var compiledNode = blueprintNode.Compile();
-                Nodes.Add(blueprintNode.Guid, compiledNode);
-                switch (blueprintNode.NodeType)
+                var runtimeNode = blueprintNode.ConvertToRuntime();
+                Nodes.Add(blueprintNode.Guid, runtimeNode);
+                if (blueprintNode.Type == typeof(EntryNodeType))
                 {
-                    case BlueprintNodeType.Entry:
+                    _entryNode = runtimeNode;
+                    foreach (var outPort in blueprintNode.OutPorts)
                     {
-                        _entryNode = compiledNode;
-                        foreach (var outPort in blueprintNode.OutPorts)
+                        if (!outPort.Value.IsExecutePin)
                         {
-                            if (!outPort.Value.IsExecutePin)
-                            {
-                                _parameters.Add(outPort.Key);
-                                _parameterTypes.Add(outPort.Value.Type);
-                            }
+                            _parameters.Add(outPort.Key);
+                            _parameterTypes.Add(outPort.Value.Type);
                         }
-
-                        break;
                     }
-                    case BlueprintNodeType.Return:
+                }
+                else if (blueprintNode.Type == typeof(ReturnNodeType))
+                {
+                    foreach (var inPort in blueprintNode.InPorts)
                     {
-                        foreach (var inPort in blueprintNode.InPorts)
+                        if (!inPort.Value.IsExecutePin)
                         {
-                            if (!inPort.Value.IsExecutePin)
-                            {
-                                _returnParameters.Add(inPort.Key, null);
-                            }
+                            _returnParameters.Add(inPort.Key, null);
                         }
-
-                        break;
                     }
                 }
             }
-            
+
             foreach (var node in Nodes)
             {
                 node.Value.Init(this);

@@ -19,6 +19,9 @@ namespace VaporEditor.Blueprints
         public BlueprintGraphSo GraphObject { get; }
         public List<IBlueprintEditorNode> EditorNodes { get; } = new();
         public string AssetName { get; set; }
+        public BlueprintBlackboardView Blackboard { get; set; }
+
+        public override bool focusable => true;
 
         // Elements
         private VisualElement _toolbar;
@@ -37,19 +40,12 @@ namespace VaporEditor.Blueprints
             this.AddManipulator(new SelectionDragger());
             this.AddManipulator(new RectangleSelector());
             this.AddManipulator(new FreehandSelector());
-            
-            focusable = true;
 
             this.AddStylesheetFromResourcePath("Styles/BlueprintView");
             this.AddStylesheetFromResourcePath(!EditorGUIUtility.isProSkin ? "Styles/BlueprintView-light" : "Styles/BlueprintView-dark");
-
-            // AddLayer(-1);
-            // AddLayer(1);
-            // AddLayer(2);
             
             CreateToolbar();
             Load();
-            
             
             // Setup Callbacks
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
@@ -88,6 +84,14 @@ namespace VaporEditor.Blueprints
             compileButton.Add(new Image { image = Resources.Load<Sprite>("BlueprintIcons/d_compile").texture });
             _toolbar.Add(compileButton);
             
+            var compileToCodeButton = new ToolbarButton(Window.CompileToScript)
+            {
+                tooltip = "Compile to script",
+                style = { width = 25, height = 20 }
+            };
+            compileToCodeButton.Add(new Image { image = EditorGUIUtility.IconContent("d_cs Script Icon").image, style = { marginBottom = 2} });
+            _toolbar.Add(compileToCodeButton);
+            
             var showButton = new ToolbarButton(Window.PingAsset)
             {
                 tooltip = "Pings the asset in the folder hierarchy"
@@ -102,6 +106,19 @@ namespace VaporEditor.Blueprints
                     flexGrow = 1f
                 }
             });
+            
+            var blackBoardToggle = new ToolbarToggle()
+            {
+                tooltip = "Hide Blackboard"
+            };
+            blackBoardToggle.Add(new Image { image = Resources.Load<Sprite>("BlueprintIcons/d_variableswindow").texture });
+            blackBoardToggle.RegisterValueChangedCallback(evt =>
+            {
+                blackBoardToggle.tooltip = evt.newValue ? "Hide Blackboard" : "Show Blackboard";
+                Window.SetBlackboardVisibility(evt.newValue);
+            });
+            blackBoardToggle.SetValueWithoutNotify(true);
+            _toolbar.Add(blackBoardToggle);
             
             var fullscreenToggle = new ToolbarToggle()
             {
@@ -129,7 +146,8 @@ namespace VaporEditor.Blueprints
             
             var mockEvalButton = new ToolbarButton(MockEvaluate)
             {
-                tooltip = "Mock Evaluate"
+                tooltip = "Mock Evaluate",
+                style = { width = 25, height = 20 }
             };
             mockEvalButton.Add(new Image { image = Resources.Load<Sprite>("BlueprintIcons/prompt").texture });
             _toolbar.Add(mockEvalButton);
@@ -138,6 +156,17 @@ namespace VaporEditor.Blueprints
 
         private void Load()
         {
+            _canConvertMap.Clear();
+            foreach (var e in graphElements)
+            {
+                RemoveElement(e);
+            }
+            EditorNodes.Clear();
+            if (GraphObject.DesignGraph.Current == null)
+            {
+                return;
+            }
+            
             // Setup Converters
             var converters = TypeCache.GetMethodsWithAttribute<BlueprintPinConverterAttribute>();
             foreach (var converter in converters)
@@ -153,7 +182,7 @@ namespace VaporEditor.Blueprints
             }
             
             // Loading Nodes
-            foreach (var node in GraphObject.BlueprintNodes)
+            foreach (var node in GraphObject.DesignGraph.Current.Nodes)
             {
                 BlueprintNodeDrawerUtility.AddNode(node, this, EditorNodes, null);
             }
@@ -161,7 +190,7 @@ namespace VaporEditor.Blueprints
             // Loading Edges
             foreach (var rightNode in EditorNodes)
             {
-                var wireReferences = rightNode.Model.InEdges;
+                var wireReferences = rightNode.Model.InputWires;
                 foreach (var wireReference in wireReferences)
                 {
                     var leftNode = EditorNodes.FirstOrDefault(iNode => wireReference.LeftSidePin.NodeGuid == iNode.Model.Guid);
@@ -225,7 +254,7 @@ namespace VaporEditor.Blueprints
             }
             
             var viewPosition = ctx.screenMousePosition - Window.position.position;
-            BlueprintSearchWindow.Show(viewPosition, ctx.screenMousePosition, new DefaultSearchProvider(OnSpawnNode).WithGraph(GraphObject));
+            BlueprintSearchWindow.Show(viewPosition, ctx.screenMousePosition, new DefaultSearchProvider(OnSpawnNode).WithGraph(GraphObject), true, false);
         }
         
         private GraphViewChange OnGraphViewChanged(GraphViewChange graphViewChange)
@@ -255,7 +284,7 @@ namespace VaporEditor.Blueprints
                 foreach (var node in graphViewChange.elementsToRemove.OfType<IBlueprintEditorNode>())
                 {
                     EditorNodes.Remove(node);
-                    GraphObject.BlueprintNodes.Remove(node.Model);
+                    GraphObject.DesignGraph.Current.Nodes.Remove(node.Model);
                 }
             }
             
@@ -265,8 +294,8 @@ namespace VaporEditor.Blueprints
         
         private void OnEnterPanel(AttachToPanelEvent evt)
         {
-            parent.Insert(0, _toolbar);
-            
+            // First Parent Is Split View
+            parent.parent.parent.Insert(0, _toolbar);
         }
 
         private void OnLeavePanel(DetachFromPanelEvent evt)
@@ -285,7 +314,7 @@ namespace VaporEditor.Blueprints
 
             position = contentViewContainer.WorldToLocal(position);
             var type = (INodeType)Activator.CreateInstance(model.ModelType);
-            var node = type.CreateDataModel(position, model.Parameters);
+            var node = type.CreateDesignNode(position, model.Parameters);
 
             if (node == null)
             {
@@ -293,7 +322,7 @@ namespace VaporEditor.Blueprints
             }
             
             // Validate and Add The Node
-            node.Validate();
+            // node.Validate();
             CreateNodeFromModel(node);
 
             var portIdx = model.Parameters.FindIndex(t => t.Item1 == INodeType.PORT_PARAM);
@@ -331,11 +360,10 @@ namespace VaporEditor.Blueprints
         {
             position = contentViewContainer.WorldToLocal(position);
             var type = (INodeType)Activator.CreateInstance(typeof(T));
-            var node = type.CreateDataModel(position, parameters.ToList());
+            var node = type.CreateDesignNode(position, parameters.ToList());
 
             if (node != null)
             {
-                node.Validate();
                 CreateNodeFromModel(node);
                 return true;
             }
@@ -343,10 +371,10 @@ namespace VaporEditor.Blueprints
             return false;
         }
         
-        public void CreateNodeFromModel(BlueprintNodeDataModel node)
+        public void CreateNodeFromModel(BlueprintDesignNode node)
         {
             Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintView), nameof(CreateNodeFromModel))} - {node.GetType().Name}");
-            BlueprintNodeDrawerUtility.AddNode(node, this, EditorNodes, GraphObject.BlueprintNodes);
+            BlueprintNodeDrawerUtility.AddNode(node, this, EditorNodes, GraphObject.DesignGraph.Current.Nodes);
         }
         
         public void CreateRedirectNode(Vector2 pos, Edge edgeTarget)
@@ -486,10 +514,10 @@ namespace VaporEditor.Blueprints
 
             if (shouldModifyDataModel)
             {
-                leftPort.Node.Model.OutEdges.Add(new BlueprintWireReference(
+                leftPort.Node.Model.OutputWires.Add(new BlueprintWireReference(
                     new BlueprintPinReference(leftPort.Pin.PortName, leftPort.Node.Model.Guid, leftPort.Pin.IsExecutePin),
                     new BlueprintPinReference(rightPort.Pin.PortName, rightPort.Node.Model.Guid, rightPort.Pin.IsExecutePin)));
-                rightPort.Node.Model.InEdges.Add(new BlueprintWireReference(
+                rightPort.Node.Model.InputWires.Add(new BlueprintWireReference(
                     new BlueprintPinReference(leftPort.Pin.PortName, leftPort.Node.Model.Guid, leftPort.Pin.IsExecutePin),
                     new BlueprintPinReference(rightPort.Pin.PortName, rightPort.Node.Model.Guid, rightPort.Pin.IsExecutePin)));
             }
@@ -514,8 +542,8 @@ namespace VaporEditor.Blueprints
                     new BlueprintPinReference(leftPin.PortName, leftModel.Guid, false),
                     new BlueprintPinReference(rightPin.PortName, rightModel.Guid, false));
 
-                rightModel.InEdges.Remove(edgeToMatch);
-                leftModel.OutEdges.Remove(edgeToMatch);
+                rightModel.InputWires.Remove(edgeToMatch);
+                leftModel.OutputWires.Remove(edgeToMatch);
 
                 rightNode.OnDisconnectedInputEdge(rightPin.PortName);
             }
@@ -561,7 +589,20 @@ namespace VaporEditor.Blueprints
 
         private void MockEvaluate()
         {
-            
+            var en = GraphObject.DesignGraph.Current.Nodes.FirstOrDefault(x => x.Type == typeof(EntryNodeType));
+            if (en != null)
+            {
+                var mock = new BlueprintFunctionGraph(GraphObject, true);
+                mock.Invoke((from outPortsValue in en.OutPorts.Values where outPortsValue.HasInlineValue select outPortsValue.InlineValue.Get()).ToArray(), 
+                    x =>
+                    {
+                        Debug.Log("Mock Evaluated");
+                        foreach (var pair in x.GetResults())
+                        {
+                            Debug.Log($"{pair.Key} - {pair.Value}");
+                        }
+                    });
+            }
         }
 
         #endregion
@@ -592,5 +633,30 @@ namespace VaporEditor.Blueprints
             return _canConvertMap.TryGetValue(outputSlotType, out var map) && map.TryGetValue(inputSlotType, out methodInfo);
         }
         #endregion
+
+        public void Invalidate(GraphInvalidationType invalidationType)
+        {
+            switch (invalidationType)
+            {
+                case GraphInvalidationType.RenamedNode:
+                    foreach (var node in EditorNodes)
+                    {
+                        node.InvalidateName();
+                    }
+                    break;
+                case GraphInvalidationType.RetypedNode:
+                    foreach (var node in EditorNodes)
+                    {
+                        node.InvalidateType();
+                    }
+                    break;
+                case GraphInvalidationType.Topology:
+                    break;
+                case GraphInvalidationType.Graph:
+                    Window.SaveAsset();
+                    Load();
+                    break;
+            }
+        }
     }
 }
