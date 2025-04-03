@@ -1,36 +1,21 @@
-﻿using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace Vapor.Blueprints
 {
+    [System.Obsolete]
     public class BlueprintGetterNode : BlueprintBaseNode
     {
         private readonly string _tempFieldName;
-        public BlueprintGetterNode(BlueprintNodeDataModel dataModel)
-        {
-            Guid = dataModel.Guid;
-            _tempFieldName = dataModel.MethodName;
-            
-            OutPortValues = new Dictionary<string, object>(dataModel.OutPorts.Count);
-            foreach (var outPort in dataModel.OutPorts.Values)
-            {
-                if (!outPort.IsExecutePin)
-                {
-                    OutPortValues[outPort.PortName] = null;
-                }
-            }
-        }
 
-        public BlueprintGetterNode(BlueprintCompiledNodeDto dto, string tempFieldName)
+        public BlueprintGetterNode(BlueprintDesignNodeDto dto)
         {
             Guid = dto.Guid;
-            _tempFieldName = tempFieldName;
-            
-            OutPortValues = new Dictionary<string, object>(dto.OutputPinNames.Count);
-            foreach (var outPort in dto.OutputPinNames)
+            if(dto.Properties.TryGetValue(NodePropertyNames.VARIABLE_NAME, out var tempFieldName))
             {
-                OutPortValues[outPort] = null;
+                _tempFieldName = (string)tempFieldName.Item2;
             }
+
+            SetupOutputPins(dto);
         }
 
         public override void Init(IBlueprintGraph graph)

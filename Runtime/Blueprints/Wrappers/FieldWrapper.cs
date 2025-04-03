@@ -7,7 +7,6 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.Assertions;
-using UnityEngineInternal;
 using Vapor.Inspector;
 using Vapor.Keys;
 
@@ -434,15 +433,32 @@ namespace Vapor.Blueprints
 
     public abstract class FieldWrapper
     {
+        public event Action<object> WrappedValueChanged;
+        
         public abstract object Get();
         public abstract void Set(object value);
         public abstract Type GetResolvedType();
+
+        protected void InvokeWrappedValueChanged()
+        {
+            WrappedValueChanged?.Invoke(Get());
+        }
     }
 
     [Serializable]
     public class FieldWrapper<T> : FieldWrapper
     {
-        public virtual T WrappedObject { get; protected set; }
+        [JsonProperty, SerializeField, OnValueChanged("OnWrappedValueChanged", false)] private T _value;
+        public virtual T WrappedObject
+        {
+            get => _value;
+            set => _value = value;
+        }
+        
+        private void OnWrappedValueChanged(T value)
+        {
+            InvokeWrappedValueChanged();
+        }
 
         public override void Set(object value) => WrappedObject = (T)value;
         public override object Get() => WrappedObject;
@@ -458,7 +474,7 @@ namespace Vapor.Blueprints
         public override T WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (T)value;
@@ -499,7 +515,7 @@ namespace Vapor.Blueprints
         public override bool WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (bool)value;
@@ -513,7 +529,7 @@ namespace Vapor.Blueprints
         public override byte WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (byte)value;
@@ -527,7 +543,7 @@ namespace Vapor.Blueprints
         public override sbyte WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (sbyte)value;
@@ -541,7 +557,7 @@ namespace Vapor.Blueprints
         public override short WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (short)value;
@@ -555,7 +571,7 @@ namespace Vapor.Blueprints
         public override ushort WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (ushort)value;
@@ -569,7 +585,7 @@ namespace Vapor.Blueprints
         public override int WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (int)value;
@@ -583,7 +599,7 @@ namespace Vapor.Blueprints
         public override uint WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (uint)value;
@@ -597,7 +613,7 @@ namespace Vapor.Blueprints
         public override long WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (long)value;
@@ -611,7 +627,7 @@ namespace Vapor.Blueprints
         public override ulong WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (ulong)value;
@@ -625,7 +641,7 @@ namespace Vapor.Blueprints
         public override float WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (float)value;
@@ -639,7 +655,7 @@ namespace Vapor.Blueprints
         public override double WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (double)value;
@@ -653,7 +669,7 @@ namespace Vapor.Blueprints
         public override string WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = value as string;
@@ -668,7 +684,7 @@ namespace Vapor.Blueprints
         public override Vector2 WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (Vector2)value;
@@ -682,7 +698,7 @@ namespace Vapor.Blueprints
         public override Vector2Int WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (Vector2Int)value;
@@ -696,7 +712,7 @@ namespace Vapor.Blueprints
         public override Vector3 WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (Vector3)value;
@@ -710,7 +726,7 @@ namespace Vapor.Blueprints
         public override Vector3Int WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (Vector3Int)value;
@@ -724,7 +740,7 @@ namespace Vapor.Blueprints
         public override Vector4 WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (Vector4)value;
@@ -738,7 +754,7 @@ namespace Vapor.Blueprints
         public override Color WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (Color)value;
@@ -752,7 +768,7 @@ namespace Vapor.Blueprints
         public override Gradient WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (Gradient)value;
@@ -766,7 +782,7 @@ namespace Vapor.Blueprints
         public override Rect WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (Rect)value;
@@ -780,7 +796,7 @@ namespace Vapor.Blueprints
         public override RectInt WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (RectInt)value;
@@ -794,7 +810,7 @@ namespace Vapor.Blueprints
         public override Bounds WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (Bounds)value;
@@ -808,7 +824,7 @@ namespace Vapor.Blueprints
         public override BoundsInt WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (BoundsInt)value;
@@ -822,7 +838,7 @@ namespace Vapor.Blueprints
         public override LayerMask WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (LayerMask)value;
@@ -836,7 +852,7 @@ namespace Vapor.Blueprints
         public override RenderingLayerMask WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (RenderingLayerMask)value;
@@ -850,7 +866,7 @@ namespace Vapor.Blueprints
         public override AnimationCurve WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (AnimationCurve)value;
@@ -864,7 +880,7 @@ namespace Vapor.Blueprints
         public override Hash128 WrappedObject
         {
             get => _value;
-            protected set => _value = value;
+            set => _value = value;
         }
 
         public override void Set(object value) => _value = (Hash128)value;
@@ -906,7 +922,7 @@ namespace Vapor.Blueprints
         public override KeyDropdownValue WrappedObject
         {
             get => _key;
-            protected set => _key = value;
+            set => _key = value;
         }
 
         public override void Set(object value)
@@ -924,7 +940,7 @@ namespace Vapor.Blueprints
         public override KeyDropdownValue WrappedObject
         {
             get => _key;
-            protected set => _key = value;
+            set => _key = value;
         }
 
         public override void Set(object value)

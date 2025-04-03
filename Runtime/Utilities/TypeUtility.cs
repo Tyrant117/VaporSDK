@@ -11,7 +11,7 @@ namespace Vapor
         {
             if (obj == null)
             {
-                if (targetType.IsClass || Nullable.GetUnderlyingType(targetType) != null)
+                if (targetType.IsClass || targetType.IsInterface || Nullable.GetUnderlyingType(targetType) != null)
                 {
                     return null; // Null is a valid value for reference types and nullable types
                 }
@@ -29,6 +29,11 @@ namespace Vapor
             {
                 // Assume that a proper assembly qualified type is being sent.
                 return Type.GetType(s);
+            }
+            
+            if (targetType.IsEnum && obj.GetType().IsPrimitive)
+            {
+                return Enum.ToObject(targetType, (long)obj);
             }
 
             if (obj is JObject jObject)

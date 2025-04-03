@@ -1,5 +1,4 @@
-﻿using System.Linq;
-using Vapor.Inspector;
+﻿using Vapor.Inspector;
 
 namespace Vapor.Blueprints
 {
@@ -14,39 +13,27 @@ namespace Vapor.Blueprints
         private readonly bool _isExecuteRedirect;
         private readonly string _leftPortName;
 
-        public BlueprintRedirectNode(BlueprintNodeDataModel dataModel)
-        {
-            Guid = dataModel.Guid;
-            var inEdge = dataModel.InEdges.FirstOrDefault(x => x.RightSidePin.PinName == PinNames.EXECUTE_IN);
-            _isExecuteRedirect = inEdge.RightSidePin.IsExecutePin;
-            if (inEdge.LeftSidePin.IsValid())
-            {
-                _leftPortName = inEdge.LeftSidePin.PinName;
-                _leftNodeGuid = inEdge.LeftSidePin.NodeGuid;
-            }
-
-            var outEdge = dataModel.OutEdges.FirstOrDefault(x => x.LeftSidePin.PinName == PinNames.EXECUTE_OUT);
-            if (outEdge.RightSidePin.IsValid())
-            {
-                _rightNodeGuid = outEdge.RightSidePin.NodeGuid;
-            }
-        }
-
-        public BlueprintRedirectNode(BlueprintCompiledNodeDto dto)
+        public BlueprintRedirectNode(BlueprintDesignNodeDto dto)
         {
             Guid = dto.Guid;
-            var inEdge = dto.InputWires.FirstOrDefault(x => x.RightSidePin.PinName == PinNames.EXECUTE_IN);
-            _isExecuteRedirect = inEdge.RightSidePin.IsExecutePin;
-            if (inEdge.LeftSidePin.IsValid())
+            if (dto.InputWires.Count != 1)
             {
-                _leftPortName = inEdge.LeftSidePin.PinName;
-                _leftNodeGuid = inEdge.LeftSidePin.NodeGuid;
+                return;
             }
 
-            if (dto.Properties.TryGetValue(NEXT_NODE_GUID, out var nextNodeGuid))
+            if (dto.OutputWires.Count != 1)
             {
-                _rightNodeGuid = nextNodeGuid as string;
+                return;
             }
+
+            var inWire = dto.InputWires[0];
+            var outWire = dto.OutputWires[0];
+            _isExecuteRedirect = inWire.IsExecuteWire && outWire.IsExecuteWire;
+
+            _leftPortName = inWire.LeftSidePin.PinName;
+            _leftNodeGuid = inWire.LeftSidePin.NodeGuid;
+
+            _rightNodeGuid = outWire.RightSidePin.NodeGuid;
         }
 
         public override void Init(IBlueprintGraph graph)

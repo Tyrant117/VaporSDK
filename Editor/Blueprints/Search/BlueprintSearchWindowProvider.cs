@@ -11,16 +11,17 @@ using VaporEditor.Inspector;
 
 namespace VaporEditor.Blueprints
 {
+    [System.Obsolete]
     public class BlueprintSearchWindowProvider : SearchWindowProvider<BlueprintSearchEntry>
     {
         public BlueprintGraphSo Graph { get; set; }
-        public BlueprintEditorPort ConnectedPort { get; set; }
+        public BlueprintPortView ConnectedPortView { get; set; }
         
         protected override void GenerateEntries()
         {
-            if (ConnectedPort != null && !ConnectedPort.Pin.IsExecutePin)
+            if (ConnectedPortView != null && !ConnectedPortView.Pin.IsExecutePin)
             {
-                var pinType = ConnectedPort.Pin.Type;
+                var pinType = ConnectedPortView.Pin.Type;
                 ConstructNodesForType(pinType, BindingFlags.Public | BindingFlags.Instance, true);
                 
                 ConstructLibraryNodes();
@@ -40,67 +41,67 @@ namespace VaporEditor.Blueprints
 
         private void ConstructGetterSetterNodes()
         {
-            foreach (var temp in Graph.DesignGraph.Variables)
-            {
-                BlueprintSearchEntry getterEntry = new BlueprintSearchEntry.Builder()
-                    .WithCategoryAndName(new[] { "Variables" }, $"Get {temp.Name}")
-                    .WithSynonyms("Get")
-                    .WithNodeType(BlueprintNodeType.Getter)
-                    .WithNameData(temp.Name)
-                    .Build();
-                Entries.Add(getterEntry);
-                
-                BlueprintSearchEntry setterEntry = new BlueprintSearchEntry.Builder()
-                    .WithCategoryAndName(new[] { "Variables" }, $"Set {temp.Name}")
-                    .WithSynonyms("Set")
-                    .WithNodeType(BlueprintNodeType.Setter)
-                    .WithNameData(temp.Name)
-                    .Build();
-                Entries.Add(setterEntry);
-            }
+            // foreach (var temp in Graph.DesignGraph.Variables)
+            // {
+            //     BlueprintSearchEntry getterEntry = new BlueprintSearchEntry.Builder()
+            //         .WithCategoryAndName(new[] { "Variables" }, $"Get {temp.Name}")
+            //         .WithSynonyms("Get")
+            //         .WithNodeType(BlueprintNodeType.Getter)
+            //         .WithNameData(temp.Name)
+            //         .Build();
+            //     Entries.Add(getterEntry);
+            //     
+            //     BlueprintSearchEntry setterEntry = new BlueprintSearchEntry.Builder()
+            //         .WithCategoryAndName(new[] { "Variables" }, $"Set {temp.Name}")
+            //         .WithSynonyms("Set")
+            //         .WithNodeType(BlueprintNodeType.Setter)
+            //         .WithNameData(temp.Name)
+            //         .Build();
+            //     Entries.Add(setterEntry);
+            // }
         }
 
         private void ConstructInternalNodes()
         {
-            BlueprintSearchEntry returnEntry = new BlueprintSearchEntry.Builder()
-                .WithCategoryAndName(new string[] { "Utilities", "Flow Control" }, "Return Node")
-                .WithSynonyms("Return")
-                .WithNodeType(BlueprintNodeType.Return)
-                .Build();
-            Entries.Add(returnEntry);
-            
-            BlueprintSearchEntry ifElseEntry = new BlueprintSearchEntry.Builder()
-                .WithCategoryAndName(new[] { "Utilities", "Flow Control" }, "Branch")
-                .WithSynonyms("If, Else")
-                .WithNodeType(BlueprintNodeType.IfElse)
-                .Build();
-            Entries.Add(ifElseEntry);
-            
-            BlueprintSearchEntry foreachEntry = new BlueprintSearchEntry.Builder()
-                .WithCategoryAndName(new[] { "Utilities", "Array" }, "ForEach")
-                .WithSynonyms("For", "Loop")
-                .WithNodeType(BlueprintNodeType.ForEach)
-                .Build();
-            Entries.Add(foreachEntry);
-            
-            BlueprintSearchEntry rerouteEntry = new BlueprintSearchEntry.Builder()
-                .WithCategoryAndName(new[] { "Utilities", "Flow Control" }, "Reroute")
-                .WithNodeType(BlueprintNodeType.Reroute)
-                .Build();
-            Entries.Add(rerouteEntry);
-            
-            RuntimeAssetDatabaseUtility.FindAssetsByType<BlueprintGraphSo>().ForEach(graph =>
-            {
-                var path = AssetDatabase.GetAssetPath(graph);
-                var guid = AssetDatabase.AssetPathToGUID(path);
-                
-                BlueprintSearchEntry graphEntry = new BlueprintSearchEntry.Builder()
-                    .WithCategoryAndName(new[] { "Graphs" }, $"{graph.DisplayName}")
-                    .WithNodeType(BlueprintNodeType.Graph)
-                    .WithNameData(guid)
-                    .Build();
-                Entries.Add(graphEntry);
-            });
+            // BlueprintSearchEntry returnEntry = new BlueprintSearchEntry.Builder()
+            //     .WithCategoryAndName(new string[] { "Utilities", "Flow Control" }, "Return Node")
+            //     .WithSynonyms("Return")
+            //     .WithNodeType(BlueprintNodeType.Return)
+            //     .Build();
+            // Entries.Add(returnEntry);
+            //
+            // BlueprintSearchEntry ifElseEntry = new BlueprintSearchEntry.Builder()
+            //     .WithCategoryAndName(new[] { "Utilities", "Flow Control" }, "Branch")
+            //     .WithSynonyms("If, Else")
+            //     .WithNodeType(BlueprintNodeType.IfElse)
+            //     .Build();
+            // Entries.Add(ifElseEntry);
+            //
+            // BlueprintSearchEntry foreachEntry = new BlueprintSearchEntry.Builder()
+            //     .WithCategoryAndName(new[] { "Utilities", "Array" }, "ForEach")
+            //     .WithSynonyms("For", "Loop")
+            //     .WithNodeType(BlueprintNodeType.ForEach)
+            //     .Build();
+            // Entries.Add(foreachEntry);
+            //
+            // BlueprintSearchEntry rerouteEntry = new BlueprintSearchEntry.Builder()
+            //     .WithCategoryAndName(new[] { "Utilities", "Flow Control" }, "Reroute")
+            //     .WithNodeType(BlueprintNodeType.Reroute)
+            //     .Build();
+            // Entries.Add(rerouteEntry);
+            //
+            // RuntimeAssetDatabaseUtility.FindAssetsByType<BlueprintGraphSo>().ForEach(graph =>
+            // {
+            //     var path = AssetDatabase.GetAssetPath(graph);
+            //     var guid = AssetDatabase.AssetPathToGUID(path);
+            //     
+            //     BlueprintSearchEntry graphEntry = new BlueprintSearchEntry.Builder()
+            //         .WithCategoryAndName(new[] { "Graphs" }, $"{graph.DisplayName}")
+            //         .WithNodeType(BlueprintNodeType.Graph)
+            //         .WithNameData(guid)
+            //         .Build();
+            //     Entries.Add(graphEntry);
+            // });
         }
 
         private void ConstructBlueprintableNodes()
@@ -182,21 +183,21 @@ namespace VaporEditor.Blueprints
             string category = pinType.IsGenericType ? $"{pinType.Name.Split('`')[0]}<{string.Join(",", pinType.GetGenericArguments().Select(a => a.Name))}>" : pinType.Name;
             foreach (var fieldInfo in fields)
             {
-                BlueprintSearchEntry getEntry = new BlueprintSearchEntry.Builder()
-                    .WithFieldInfo(fieldInfo)
-                    .WithCategoryAndName(new[] { category, "Fields" }, $"Get {ObjectNames.NicifyVariableName(fieldInfo.Name)}")
-                    .WithSynonyms(fieldInfo.Name)
-                    .WithNodeType(BlueprintNodeType.FieldGetter)
-                    .Build();
-                Entries.Add(getEntry);
-                
-                BlueprintSearchEntry setEntry = new BlueprintSearchEntry.Builder()
-                    .WithFieldInfo(fieldInfo)
-                    .WithCategoryAndName(new[] { category, "Fields" }, $"Set {ObjectNames.NicifyVariableName(fieldInfo.Name)}")
-                    .WithSynonyms(fieldInfo.Name)
-                    .WithNodeType(BlueprintNodeType.FieldSetter)
-                    .Build();
-                Entries.Add(setEntry);
+                // BlueprintSearchEntry getEntry = new BlueprintSearchEntry.Builder()
+                //     .WithFieldInfo(fieldInfo)
+                //     .WithCategoryAndName(new[] { category, "Fields" }, $"Get {ObjectNames.NicifyVariableName(fieldInfo.Name)}")
+                //     .WithSynonyms(fieldInfo.Name)
+                //     .WithNodeType(BlueprintNodeType.FieldGetter)
+                //     .Build();
+                // Entries.Add(getEntry);
+                //
+                // BlueprintSearchEntry setEntry = new BlueprintSearchEntry.Builder()
+                //     .WithFieldInfo(fieldInfo)
+                //     .WithCategoryAndName(new[] { category, "Fields" }, $"Set {ObjectNames.NicifyVariableName(fieldInfo.Name)}")
+                //     .WithSynonyms(fieldInfo.Name)
+                //     .WithNodeType(BlueprintNodeType.FieldSetter)
+                //     .Build();
+                // Entries.Add(setEntry);
             }
             
             if (includeTypeStatics)
@@ -204,21 +205,21 @@ namespace VaporEditor.Blueprints
                 var staticFields = pinType.GetFields(staticSearchBindingFlags);
                 foreach (var fieldInfo in staticFields)
                 {
-                    BlueprintSearchEntry getEntry = new BlueprintSearchEntry.Builder()
-                        .WithFieldInfo(fieldInfo)
-                        .WithCategoryAndName(new[] { category, "Static Fields" }, $"Get {ObjectNames.NicifyVariableName(fieldInfo.Name)}")
-                        .WithSynonyms(fieldInfo.Name)
-                        .WithNodeType(BlueprintNodeType.FieldGetter)
-                        .Build();
-                    Entries.Add(getEntry);
-                
-                    BlueprintSearchEntry setEntry = new BlueprintSearchEntry.Builder()
-                        .WithFieldInfo(fieldInfo)
-                        .WithCategoryAndName(new[] { category, "Static Fields" }, $"Set {ObjectNames.NicifyVariableName(fieldInfo.Name)}")
-                        .WithSynonyms(fieldInfo.Name)
-                        .WithNodeType(BlueprintNodeType.FieldSetter)
-                        .Build();
-                    Entries.Add(setEntry);
+                    // BlueprintSearchEntry getEntry = new BlueprintSearchEntry.Builder()
+                    //     .WithFieldInfo(fieldInfo)
+                    //     .WithCategoryAndName(new[] { category, "Static Fields" }, $"Get {ObjectNames.NicifyVariableName(fieldInfo.Name)}")
+                    //     .WithSynonyms(fieldInfo.Name)
+                    //     .WithNodeType(BlueprintNodeType.FieldGetter)
+                    //     .Build();
+                    // Entries.Add(getEntry);
+                    //
+                    // BlueprintSearchEntry setEntry = new BlueprintSearchEntry.Builder()
+                    //     .WithFieldInfo(fieldInfo)
+                    //     .WithCategoryAndName(new[] { category, "Static Fields" }, $"Set {ObjectNames.NicifyVariableName(fieldInfo.Name)}")
+                    //     .WithSynonyms(fieldInfo.Name)
+                    //     .WithNodeType(BlueprintNodeType.FieldSetter)
+                    //     .Build();
+                    // Entries.Add(setEntry);
                 }
             }
             
@@ -226,23 +227,23 @@ namespace VaporEditor.Blueprints
             var methods = pinType.GetMethods(searchBindingFlags);
             foreach (var methodInfo in methods)
             {
-                var name = methodInfo.IsGenericMethod ? $"{methodInfo.Name.Split('`')[0]}<{string.Join(",", methodInfo.GetGenericArguments().Select(a => a.Name))}>" : methodInfo.Name;
-                name = methodInfo.IsSpecialName ? BlueprintNodeDataModelUtility.ToTitleCase(name) : name;
-                var parameters = methodInfo.GetParameters();
-                string paramNames = parameters.Length > 0 ? parameters.Select(pi => pi.ParameterType.IsGenericType 
-                        ? $"{pi.ParameterType.Name.Split('`')[0]}<{string.Join(",", pi.ParameterType.GetGenericArguments().Select(a => a.Name))}>"
-                        : pi.ParameterType.Name)
-                    .Aggregate((a, b) => a + ", " + b) 
-                    : string.Empty;
-
-                
-                BlueprintSearchEntry entry = new BlueprintSearchEntry.Builder()
-                    .WithMethodInfo(methodInfo)
-                    .WithCategoryAndName(new[] { category, "Methods" }, $"{name}({paramNames})")
-                    .WithSynonyms(name)
-                    .WithNodeType(BlueprintNodeType.Method)
-                    .Build();
-                Entries.Add(entry);
+                // var name = methodInfo.IsGenericMethod ? $"{methodInfo.Name.Split('`')[0]}<{string.Join(",", methodInfo.GetGenericArguments().Select(a => a.Name))}>" : methodInfo.Name;
+                // name = methodInfo.IsSpecialName ? name.ToTitleCase() : name;
+                // var parameters = methodInfo.GetParameters();
+                // string paramNames = parameters.Length > 0 ? parameters.Select(pi => pi.ParameterType.IsGenericType 
+                //         ? $"{pi.ParameterType.Name.Split('`')[0]}<{string.Join(",", pi.ParameterType.GetGenericArguments().Select(a => a.Name))}>"
+                //         : pi.ParameterType.Name)
+                //     .Aggregate((a, b) => a + ", " + b) 
+                //     : string.Empty;
+                //
+                //
+                // BlueprintSearchEntry entry = new BlueprintSearchEntry.Builder()
+                //     .WithMethodInfo(methodInfo)
+                //     .WithCategoryAndName(new[] { category, "Methods" }, $"{name}({paramNames})")
+                //     .WithSynonyms(name)
+                //     .WithNodeType(BlueprintNodeType.Method)
+                //     .Build();
+                // Entries.Add(entry);
             }
 
             if (includeTypeStatics)
@@ -250,22 +251,22 @@ namespace VaporEditor.Blueprints
                 var staticMethods = pinType.GetMethods(staticSearchBindingFlags);
                 foreach (var methodInfo in staticMethods)
                 {
-                    var name = methodInfo.IsGenericMethod ? $"{methodInfo.Name.Split('`')[0]}<{string.Join(",", methodInfo.GetGenericArguments().Select(a => a.Name))}>" : methodInfo.Name;
-                    name = methodInfo.IsSpecialName ? BlueprintNodeDataModelUtility.ToTitleCase(name) : name;
-                    var parameters = methodInfo.GetParameters();
-                    string paramNames = parameters.Length > 0 ? parameters.Select(pi => pi.ParameterType.IsGenericType 
-                                ? $"{pi.ParameterType.Name.Split('`')[0]}<{string.Join(",", pi.ParameterType.GetGenericArguments().Select(a => a.Name))}>"
-                                : pi.ParameterType.Name)
-                            .Aggregate((a, b) => a + ", " + b) 
-                        : string.Empty;
-                    
-                    BlueprintSearchEntry entry = new BlueprintSearchEntry.Builder()
-                        .WithMethodInfo(methodInfo)
-                        .WithCategoryAndName(new[] { category, "Static Methods" }, $"{name}({paramNames})")
-                        .WithSynonyms(name)
-                        .WithNodeType(BlueprintNodeType.Method)
-                        .Build();
-                    Entries.Add(entry);
+                    // var name = methodInfo.IsGenericMethod ? $"{methodInfo.Name.Split('`')[0]}<{string.Join(",", methodInfo.GetGenericArguments().Select(a => a.Name))}>" : methodInfo.Name;
+                    // name = methodInfo.IsSpecialName ? name.ToTitleCase() : name;
+                    // var parameters = methodInfo.GetParameters();
+                    // string paramNames = parameters.Length > 0 ? parameters.Select(pi => pi.ParameterType.IsGenericType 
+                    //             ? $"{pi.ParameterType.Name.Split('`')[0]}<{string.Join(",", pi.ParameterType.GetGenericArguments().Select(a => a.Name))}>"
+                    //             : pi.ParameterType.Name)
+                    //         .Aggregate((a, b) => a + ", " + b) 
+                    //     : string.Empty;
+                    //
+                    // BlueprintSearchEntry entry = new BlueprintSearchEntry.Builder()
+                    //     .WithMethodInfo(methodInfo)
+                    //     .WithCategoryAndName(new[] { category, "Static Methods" }, $"{name}({paramNames})")
+                    //     .WithSynonyms(name)
+                    //     .WithNodeType(BlueprintNodeType.Method)
+                    //     .Build();
+                    // Entries.Add(entry);
                 }
             }
         }

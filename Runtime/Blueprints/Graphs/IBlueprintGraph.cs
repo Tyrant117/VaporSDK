@@ -49,76 +49,76 @@ namespace Vapor.Blueprints
             _tempData = new Dictionary<string, object>();
             _returnParameters = new Dictionary<string, object>();
 
-            foreach (var temp in so.DesignGraph.Variables)
-            {
-                if (temp.Type == typeof(string))
-                {
-                    _tempData.Add(temp.Name, string.Empty);
-                }
-                else
-                {
-                    if (!temp.Type.IsSubclassOf(typeof(Object)))
-                    {
-                        _tempData.Add(temp.Name, Activator.CreateInstance(temp.Type));
-                    }
-                    else
-                    {
-                        if (!_isMock)
-                        {
-                            _tempData.Add(temp.Name, null);
-                        }
-                        else
-                        {
-                            if (temp.Type.IsSubclassOf(typeof(ScriptableObject)))
-                            {
-                                var tmpSo = ScriptableObject.CreateInstance(temp.Type);
-                                tmpSo.hideFlags = HideFlags.HideAndDontSave;
-                                _tempData.Add(temp.Name, tmpSo);
-                            }
-                            else if(temp.Type.IsSubclassOf(typeof(Component)))
-                            {
-                                var go = new GameObject(temp.Name)
-                                {
-                                    hideFlags = HideFlags.HideAndDontSave
-                                };
-                                _tempData.Add(temp.Name, go.AddComponent(temp.Type));
-                            }
-                            else
-                            {
-                                _tempData.Add(temp.Name, null);
-                            }
-                        }
-                    }
-                }
-            }
-
-            foreach (var blueprintNode in so.DesignGraph.Current.Nodes)
-            {
-                var runtimeNode = blueprintNode.ConvertToRuntime();
-                Nodes.Add(blueprintNode.Guid, runtimeNode);
-                if (blueprintNode.Type == typeof(EntryNodeType))
-                {
-                    _entryNode = runtimeNode;
-                    foreach (var outPort in blueprintNode.OutPorts)
-                    {
-                        if (!outPort.Value.IsExecutePin)
-                        {
-                            _parameters.Add(outPort.Key);
-                            _parameterTypes.Add(outPort.Value.Type);
-                        }
-                    }
-                }
-                else if (blueprintNode.Type == typeof(ReturnNodeType))
-                {
-                    foreach (var inPort in blueprintNode.InPorts)
-                    {
-                        if (!inPort.Value.IsExecutePin)
-                        {
-                            _returnParameters.Add(inPort.Key, null);
-                        }
-                    }
-                }
-            }
+            // foreach (var temp in so.DesignGraph.Variables)
+            // {
+            //     if (temp.Type == typeof(string))
+            //     {
+            //         _tempData.Add(temp.Name, string.Empty);
+            //     }
+            //     else
+            //     {
+            //         if (!temp.Type.IsSubclassOf(typeof(Object)))
+            //         {
+            //             _tempData.Add(temp.Name, Activator.CreateInstance(temp.Type));
+            //         }
+            //         else
+            //         {
+            //             if (!_isMock)
+            //             {
+            //                 _tempData.Add(temp.Name, null);
+            //             }
+            //             else
+            //             {
+            //                 if (temp.Type.IsSubclassOf(typeof(ScriptableObject)))
+            //                 {
+            //                     var tmpSo = ScriptableObject.CreateInstance(temp.Type);
+            //                     tmpSo.hideFlags = HideFlags.HideAndDontSave;
+            //                     _tempData.Add(temp.Name, tmpSo);
+            //                 }
+            //                 else if(temp.Type.IsSubclassOf(typeof(Component)))
+            //                 {
+            //                     var go = new GameObject(temp.Name)
+            //                     {
+            //                         hideFlags = HideFlags.HideAndDontSave
+            //                     };
+            //                     _tempData.Add(temp.Name, go.AddComponent(temp.Type));
+            //                 }
+            //                 else
+            //                 {
+            //                     _tempData.Add(temp.Name, null);
+            //                 }
+            //             }
+            //         }
+            //     }
+            // }
+            //
+            // foreach (var blueprintNode in so.DesignGraph.Current.Nodes)
+            // {
+            //     var runtimeNode = blueprintNode.ConvertToRuntime();
+            //     Nodes.Add(blueprintNode.Guid, runtimeNode);
+            //     if (blueprintNode.Type == typeof(EntryNodeType))
+            //     {
+            //         _entryNode = runtimeNode;
+            //         foreach (var outPort in blueprintNode.OutPorts)
+            //         {
+            //             if (!outPort.Value.IsExecutePin)
+            //             {
+            //                 _parameters.Add(outPort.Key);
+            //                 _parameterTypes.Add(outPort.Value.Type);
+            //             }
+            //         }
+            //     }
+            //     else if (blueprintNode.Type == typeof(ReturnNodeType))
+            //     {
+            //         foreach (var inPort in blueprintNode.InPorts)
+            //         {
+            //             if (!inPort.Value.IsExecutePin)
+            //             {
+            //                 _returnParameters.Add(inPort.Key, null);
+            //             }
+            //         }
+            //     }
+            // }
 
             foreach (var node in Nodes)
             {

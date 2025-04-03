@@ -5,6 +5,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
+using Vapor;
 using Vapor.Blueprints;
 using Vapor.Inspector;
 using VaporEditor.Inspector;
@@ -84,7 +85,7 @@ namespace VaporEditor.Blueprints
                 }
             });
 
-            _methodCategory = new BlueprintBlackboardMethodCategory("Methods", Type.GetType(Window.GraphObject.AssemblyQualifiedTypeName), OnAddMethod);
+            _methodCategory = new BlueprintBlackboardMethodCategory(this, "Methods", Type.GetType(Window.GraphObject.AssemblyQualifiedTypeName), OnAddMethod);
             _variables = new BlueprintBlackboardVariableCategory("Variables", OnAddVariable);
             
             _inputArguments = new BlueprintBlackboardVariableCategory("Input Arguments", OnAddInputArgument);
@@ -101,21 +102,21 @@ namespace VaporEditor.Blueprints
             Add(_outputArguments);
             Add(_localVariables);
             
-            foreach (var v in Window.GraphObject.DesignGraph.Methods)
+            foreach (var v in Window.DesignGraph.Methods)
             {
                 _methodCategory.Add(v.IsOverride ? new BlueprintBlackboardMethod(v.MethodInfo) : new BlueprintBlackboardMethod(v.MethodName));
             }
             
-            foreach (var v in Window.GraphObject.DesignGraph.Variables)
+            foreach (var v in Window.DesignGraph.Variables)
             {
-                _variables.Add(new BlueprintBlackboardVariable(v.Name, BlueprintBlackboardVariable.Group.Global, v.Type));
+                _variables.Add(new BlueprintBlackboardVariable(v));
             }
         }
 
         private void OnAddMethod()
         {
             var nm = GetNextName("Method");
-            Window.GraphObject.DesignGraph.AddMethod(nm, null);
+            Window.DesignGraph.AddMethod(nm, null);
             var method = new BlueprintBlackboardMethod(nm);
             _methodCategory.Add(method);
             _methodCategory.SetState(true);
@@ -124,55 +125,55 @@ namespace VaporEditor.Blueprints
 
         public void OnOverrideMethod(MethodInfo method)
         {
-            if (Window.GraphObject.DesignGraph.Methods.Exists(m => m.MethodName == method.Name))
+            if (Window.DesignGraph.Methods.Exists(m => m.MethodName == method.Name))
             {
                 return;
             }
 
-            Window.GraphObject.DesignGraph.AddMethod(method.Name, method);
+            Window.DesignGraph.AddMethod(method.Name, method);
             _methodCategory.Add(new BlueprintBlackboardMethod(method));
         }
 
         private void OnAddVariable()
         {
-            var nm = GetNextName("Var");
-            Window.GraphObject.DesignGraph.AddVariable(nm, typeof(bool));
-            var variable = new BlueprintBlackboardVariable(nm, BlueprintBlackboardVariable.Group.Global);
-            _variables.Add(variable);
+            // var nm = GetNextName("Var");
+            var variable = Window.DesignGraph.AddVariable(typeof(bool));
+            var view = new BlueprintBlackboardVariable(variable);
+            _variables.Add(view);
             _variables.SetState(true);
-            variable.StartRename();
+            view.StartRename();
         }
         
         private void OnAddInputArgument()
         {
-            var nm = GetNextName("InputArg");
-            Window.GraphObject.DesignGraph.Current.AddInputArgument(nm, typeof(bool));
-            var variable = new BlueprintBlackboardVariable(nm, BlueprintBlackboardVariable.Group.Input);
-            _inputArguments.Add(variable);
+            // var nm = GetNextName("InputArg");
+            var variable = Window.DesignGraph.Current.AddInputArgument(typeof(bool));
+            var view = new BlueprintBlackboardVariable(variable);
+            _inputArguments.Add(view);
             _inputArguments.SetState(true);
-            variable.StartRename();
+            view.StartRename();
             Window.GraphEditorView.Invalidate(GraphInvalidationType.Graph);
         }
 
         private void OnAddOutputArgument()
         {
-            var nm = GetNextName("OutputArg");
-            Window.GraphObject.DesignGraph.Current.AddOutputArgument(nm, typeof(bool));
-            var variable = new BlueprintBlackboardVariable(nm, BlueprintBlackboardVariable.Group.Output);
-            _outputArguments.Add(variable);
+            // var nm = GetNextName("OutputArg");
+            var variable = Window.DesignGraph.Current.AddOutputArgument(typeof(bool));
+            var view = new BlueprintBlackboardVariable(variable);
+            _outputArguments.Add(view);
             _outputArguments.SetState(true);
-            variable.StartRename();
+            view.StartRename();
             Window.GraphEditorView.Invalidate(GraphInvalidationType.Graph);
         }
 
         private void OnAddLocalVariable()
         {
-            var nm = GetNextName("LocalVar");
-            Window.GraphObject.DesignGraph.Current.AddTemporaryVariable(nm, typeof(bool));
-            var variable = new BlueprintBlackboardVariable(nm, BlueprintBlackboardVariable.Group.Local);
-            _localVariables.Add(variable);
+            // var nm = GetNextName("LocalVar");
+            var variable = Window.DesignGraph.Current.AddTemporaryVariable(typeof(bool));
+            var view = new BlueprintBlackboardVariable(variable);
+            _localVariables.Add(view);
             _localVariables.SetState(true);
-            variable.StartRename();
+            view.StartRename();
         }
 
         // public void DrawField(BlueprintBlackboardVariable blueprintBlackboardVariable, Type type)
@@ -194,7 +195,7 @@ namespace VaporEditor.Blueprints
             {
                 case "InputArg":
                 {
-                    while (Window.GraphObject.DesignGraph.Current.InputArguments.Exists(m => m.Name == $"{prefix}_{_counter}"))
+                    while (Window.DesignGraph.Current.InputArguments.Exists(m => m.Name == $"{prefix}_{_counter}"))
                     {
                         _counter++;
                     }
@@ -202,7 +203,7 @@ namespace VaporEditor.Blueprints
                 }
                 case "Output":
                 {
-                    while (Window.GraphObject.DesignGraph.Current.OutputArguments.Exists(m => m.Name == $"{prefix}_{_counter}"))
+                    while (Window.DesignGraph.Current.OutputArguments.Exists(m => m.Name == $"{prefix}_{_counter}"))
                     {
                         _counter++;
                     }
@@ -210,7 +211,7 @@ namespace VaporEditor.Blueprints
                 }
                 case "LocalVar":
                 {
-                    while (Window.GraphObject.DesignGraph.Variables.Exists(m => m.Name == $"{prefix}_{_counter}"))
+                    while (Window.DesignGraph.Variables.Exists(m => m.Name == $"{prefix}_{_counter}"))
                     {
                         _counter++;
                     }
@@ -226,33 +227,33 @@ namespace VaporEditor.Blueprints
         public void UpdateInputArguments()
         {
             _inputArguments.Clear();
-            foreach (var v in Window.GraphObject.DesignGraph.Current.InputArguments)
+            foreach (var v in Window.DesignGraph.Current.InputArguments)
             {
-                _inputArguments.Add(new BlueprintBlackboardVariable(v.Name, BlueprintBlackboardVariable.Group.Input, v.Type));
+                _inputArguments.Add(new BlueprintBlackboardVariable(v));
             }
         }
 
         public void UpdateOutputArguments()
         {
             _outputArguments.Clear();
-            foreach (var v in Window.GraphObject.DesignGraph.Current.OutputArguments)
+            foreach (var v in Window.DesignGraph.Current.OutputArguments)
             {
-                _outputArguments.Add(new BlueprintBlackboardVariable(v.Name, BlueprintBlackboardVariable.Group.Output, v.Type));
+                _outputArguments.Add(new BlueprintBlackboardVariable(v));
             }
         }
         
         public void UpdateTemporaryVariables()
         {
             _localVariables.Clear();
-            foreach (var v in Window.GraphObject.DesignGraph.Current.TemporaryVariables)
+            foreach (var v in Window.DesignGraph.Current.TemporaryVariables)
             {
-                _localVariables.Add(new BlueprintBlackboardVariable(v.Name, BlueprintBlackboardVariable.Group.Local, v.Type));
+                _localVariables.Add(new BlueprintBlackboardVariable(v));
             }
         }
 
         public void ShowConditionalMethodFoldouts()
         {
-            var current  = Window.GraphObject.DesignGraph.Current;
+            var current  = Window.DesignGraph.Current;
             if (current == null)
             {
                 _inputArguments.Hide();
@@ -284,6 +285,7 @@ namespace VaporEditor.Blueprints
     {
         public override VisualElement contentContainer => _foldout.contentContainer;
 
+        private readonly BlueprintBlackboardView _view;
         private readonly Foldout _foldout;
         private readonly Button _overrideSelector;
 
@@ -291,9 +293,20 @@ namespace VaporEditor.Blueprints
         private readonly List<GenericDescriptor> _descriptors;
         private readonly List<GenericDescriptor> _filteredDescriptors;
 
-        public BlueprintBlackboardMethodCategory(string header, Type declaringType, Action addMethodCallback)
+        public BlueprintBlackboardMethodCategory(BlueprintBlackboardView view, string header, Type declaringType, Action addMethodCallback)
         {
-            _overridableMethods = ReflectionUtility.GetAllMethodsThatMatch(declaringType, mi => mi.IsVirtual || mi.IsAbstract, false).ToList();
+            _view = view;
+            Func<MethodInfo, bool> filter = mi => (mi.IsVirtual || mi.IsAbstract) && !mi.IsSpecialName;
+            _overridableMethods = ReflectionUtility.GetAllMethodsThatMatch(declaringType, filter, false).ToList();
+            foreach (var interfaceAqn in _view.Window.DesignGraph.ImplementedInterfaces)
+            {
+                if (interfaceAqn.EmptyOrNull())
+                {
+                    continue;
+                }
+                var type = Type.GetType(interfaceAqn);
+                _overridableMethods.AddRange(ReflectionUtility.GetAllMethodsThatMatch(type, filter, false));
+            }
             _descriptors = new List<GenericDescriptor>(_overridableMethods.Count);
             foreach (var mi in _overridableMethods.Where(mi => mi.Name != "Finalize"))
             {
@@ -364,11 +377,10 @@ namespace VaporEditor.Blueprints
         
         private void OnSelectType()
         {
-            var view = GetFirstAncestorOfType<BlueprintBlackboardView>();
-            var screenPosition = _overrideSelector.worldBound.position + view.Window.position.position;
+            var screenPosition = GUIUtility.GUIToScreenPoint(_overrideSelector.worldBound.position) + new Vector2(0, _overrideSelector.worldBound.height + 16);
             
             _filteredDescriptors.Clear();
-            foreach (var descriptor in _descriptors.Where(descriptor => !view.Window.GraphObject.DesignGraph.Methods.Exists(m => m.MethodName == descriptor.Name)))
+            foreach (var descriptor in _descriptors.Where(descriptor => !_view.Window.DesignGraph.Methods.Exists(m => m.MethodName == descriptor.Name)))
             {
                 _filteredDescriptors.Add(descriptor);
             }
@@ -383,7 +395,7 @@ namespace VaporEditor.Blueprints
                 return;
             }
             
-            GetFirstAncestorOfType<BlueprintBlackboardView>().OnOverrideMethod(mi);
+            _view.OnOverrideMethod(mi);
         }
 
         public void SetState(bool open) => _foldout.value = open;
@@ -445,7 +457,7 @@ namespace VaporEditor.Blueprints
                     var trimmed = evt.newValue.Replace(" ", "");
                     _label.text = trimmed;
                     var window = GetFirstAncestorOfType<BlueprintBlackboardView>().Window;
-                    window.GraphObject.DesignGraph.Methods.First(v => v.MethodName == _name).MethodName = trimmed;
+                    window.DesignGraph.Methods.First(v => v.MethodName == _name).MethodName = trimmed;
                     _name = trimmed;
                     _renameTextField.SetValueWithoutNotify(trimmed);
                     window.GraphEditorView.Invalidate(GraphInvalidationType.RenamedNode);
@@ -502,7 +514,7 @@ namespace VaporEditor.Blueprints
         {
             IsOverride = true;
             var displayName = method.IsGenericMethod ? $"{method.Name.Split('`')[0]}<{string.Join(",", method.GetGenericArguments().Select(a => a.Name))}>" : method.Name;
-            displayName = method.IsSpecialName ? BlueprintNodeDataModelUtility.ToTitleCase(displayName) : displayName;
+            displayName = method.IsSpecialName ? displayName.ToTitleCase() : displayName;
             var parameters = method.GetParameters();
             string paramNames = parameters.Length > 0
                 ? parameters.Select(pi => pi.ParameterType.IsGenericType
@@ -536,7 +548,7 @@ namespace VaporEditor.Blueprints
         private void OnSelectMethodGraph()
         {
             var view = GetFirstAncestorOfType<BlueprintBlackboardView>();
-            view.Window.GraphObject.DesignGraph.SelectMethod(_name);
+            view.Window.DesignGraph.SelectMethod(_name);
             view.ShowConditionalMethodFoldouts();
             view.Window.GraphEditorView.Invalidate(GraphInvalidationType.Graph);
         }
@@ -562,13 +574,13 @@ namespace VaporEditor.Blueprints
         {
             var view = GetFirstAncestorOfType<BlueprintBlackboardView>();
             var window = view.Window;
-            var current = window.GraphObject.DesignGraph.Current;
-            window.GraphObject.DesignGraph.Methods.RemoveAll(m => m.MethodName == _name);
+            var current = window.DesignGraph.Current;
+            window.DesignGraph.Methods.RemoveAll(m => m.MethodName == _name);
             
             RemoveFromHierarchy();
             if (current != null && current.MethodName == _name)
             {
-                window.GraphObject.DesignGraph.Current = null;
+                window.DesignGraph.Current = null;
                 view.ShowConditionalMethodFoldouts();
                 window.GraphEditorView.Invalidate(GraphInvalidationType.Graph);
             }
@@ -688,33 +700,24 @@ namespace VaporEditor.Blueprints
     
     public class BlueprintBlackboardVariable : VisualElement
     {
-        public enum Group
-        {
-            Input,
-            Output,
-            Local,
-            Global,
-        }
         private readonly Label _label;
         private readonly TextField _renameTextField;
-        private readonly Label _typeLabel;
-        private readonly Button _typeSelector;
-        private string _name;
-        private readonly Group _group;
+        private readonly TypeSelectorField _typeSelector;
+        
+        private BlueprintVariable _model;
         private GenericTypeBuilder _typeStack;
 
-        public Type CurrentType { get; private set; }
+        public Type CurrentType => _typeSelector.CurrentType;
 
         public override bool focusable => true;
 
-        public BlueprintBlackboardVariable(string name, Group group)
+        public BlueprintBlackboardVariable(BlueprintVariable model)
         {
             style.flexGrow = 1f;
             style.flexDirection = FlexDirection.Row;
             style.backgroundColor = new Color(0.16f, 0.16f, 0.16f);
             style.marginLeft = 0f;
-            _name = name;
-            _group = group;
+            _model = model;
 
             var ve = new VisualElement()
             {
@@ -723,7 +726,7 @@ namespace VaporEditor.Blueprints
                     flexGrow = 1f,
                 }
             };
-            _label = new Label(name)
+            _label = new Label(_model.Name)
             {
                 style =
                 {
@@ -751,22 +754,7 @@ namespace VaporEditor.Blueprints
                     var trimmed = evt.newValue.Replace(" ", "");
                     _label.text = trimmed;
                     var window = GetFirstAncestorOfType<BlueprintBlackboardView>().Window;
-                    switch (_group)
-                    {
-                        case Group.Input:
-                            window.GraphObject.DesignGraph.Current.InputArguments.First(v => v.Name == _name).Name = trimmed;
-                            break;
-                        case Group.Output:
-                            window.GraphObject.DesignGraph.Current.OutputArguments.First(v => v.Name == _name).Name = trimmed;
-                            break;
-                        case Group.Local:
-                            window.GraphObject.DesignGraph.Current.TemporaryVariables.First(v => v.Name == _name).Name = trimmed;
-                            break;
-                        case Group.Global:
-                            window.GraphObject.DesignGraph.Variables.First(v => v.Name == _name).Name = trimmed;
-                            break;
-                    }
-                    _name = trimmed;
+                    _model.Name = trimmed;
                     _renameTextField.SetValueWithoutNotify(trimmed);
                     window.GraphEditorView.Invalidate(GraphInvalidationType.RenamedNode);
                 }
@@ -783,37 +771,14 @@ namespace VaporEditor.Blueprints
             ve.Add(_renameTextField);
             Add(ve);
 
-            
-            
-            CurrentType = typeof(bool);
-            _typeLabel = new Label(CurrentType.Name)
-            {
-                style =
-                {
-                    flexGrow = 1f,
-                    color = Color.grey,
-                    fontSize = 10f,
-                    unityTextAlign = TextAnchor.MiddleRight,
-                    overflow = Overflow.Hidden,
-                    textOverflow = TextOverflow.Ellipsis,
-                }
-            };
-            _typeSelector = new Button(OnSelectType)
-            {
-                text = "T",
-                style =
-                {
-                    width = 20,
-                    height = 20,
-                    unityFontStyleAndWeight = FontStyle.Bold,
-                }
-            };
+            _typeSelector = new TypeSelectorField(string.Empty, _model.Type, t => (t.IsPublic || t.IsNestedPublic) && !(t.IsAbstract && t.IsSealed));
+            _typeSelector.TypeChanged += SetType;
             
             RegisterCallback<FocusInEvent>(_ =>
             {
                 style.backgroundColor = new Color(0.16f, 0.16f, 0.2f);
-                // var view = GetFirstAncestorOfType<BlueprintBlackboardView>();
-                // view.DrawField(this, CurrentType);
+                var view = GetFirstAncestorOfType<BlueprintBlackboardView>();
+                view.Window.InspectorView.SetDrawTarget(new BlueprintInspectorVariableView(_model));
             });
             RegisterCallback<FocusOutEvent>(_ =>
             {
@@ -833,14 +798,7 @@ namespace VaporEditor.Blueprints
             });
             this.AddManipulator(new ContextualMenuManipulator(BuildContextualMenu));
             
-            Add(_typeLabel);
             Add(_typeSelector);
-        }
-
-        public BlueprintBlackboardVariable(string name, Group group, Type type) : this(name, group)
-        {
-            _typeLabel.text = type.IsGenericType ? GetReadableTypeName(type) : type.Name;
-            CurrentType = type;
         }
 
         private void BuildContextualMenu(ContextualMenuPopulateEvent evt)
@@ -863,92 +821,30 @@ namespace VaporEditor.Blueprints
         private void CTX_Delete(DropdownMenuAction obj)
         {
             var window = GetFirstAncestorOfType<BlueprintBlackboardView>().Window;
-            switch (_group)
+            switch (_model.VariableType)
             {
-                case Group.Input:
-                    window.GraphObject.DesignGraph.Current.InputArguments.RemoveAll(v => v.Name == _name);
+                case VariableType.Argument:
+                    window.DesignGraph.Current.InputArguments.Remove(_model);
                     break;
-                case Group.Output:
-                    window.GraphObject.DesignGraph.Current.OutputArguments.RemoveAll(v => v.Name == _name);
+                case VariableType.OutArgument:
+                case VariableType.Return:
+                    window.DesignGraph.Current.OutputArguments.Remove(_model);
                     break;
-                case Group.Local:
-                    window.GraphObject.DesignGraph.Current.TemporaryVariables.RemoveAll(v => v.Name == _name);
+                case VariableType.Local:
+                    window.DesignGraph.Current.TemporaryVariables.Remove(_model);
                     break;
-                case Group.Global:
-                    window.GraphObject.DesignGraph.Variables.RemoveAll(v => v.Name == _name);
+                case VariableType.Global:
+                    window.DesignGraph.Variables.Remove(_model);
                     break;
             }
             RemoveFromHierarchy();
             window.GraphEditorView.Invalidate(GraphInvalidationType.Topology);
         }
 
-        private void OnSelectType()
+        public void SetType(VisualElement sender, Type newType, Type oldType)
         {
-            _typeStack = null;
-            var view = GetFirstAncestorOfType<BlueprintBlackboardView>();
-            var screenPosition = _typeSelector.worldBound.position + view.Window.position.position;
-            BlueprintSearchWindow.Show(screenPosition, screenPosition, new TypeSearchProvider(OnTypeSelected), true, false);
-        }
-
-        private void OnTypeSelected(BlueprintSearchModel model, Vector2 position)
-        {
-            if (model.ModelType.IsGenericType)
-            {
-                var cachedGenericType = model.ModelType.GetGenericTypeDefinition();
-                var genericTypeArguments = new Type[cachedGenericType.GetGenericArguments().Length];
-                if (_typeStack == null)
-                {
-                    _typeStack = new GenericTypeBuilder(cachedGenericType, genericTypeArguments);
-                }
-                else
-                {
-                    _typeStack.StackGenericType(cachedGenericType, genericTypeArguments);
-                }
-                
-                var view = GetFirstAncestorOfType<BlueprintBlackboardView>();
-                var screenPosition = _typeSelector.worldBound.position + view.Window.position.position;
-                BlueprintSearchWindow.Show(screenPosition, screenPosition, new TypeSearchProvider(OnTypeSelected), true, false);
-            }
-            else if(_typeStack != null)
-            {
-                _typeStack.AddType(model.ModelType);
-                if (_typeStack.Complete)
-                {
-                    SetType(_typeStack.MakeType());
-                }
-                else
-                {
-                    var view = GetFirstAncestorOfType<BlueprintBlackboardView>();
-                    var screenPosition = _typeSelector.worldBound.position + view.Window.position.position;
-                    BlueprintSearchWindow.Show(screenPosition, screenPosition, new TypeSearchProvider(OnTypeSelected), true, false);
-                }
-            }
-            else
-            {
-                SetType(model.ModelType);
-            }
-        }
-
-        public void SetType(Type type)
-        {
-            CurrentType = type;
-            _typeLabel.text = CurrentType.IsGenericType ? GetReadableTypeName(CurrentType) : CurrentType.Name;
+            _model.Type = newType;
             var window = GetFirstAncestorOfType<BlueprintBlackboardView>().Window;
-            switch (_group)
-            {
-                case Group.Input:
-                    window.GraphObject.DesignGraph.Current.InputArguments.First(v => v.Name == _name).Type = CurrentType;
-                    break;
-                case Group.Output:
-                    window.GraphObject.DesignGraph.Current.OutputArguments.First(v => v.Name == _name).Type = CurrentType;
-                    break;
-                case Group.Local:
-                    window.GraphObject.DesignGraph.Current.TemporaryVariables.First(v => v.Name == _name).Type = CurrentType;
-                    break;
-                case Group.Global:
-                    window.GraphObject.DesignGraph.Variables.First(v => v.Name == _name).Type = CurrentType;
-                    break;
-            }
             window.GraphEditorView.Invalidate(GraphInvalidationType.RetypedNode);
         }
 
@@ -959,24 +855,6 @@ namespace VaporEditor.Blueprints
             _renameTextField.SetValueWithoutNotify(_label.text);
             _renameTextField.Focus();
             _renameTextField.SelectAll();
-        }
-        
-        public static string GetReadableTypeName(Type type)
-        {
-            if (type.IsGenericType)
-            {
-                // Get the base type name without `1, `2, etc.
-                string baseTypeName = type.Name.Split('`')[0];
-
-                // Recursively resolve generic type arguments
-                string genericArgs = string.Join(", ", type.GetGenericArguments().Select(GetReadableTypeName));
-
-                return $"{baseTypeName}<{genericArgs}>";
-            }
-            else
-            {
-                return type.Name;
-            }
         }
     }
 }

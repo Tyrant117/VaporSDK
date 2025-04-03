@@ -215,13 +215,13 @@ namespace Vapor.Blueprints
         public static bool LogicalXOr(bool a, bool b) => a ^ b;
     }
 
-    [BlueprintLibrary]
-    public static class ObjectLibrary
-    {
-        [BlueprintCallable(nodeName: "CastTo", category: "Utilities"), BlueprintPure]
-        public static object Cast(object @object, Type type)
-        {
-            return TypeUtility.CastToType(@object, type);
-        }
-    }
+    // [BlueprintLibrary]
+    // public static class ObjectLibrary
+    // {
+    //     [BlueprintCallable(nodeName: "CastTo", category: "Utilities"), BlueprintPure]
+    //     public static object Cast(object @object, Type type)
+    //     {
+    //         return TypeUtility.CastToType(@object, type);
+    //     }
+    // }
 }

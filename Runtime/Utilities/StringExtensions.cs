@@ -1,16 +1,15 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.InputSystem;
+using System.Globalization;
+using System.Text.RegularExpressions;
+using Vapor.Inspector;
 
 namespace Vapor
 {
     public static class StringExtensions
     {
-        private const uint FNV_offset_basis32 = 2166136261;
-        private const uint FNV_prime32 = 16777619;
-        private const ulong FNV_offset_basis64 = 14695981039346656037;
-        private const ulong FNV_prime64 = 1099511628211;
+        private const uint k_FnvOffsetBasis32 = 2166136261;
+        private const uint k_FnvPrime32 = 16777619;
+        private const ulong k_FnvOffsetBasis64 = 14695981039346656037;
+        private const ulong k_FnvPrime64 = 1099511628211;
 
         /// <summary>
         /// non cryptographic stable hash code,  
@@ -44,11 +43,11 @@ namespace Vapor
         {
             unchecked
             {
-                uint hash = FNV_offset_basis32;
+                uint hash = k_FnvOffsetBasis32;
                 for (int i = 0; i < txt.Length; i++)
                 {
                     uint ch = txt[i];
-                    hash *= FNV_prime32;
+                    hash *= k_FnvPrime32;
                     hash ^= ch;
                 }
                 return hash;
@@ -63,21 +62,39 @@ namespace Vapor
         /// This is simply an implementation of FNV-1  64 bit
         /// https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function
         /// </summary>
-        /// <returns>The stable hash32.</returns>
+        /// <returns>The stable hash64.</returns>
         /// <param name="txt">Text.</param>
         public static ulong GetStableHashU64(this string txt)
         {
             unchecked
             {
-                ulong hash = FNV_offset_basis64;
+                ulong hash = k_FnvOffsetBasis64;
                 for (int i = 0; i < txt.Length; i++)
                 {
                     ulong ch = txt[i];
-                    hash *= FNV_prime64;
+                    hash *= k_FnvPrime64;
                     hash ^= ch;
                 }
                 return hash;
             }
+        }
+        
+        public static string ToTitleCase(this string input)
+        {
+            if (input.EmptyOrNull())
+            {
+                return input;
+            }
+
+            // Step 1: Replace underscores with spaces
+            input = input.Replace("_", " ");
+
+            // Step 2: Insert space before uppercase letters (excluding first character)
+            input = Regex.Replace(input, "(?<!^)([A-Z])", " $1");
+
+            // Step 3: Convert to Title Case
+            TextInfo textInfo = CultureInfo.InvariantCulture.TextInfo;
+            return textInfo.ToTitleCase(input.ToLowerInvariant());
         }
     }
 }

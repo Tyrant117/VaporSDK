@@ -5,32 +5,13 @@ namespace Vapor.Blueprints
 {
     public class BlueprintReturnNode : BlueprintBaseNode
     {
-        public BlueprintReturnNode(BlueprintNodeDataModel dataModel)
-        {
-            Guid = dataModel.Guid;
-            InEdges = dataModel.InEdges;
-            
-            InPortValues = new Dictionary<string, object>(dataModel.InPorts.Count);
-            foreach (var inPort in dataModel.InPorts.Values)
-            {
-                if (inPort.HasInlineValue)
-                {
-                    InPortValues[inPort.PortName] = inPort.GetContent();
-                }
-            }
-        }
-
-        public BlueprintReturnNode(BlueprintCompiledNodeDto dto)
+        public BlueprintReturnNode(BlueprintDesignNodeDto dto)
         {
             Guid = dto.Guid;
-            InEdges = dto.InputWires;
+            InputWires = dto.InputWires;
+            OutputWires = dto.OutputWires;
             
-            InPortValues = new Dictionary<string, object>(dto.InputPinValues.Count);
-            foreach (var (key, tuple) in dto.InputPinValues)
-            {
-                var val = TypeUtility.CastToType(tuple.Item2, tuple.Item1);
-                InPortValues[key] = val;
-            }
+            SetupInputPins(dto);
         }
 
         public override void Init(IBlueprintGraph graph)
@@ -40,7 +21,7 @@ namespace Vapor.Blueprints
 
         protected override void CacheInputValues()
         {
-            foreach (var edge in InEdges)
+            foreach (var edge in InputWires)
             {
                 if (edge.LeftSidePin.IsExecutePin)
                 {

@@ -260,7 +260,7 @@ namespace VaporEditor.Blueprints
         {
             var item = treeview.GetItemDataForIndex<Descriptor>(index);
             element.AddToClassList("treenode");
-            var parent = element.GetFirstAncestorWithClass("unity-tree-view__item");
+            var parent = element.GetFirstAncestorWithClass<VisualElement>("unity-tree-view__item");
 
             List<Label> labels = null;
 
@@ -281,6 +281,18 @@ namespace VaporEditor.Blueprints
 
             if (item.SearchModel != null)
             {
+                if (HasSearch)
+                {
+                    element.Add(new Label(item.SearchModel.Category)
+                    {
+                        style =
+                        {
+                            fontSize = 10,
+                            color = Color.grey,
+                        }
+                    });
+                }
+                
                 if (_settings.IsFavorite(item))
                 {
                     parent.AddToClassList("favorite");
@@ -335,7 +347,7 @@ namespace VaporEditor.Blueprints
             element.Clear();
             element.ClearClassList();
 
-            var parent = element.GetFirstAncestorWithClass("unity-tree-view__item");
+            var parent = element.GetFirstAncestorWithClass<VisualElement>("unity-tree-view__item");
             parent.RemoveFromClassList("favorite");
             parent.RemoveFromClassList("treeleaf");
             parent.RemoveFromClassList("separator");
@@ -348,7 +360,7 @@ namespace VaporEditor.Blueprints
             // The test on localPosition is to toggle expand state only when clicking on the left of the treeview item label
             if (evt.target is VisualElement element and not Toggle && evt.localPosition.x < 30)
             {
-                var parent = element.GetFirstAncestorWithClass("unity-tree-view__item");
+                var parent = element.GetFirstAncestorWithClass<VisualElement>("unity-tree-view__item");
                 if (parent != null)
                 {
                     var toggle = parent.Q<Toggle>();
@@ -467,7 +479,7 @@ namespace VaporEditor.Blueprints
             {
                 if (_settings.IsFavorite(descriptor))
                 {
-                    var parent = button.GetFirstAncestorWithClass("unity-tree-view__item");
+                    var parent = button.GetFirstAncestorWithClass<VisualElement>("unity-tree-view__item");
                     parent.RemoveFromClassList("favorite");
                     _settings.RemoveFavorite(descriptor);
                     var idToRemove = _favoriteCategory.children.SingleOrDefault(x => x.data.Name == descriptor.Name && x.data.Category == descriptor.Category).id;
@@ -478,7 +490,7 @@ namespace VaporEditor.Blueprints
                 }
                 else
                 {
-                    var parent = button.GetFirstAncestorWithClass("unity-tree-view__item");
+                    var parent = button.GetFirstAncestorWithClass<VisualElement>("unity-tree-view__item");
                     parent.AddToClassList("favorite");
                     _settings.AddFavorite(descriptor);
                     var newId = _treeView.viewController.GetAllItemIds().Max() + 1;
@@ -857,9 +869,10 @@ namespace VaporEditor.Blueprints
 
             // Match all pattern tokens with the source tokens
             var sourceTokens = text.Split(s_MatchingSeparators, StringSplitOptions.RemoveEmptyEntries).ToList();
+            var patternMatches = new List<string>(patternTokens.Length * sourceTokens.Count);
             if (sourceTokens.Count >= patternTokens.Length)
             {
-                s_PatternMatches.Clear();
+                // s_PatternMatches.Clear();
                 foreach (var token in patternTokens)
                 {
                     foreach (var sourceToken in sourceTokens)
@@ -867,7 +880,8 @@ namespace VaporEditor.Blueprints
                         if (sourceToken.Contains(token, StringComparison.OrdinalIgnoreCase))
                         {
                             sourceTokens.Remove(sourceToken);
-                            s_PatternMatches.Add(token);
+                            // s_PatternMatches.Add(token);
+                            patternMatches.Add(token);
                             pattern = pattern.Replace(token, string.Empty).Trim();
                             score += (float)token.Length / sourceToken.Length;
                             break;
@@ -875,10 +889,10 @@ namespace VaporEditor.Blueprints
                     }
                 }
 
-                if (s_PatternMatches.Count > 0)
+                if (/*s_PatternMatches.Count*/patternMatches.Count > 0)
                 {
                     matchHighlight = text;
-                    foreach (var match in s_PatternMatches)
+                    foreach (var match in /*s_PatternMatches*/patternMatches)
                     {
                         matchHighlight = matchHighlight.Replace(match, $"#@{match}#", StringComparison.OrdinalIgnoreCase);
                     }

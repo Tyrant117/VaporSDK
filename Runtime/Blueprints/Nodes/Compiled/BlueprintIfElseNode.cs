@@ -1,69 +1,27 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using Vapor.Inspector;
+﻿using Vapor.Inspector;
 
 namespace Vapor.Blueprints
 {
     public class BlueprintIfElseNode : BlueprintBaseNode
     {
-        public const string TRUE_NODE_GUID = "TrueNodeGuid";
-        public const string FALSE_NODE_GUID = "FalseNodeGuid";
-        
         private readonly string _trueNodeGuid;
         private BlueprintBaseNode _trueNode;
+        
         private readonly string _falseNodeGuid;
         private BlueprintBaseNode _falseNode;
-        private bool _true;
         
-        public BlueprintIfElseNode(BlueprintNodeDataModel dataModel)
-        {
-            Guid = dataModel.Guid;
-            InEdges = dataModel.InEdges;
-            
-            InPortValues = new Dictionary<string, object>(dataModel.InPorts.Count);
-            foreach (var inPort in dataModel.InPorts.Values)
-            {
-                if (inPort.HasInlineValue)
-                {
-                    InPortValues[inPort.PortName] = inPort.GetContent();
-                }
-            }
-            
-            var trueEdge = dataModel.OutEdges.FirstOrDefault(x => x.LeftSidePin.PinName == "True");
-            if (trueEdge.RightSidePin.IsValid())
-            {
-                _trueNodeGuid = trueEdge.RightSidePin.NodeGuid;
-            }
-            
-            var falseEdge = dataModel.OutEdges.FirstOrDefault(x => x.LeftSidePin.PinName == "False");
-            if (falseEdge.RightSidePin.IsValid())
-            {
-                _falseNodeGuid = falseEdge.RightSidePin.NodeGuid;
-            }
-        }
+        private bool _true;
 
-        public BlueprintIfElseNode(BlueprintCompiledNodeDto dto)
+        public BlueprintIfElseNode(BlueprintDesignNodeDto dto)
         {
             Guid = dto.Guid;
-            InEdges = dto.InputWires;
-            
-            InPortValues = new Dictionary<string, object>(dto.InputPinValues.Count);
-            foreach (var (key, tuple) in dto.InputPinValues)
-            {
-                var val = Convert.ChangeType(tuple.Item2, tuple.Item1);
-                InPortValues[key] = val;
-            }
-            
-            if (dto.Properties.TryGetValue(TRUE_NODE_GUID, out var tNodeGuid))
-            {
-                _trueNodeGuid = tNodeGuid as string;
-            }
-            
-            if (dto.Properties.TryGetValue(FALSE_NODE_GUID, out var fNodeGuid))
-            {
-                _falseNodeGuid = fNodeGuid as string;
-            }
+            InputWires = dto.InputWires;
+            OutputWires = dto.OutputWires;
+
+            SetupInputPins(dto);
+
+            _trueNodeGuid = GetNodeGuidForPinName(dto, PinNames.TRUE_OUT);
+            _falseNodeGuid = GetNodeGuidForPinName(dto, PinNames.FALSE_OUT);
         }
 
         public override void Init(IBlueprintGraph graph)
@@ -81,29 +39,12 @@ namespace Vapor.Blueprints
 
         protected override void CacheInputValues()
         {
-            foreach (var edge in InEdges)
-            {
-                if (edge.LeftSidePin.IsExecutePin)
-                {
-                    continue;
-                }
-                
-                if (!Graph.TryGetNode(edge.LeftSidePin.NodeGuid, out var leftNode))
-                {
-                    continue;
-                }
-
-                leftNode.Invoke();
-                if (leftNode.TryGetOutputValue(edge.LeftSidePin.PinName, out var outputValue))
-                {
-                    InPortValues[edge.RightSidePin.PinName] = outputValue;
-                }
-            }
+            GetAllInputPinValues();
         }
 
         protected override void WriteOutputValues()
         {
-            _true = (bool)InPortValues["Value"];
+            _true = (bool)InPortValues[PinNames.VALUE_IN];
         }
 
         protected override void Continue()

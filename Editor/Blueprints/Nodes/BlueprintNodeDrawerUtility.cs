@@ -6,55 +6,62 @@ namespace VaporEditor.Blueprints
 {
     public static class BlueprintNodeDrawerUtility
     {
-        private static readonly Dictionary<Type, Func<BlueprintView, BlueprintDesignNode, IBlueprintEditorNode>> s_NodeFactory = new()
+        private static readonly Dictionary<NodeType, Func<BlueprintView, BlueprintNodeController, IBlueprintNodeView>> s_NodeFactory = new()
         {
-            { typeof(EntryNodeType), CreateEditorNode },
-            { typeof(ReturnNodeType), CreateEditorNode },
-            { typeof(GraphNodeType), CreateEditorNode },
+            { NodeType.Entry, CreateEditorNode },
+            { NodeType.Method, CreateEditorNode },
+            { NodeType.MemberAccess, CreateEditorNode },
+            { NodeType.Return, CreateEditorNode },
             
-            { typeof(MethodNodeType), CreateEditorNode },
+            { NodeType.Branch, CreateEditorNode },
+            { NodeType.Switch, CreateEditorNode },
+            { NodeType.Sequence, CreateEditorNode<BlueprintSequenceNodeView> },
             
-            { typeof(BranchNodeType), CreateEditorNode },
-            { typeof(SwitchNodeType), CreateEditorNode },
-            { typeof(WhileNodeType), CreateEditorNode },
-            { typeof(SequenceNodeType), CreateEditorNode },
-            { typeof(ForEachNodeType), CreateEditorNode },
-            { typeof(ForNodeType), CreateEditorNode },
+            { NodeType.For, CreateEditorNode },
+            { NodeType.ForEach, CreateEditorNode },
+            { NodeType.While, CreateEditorNode },
+            { NodeType.Break, CreateEditorNode },
+            { NodeType.Continue, CreateEditorNode },
             
-            { typeof(TemporaryDataGetterNodeType), CreateEditorNode },
-            { typeof(TemporaryDataSetterNodeType), CreateEditorNode },
-            { typeof(FieldGetterNodeType), CreateEditorNode },
-            { typeof(FieldSetterNodeType), CreateEditorNode },
-            { typeof(MakeSerializableNodeType), CreateEditorNode },
+            { NodeType.Conversion, CreateRerouteNode },
+            { NodeType.Cast, CreateEditorNode<BlueprintCastNodeView> },
             
-            { typeof(RerouteNodeType), CreateRerouteNode },
-            { typeof(ConverterNodeType), CreateRerouteNode },
+            { NodeType.Redirect, CreateRerouteNode },
+            { NodeType.Inline, CreateEditorNode },
         };
         
-        public static void AddNode(BlueprintDesignNode node, BlueprintView view, List<IBlueprintEditorNode> editorNodes, List<BlueprintDesignNode> refNodes)
+        public static void AddNode(BlueprintNodeController nodeController, BlueprintView view, List<IBlueprintNodeView> editorNodes, List<BlueprintNodeController> refNodes)
         {
-            if (node == null || !s_NodeFactory.TryGetValue(node.Type, out var func))
+            if (nodeController == null || !s_NodeFactory.TryGetValue(nodeController.Model.NodeType, out var func))
             {
                 return;
             }
 
-            var editorNode = func(view, node);
+            var editorNode = func(view, nodeController);
             editorNodes.Add(editorNode);
-            refNodes?.Add(node);
+            refNodes?.Add(nodeController);
         }
 
-        private static IBlueprintEditorNode CreateEditorNode(BlueprintView view, BlueprintDesignNode node)
+        private static IBlueprintNodeView CreateEditorNode(BlueprintView view, BlueprintNodeController nodeController)
         {
-            var editorNode = new BlueprintEditorNode(view, node);
-            editorNode.SetPosition(node.Position);
+            var editorNode = new BlueprintNodeView(view, nodeController);
+            editorNode.SetPosition(nodeController.Model.Position);
             view.AddElement(editorNode);
             return editorNode;
         }
         
-        private static IBlueprintEditorNode CreateRerouteNode(BlueprintView view, BlueprintDesignNode node)
+        private static IBlueprintNodeView CreateEditorNode<T>(BlueprintView view, BlueprintNodeController nodeController) where T : BlueprintNodeView
         {
-            var redirectNode = new BlueprintRedirectNode(view, node);
-            redirectNode.SetPosition(node.Position);
+            var editorNode = Activator.CreateInstance(typeof(T), view, nodeController) as T;
+            editorNode.SetPosition(nodeController.Model.Position);
+            view.AddElement(editorNode);
+            return editorNode;
+        }
+        
+        private static IBlueprintNodeView CreateRerouteNode(BlueprintView view, BlueprintNodeController nodeController)
+        {
+            var redirectNode = new BlueprintRedirectNodeView(view, nodeController);
+            redirectNode.SetPosition(nodeController.Model.Position);
             view.AddElement(redirectNode);
             return redirectNode;
         }

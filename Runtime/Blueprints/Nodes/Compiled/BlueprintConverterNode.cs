@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Reflection;
 
 namespace Vapor.Blueprints
 {
@@ -8,25 +7,17 @@ namespace Vapor.Blueprints
     {
         private readonly Delegate _function;
         private readonly object[] _parameterValues;
-        
-        public BlueprintConverterNode(BlueprintNodeDataModel dataModel)
-        {
-            Guid = dataModel.Guid;
-            _function = MethodDelegateHelper.GetDelegateForMethod(dataModel.MethodInfo);
-            InEdges = dataModel.InEdges;
-            
-            _parameterValues = new object[1];
-            InPortValues = new Dictionary<string, object>(1);
-            OutPortValues = new Dictionary<string, object>(1);
-            InPortValues[PinNames.EXECUTE_IN] = null;
-            OutPortValues[PinNames.RETURN] = null;
-        }
 
-        public BlueprintConverterNode(BlueprintCompiledNodeDto dto, MethodInfo methodInfo)
+        public BlueprintConverterNode(BlueprintDesignNodeDto dto)
         {
             Guid = dto.Guid;
+            dto.Properties.TryGetValue(NodePropertyNames.K_METHOD_DECLARING_TYPE, out var methodAssemblyType);
+            dto.Properties.TryGetValue(NodePropertyNames.K_METHOD_NAME, out var methodName);
+            dto.Properties.TryGetValue(NodePropertyNames.K_METHOD_PARAMETER_TYPES, out var methodParameterTypes);
+            var methodInfo = RuntimeReflectionUtility.GetMethodInfo((Type)methodAssemblyType.Item2, (string)methodName.Item2, (string[])methodParameterTypes.Item2);
             _function = MethodDelegateHelper.GetDelegateForMethod(methodInfo);
-            InEdges = dto.InputWires;
+            InputWires = dto.InputWires;
+            OutputWires = dto.OutputWires;
             
             _parameterValues = new object[1];
             InPortValues = new Dictionary<string, object>(1);
@@ -42,24 +33,7 @@ namespace Vapor.Blueprints
 
         protected override void CacheInputValues()
         {
-            foreach (var edge in InEdges)
-            {
-                if (edge.LeftSidePin.IsExecutePin)
-                {
-                    continue;
-                }
-
-                if (!Graph.TryGetNode(edge.LeftSidePin.NodeGuid, out var leftNode))
-                {
-                    continue;
-                }
-
-                leftNode.Invoke();
-                if (leftNode.TryGetOutputValue(edge.LeftSidePin.PinName, out var outputValue))
-                {
-                    InPortValues[edge.RightSidePin.PinName] = outputValue;
-                }
-            }
+            GetAllInputPinValues();
         }
 
         protected override void WriteOutputValues()

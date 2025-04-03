@@ -16,8 +16,8 @@ namespace VaporEditor.Blueprints
     {
         // public BlueprintEditorView View { get; }
         public BlueprintEditorWindow Window { get; set; }
-        public BlueprintGraphSo GraphObject { get; }
-        public List<IBlueprintEditorNode> EditorNodes { get; } = new();
+        public BlueprintDesignGraph GraphObject { get; }
+        public List<IBlueprintNodeView> EditorNodes { get; } = new();
         public string AssetName { get; set; }
         public BlueprintBlackboardView Blackboard { get; set; }
 
@@ -29,7 +29,7 @@ namespace VaporEditor.Blueprints
         // Fields
         private readonly Dictionary<Type, Dictionary<Type, MethodInfo>> _canConvertMap = new();
         
-        public BlueprintView(BlueprintEditorWindow window, BlueprintGraphSo graphObject)
+        public BlueprintView(BlueprintEditorWindow window, BlueprintDesignGraph graphObject)
         {
             Window = window;
             GraphObject = graphObject;
@@ -77,19 +77,18 @@ namespace VaporEditor.Blueprints
             saveButton.Add(new Image { image = EditorGUIUtility.IconContent("SaveActive").image });
             _toolbar.Add(saveButton);
             
-            var compileButton = new ToolbarButton(Window.CompileAsset)
-            {
-                tooltip = "Compile"
-            };
-            compileButton.Add(new Image { image = Resources.Load<Sprite>("BlueprintIcons/d_compile").texture });
-            _toolbar.Add(compileButton);
+            // var compileButton = new ToolbarButton(Window.CompileAsset)
+            // {
+            //     tooltip = "Compile"
+            // };
+            // compileButton.Add(new Image { image = Resources.Load<Sprite>("BlueprintIcons/d_compile").texture });
+            // _toolbar.Add(compileButton);
             
             var compileToCodeButton = new ToolbarButton(Window.CompileToScript)
             {
-                tooltip = "Compile to script",
-                style = { width = 25, height = 20 }
+                tooltip = "Compile",
             };
-            compileToCodeButton.Add(new Image { image = EditorGUIUtility.IconContent("d_cs Script Icon").image, style = { marginBottom = 2} });
+            compileToCodeButton.Add(new Image { image = Resources.Load<Sprite>("BlueprintIcons/d_compile").texture });
             _toolbar.Add(compileToCodeButton);
             
             var showButton = new ToolbarButton(Window.PingAsset)
@@ -98,14 +97,6 @@ namespace VaporEditor.Blueprints
             };
             showButton.Add(new Image { image = EditorGUIUtility.IconContent("d_scenepicking_pickable_hover").image });
             _toolbar.Add(showButton);
-            
-            _toolbar.Add(new ToolbarSpacer
-            {
-                style =
-                {
-                    flexGrow = 1f
-                }
-            });
             
             var blackBoardToggle = new ToolbarToggle()
             {
@@ -119,6 +110,28 @@ namespace VaporEditor.Blueprints
             });
             blackBoardToggle.SetValueWithoutNotify(true);
             _toolbar.Add(blackBoardToggle);
+            
+            
+            _toolbar.Add(new ToolbarSpacer
+            {
+                style =
+                {
+                    flexGrow = 1f
+                }
+            });
+            
+            var inspectorToggle = new ToolbarToggle()
+            {
+                tooltip = "Hide Inspector"
+            };
+            inspectorToggle.Add(new Image { image = EditorGUIUtility.IconContent("d_UnityEditor.InspectorWindow").image });
+            inspectorToggle.RegisterValueChangedCallback(evt =>
+            {
+                inspectorToggle.tooltip = evt.newValue ? "Hide Inspector" : "Show Inspector";
+                Window.SetInspectorVisibility(evt.newValue);
+            });
+            inspectorToggle.SetValueWithoutNotify(true);
+            _toolbar.Add(inspectorToggle);
             
             var fullscreenToggle = new ToolbarToggle()
             {
@@ -162,7 +175,7 @@ namespace VaporEditor.Blueprints
                 RemoveElement(e);
             }
             EditorNodes.Clear();
-            if (GraphObject.DesignGraph.Current == null)
+            if (GraphObject.Current == null)
             {
                 return;
             }
@@ -182,7 +195,7 @@ namespace VaporEditor.Blueprints
             }
             
             // Loading Nodes
-            foreach (var node in GraphObject.DesignGraph.Current.Nodes)
+            foreach (var node in GraphObject.Current.Nodes)
             {
                 BlueprintNodeDrawerUtility.AddNode(node, this, EditorNodes, null);
             }
@@ -190,10 +203,10 @@ namespace VaporEditor.Blueprints
             // Loading Edges
             foreach (var rightNode in EditorNodes)
             {
-                var wireReferences = rightNode.Model.InputWires;
+                var wireReferences = rightNode.Controller.Model.InputWires;
                 foreach (var wireReference in wireReferences)
                 {
-                    var leftNode = EditorNodes.FirstOrDefault(iNode => wireReference.LeftSidePin.NodeGuid == iNode.Model.Guid);
+                    var leftNode = EditorNodes.FirstOrDefault(iNode => wireReference.LeftSidePin.NodeGuid == iNode.Controller.Model.Guid);
                     if (leftNode != null)
                     {
                         // Get Connected Pins
@@ -236,6 +249,8 @@ namespace VaporEditor.Blueprints
                     }
                 }
             }
+            
+            schedule.Execute(_ => FrameAll()).ExecuteLater(100);
         }
         #endregion
 
@@ -265,9 +280,9 @@ namespace VaporEditor.Blueprints
                 Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintView), nameof(OnGraphViewChanged))} - Moved Elements [{graphViewChange.movedElements.Count}]");
                 foreach (var element in graphViewChange.movedElements)
                 {
-                    if (element is IBlueprintEditorNode node)
+                    if (element is IBlueprintNodeView node)
                     {
-                        node.Model.Position = element.parent.ChangeCoordinatesTo(contentViewContainer, element.GetPosition());
+                        node.Controller.Model.Position = element.parent.ChangeCoordinatesTo(contentViewContainer, element.GetPosition());
                     }
                 }
             }
@@ -281,10 +296,10 @@ namespace VaporEditor.Blueprints
                     RemoveEdge(edge);
                 }
                 
-                foreach (var node in graphViewChange.elementsToRemove.OfType<IBlueprintEditorNode>())
+                foreach (var node in graphViewChange.elementsToRemove.OfType<IBlueprintNodeView>())
                 {
                     EditorNodes.Remove(node);
-                    GraphObject.DesignGraph.Current.Nodes.Remove(node.Model);
+                    GraphObject.Current.Nodes.Remove(node.Controller);
                 }
             }
             
@@ -295,7 +310,7 @@ namespace VaporEditor.Blueprints
         private void OnEnterPanel(AttachToPanelEvent evt)
         {
             // First Parent Is Split View
-            parent.parent.parent.Insert(0, _toolbar);
+            Window.SplitView.parent.Insert(0, _toolbar);
         }
 
         private void OnLeavePanel(DetachFromPanelEvent evt)
@@ -313,26 +328,31 @@ namespace VaporEditor.Blueprints
             }
 
             position = contentViewContainer.WorldToLocal(position);
-            var type = (INodeType)Activator.CreateInstance(model.ModelType);
-            var node = type.CreateDesignNode(position, model.Parameters);
 
-            if (node == null)
+            model.TryGetParameter<NodeType>(SearchModelParams.NODE_TYPE_PARAM, out var nodeType);
+
+            var controller = BlueprintNodeControllerFactory.Build(nodeType, position, GraphObject.Current, model.Parameters.ToArray());
+            
+            // var type = (INodeType)Activator.CreateInstance(model.ModelType);
+            // var node = type.CreateDesignNode(position, model.Parameters);
+
+            if (controller == null)
             {
                 return;
             }
             
             // Validate and Add The Node
             // node.Validate();
-            CreateNodeFromModel(node);
+            CreateModelForController(controller);
 
-            var portIdx = model.Parameters.FindIndex(t => t.Item1 == INodeType.PORT_PARAM);
+            var portIdx = model.Parameters.FindIndex(t => t.Item1 == SearchModelParams.PORT_PARAM);
             if (portIdx == -1)
             {
                 return;
             }
             
             // Auto-Create A Valid Edge If Possible
-            var port = (BlueprintEditorPort)model.Parameters[portIdx].Item2;
+            var port = (BlueprintPortView)model.Parameters[portIdx].Item2;
             var last = EditorNodes[^1];
             if (port.direction == Direction.Input)
             {
@@ -356,31 +376,30 @@ namespace VaporEditor.Blueprints
             }
         }
         
-        public bool OnSpawnNodeDirect<T>(Vector2 position, params ValueTuple<string, object>[] parameters) where T : INodeType
+        public bool OnSpawnNodeDirect(NodeType nodeType, Vector2 position, params ValueTuple<string, object>[] parameters)
         {
             position = contentViewContainer.WorldToLocal(position);
-            var type = (INodeType)Activator.CreateInstance(typeof(T));
-            var node = type.CreateDesignNode(position, parameters.ToList());
-
-            if (node != null)
+            var node = BlueprintNodeControllerFactory.Build(nodeType, position, GraphObject.Current, parameters);
+            if (node == null)
             {
-                CreateNodeFromModel(node);
-                return true;
+                return false;
             }
 
-            return false;
+            CreateModelForController(node);
+            return true;
+
         }
         
-        public void CreateNodeFromModel(BlueprintDesignNode node)
+        public void CreateModelForController(BlueprintNodeController nodeController)
         {
-            Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintView), nameof(CreateNodeFromModel))} - {node.GetType().Name}");
-            BlueprintNodeDrawerUtility.AddNode(node, this, EditorNodes, GraphObject.DesignGraph.Current.Nodes);
+            Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintView), nameof(CreateModelForController))} - {nodeController.GetType().Name}");
+            BlueprintNodeDrawerUtility.AddNode(nodeController, this, EditorNodes, GraphObject.Current.Nodes);
         }
         
         public void CreateRedirectNode(Vector2 pos, Edge edgeTarget)
         {
-            var outputPort = (BlueprintEditorPort)edgeTarget.output;
-            var inputPort = (BlueprintEditorPort)edgeTarget.input;
+            var outputPort = (BlueprintPortView)edgeTarget.output;
+            var inputPort = (BlueprintPortView)edgeTarget.input;
             
             var outputSlot = edgeTarget.output.GetPin();
             var inputSlot = edgeTarget.input.GetPin();
@@ -390,7 +409,7 @@ namespace VaporEditor.Blueprints
             // sr.UserData = (bse, pos);
             // View.Select(sr);
 
-            if (!OnSpawnNodeDirect<RerouteNodeType>(pos, (INodeType.CONNECTION_TYPE_PARAM, inputSlot.Type)))
+            if (!OnSpawnNodeDirect(NodeType.Redirect, pos, (SearchModelParams.DATA_TYPE_PARAM, inputSlot.Type)))
             {
                 // Exit Out Failed To Add
                 DeleteElements(new[] { edgeTarget });
@@ -398,11 +417,11 @@ namespace VaporEditor.Blueprints
             }
 
             var reroute = EditorNodes[^1];
-            var leftPortRef = new BlueprintPinReference(outputSlot.PortName, outputPort.Node.Model.Guid, outputSlot.IsExecutePin);
-            var rightPortRef = new BlueprintPinReference(inputSlot.PortName, inputPort.Node.Model.Guid, inputSlot.IsExecutePin);
+            var leftPortRef = new BlueprintPinReference(outputSlot.PortName, outputPort.NodeView.Controller.Model.Guid, outputSlot.IsExecutePin);
+            var rightPortRef = new BlueprintPinReference(inputSlot.PortName, inputPort.NodeView.Controller.Model.Guid, inputSlot.IsExecutePin);
 
-            var inRerouteRef = new BlueprintPinReference(PinNames.EXECUTE_IN, reroute.Model.Guid, outputSlot.IsExecutePin);
-            var outRerouteRef = new BlueprintPinReference(PinNames.EXECUTE_OUT, reroute.Model.Guid, outputSlot.IsExecutePin);
+            var inRerouteRef = new BlueprintPinReference(outputSlot.IsExecutePin ? PinNames.EXECUTE_IN : PinNames.SET_IN, reroute.Controller.Model.Guid, outputSlot.IsExecutePin);
+            var outRerouteRef = new BlueprintPinReference(outputSlot.IsExecutePin ? PinNames.EXECUTE_OUT : PinNames.GET_OUT, reroute.Controller.Model.Guid, outputSlot.IsExecutePin);
             DeleteElements(new[] { edgeTarget });
             ConnectPins(leftPortRef, inRerouteRef);
             ConnectPins(outRerouteRef, rightPortRef);
@@ -410,17 +429,17 @@ namespace VaporEditor.Blueprints
 
         public void CreateConverterNode(Edge edgeTarget)
         {
-            var outputPort = (BlueprintEditorPort)edgeTarget.output;
-            var inputPort = (BlueprintEditorPort)edgeTarget.input;
+            var outputPort = (BlueprintPortView)edgeTarget.output;
+            var inputPort = (BlueprintPortView)edgeTarget.input;
             
             var outputSlot = edgeTarget.output.GetPin();
             var inputSlot = edgeTarget.input.GetPin();
 
-            if (!TryGetConvertMethod(outputSlot.Type, inputSlot.Type, out MethodInfo convertMethod))
-            {
-                DeleteElements(new[] { edgeTarget });
-                return;
-            }
+            // if (!TryGetConvertMethod(outputSlot.Type, inputSlot.Type, out MethodInfo convertMethod))
+            // {
+            //     DeleteElements(new[] { edgeTarget });
+            //     return;
+            // }
 
             // var assemblyName = convertMethod.DeclaringType?.AssemblyQualifiedName;
             // var methodName = convertMethod.Name;
@@ -430,7 +449,7 @@ namespace VaporEditor.Blueprints
             // View.Select(sr);
             
             var pos = Vector2.Lerp(outputPort.worldBound.center, inputPort.worldBound.center, 0.5f) + new Vector2(0, -12);
-            if (!OnSpawnNodeDirect<ConverterNodeType>(pos, (INodeType.METHOD_INFO_PARAM, convertMethod)))
+            if (!OnSpawnNodeDirect(NodeType.Conversion, pos, (SearchModelParams.DATA_TYPE_PARAM, (outputSlot.Type, inputSlot.Type))))
             {
                 // Exit Out Failed To Add
                 DeleteElements(new[] { edgeTarget });
@@ -439,24 +458,25 @@ namespace VaporEditor.Blueprints
             
 
             var converter = EditorNodes[^1];
-            var leftPortRef = new BlueprintPinReference(outputSlot.PortName, outputPort.Node.Model.Guid, outputSlot.IsExecutePin);
-            var rightPortRef = new BlueprintPinReference(inputSlot.PortName, inputPort.Node.Model.Guid, inputSlot.IsExecutePin);
+            var leftPortRef = new BlueprintPinReference(outputSlot.PortName, outputPort.NodeView.Controller.Model.Guid, outputSlot.IsExecutePin);
+            var rightPortRef = new BlueprintPinReference(inputSlot.PortName, inputPort.NodeView.Controller.Model.Guid, inputSlot.IsExecutePin);
 
-            var inRerouteRef = new BlueprintPinReference(PinNames.EXECUTE_IN, converter.Model.Guid, outputSlot.IsExecutePin);
-            var outRerouteRef = new BlueprintPinReference(PinNames.RETURN, converter.Model.Guid, outputSlot.IsExecutePin);
+            var inRerouteRef = new BlueprintPinReference(PinNames.SET_IN, converter.Controller.Model.Guid, outputSlot.IsExecutePin);
+            var outRerouteRef = new BlueprintPinReference(PinNames.GET_OUT, converter.Controller.Model.Guid, outputSlot.IsExecutePin);
             DeleteElements(new[] { edgeTarget });
             ConnectPins(leftPortRef, inRerouteRef);
             ConnectPins(outRerouteRef, rightPortRef);
         }
+        
         #endregion
 
         #region - Pins -
         public override List<Port> GetCompatiblePorts(Port startPort, NodeAdapter nodeAdapter)
         {
-            var allPorts = new List<BlueprintEditorPort>();
+            var allPorts = new List<BlueprintPortView>();
             var validPorts = new List<Port>();
 
-            if (startPort is not BlueprintEditorPort startEditorPort)
+            if (startPort is not BlueprintPortView startEditorPort)
             {
                 return validPorts;
             }
@@ -493,7 +513,17 @@ namespace VaporEditor.Blueprints
                 return true;
             }
 
-            if (endPort.portType ==  typeof(object) && startPort.portType != typeof(ExecutePin))
+            if (endPort.portType.IsAssignableFrom(startPort.portType))
+            {
+                return true;
+            }
+
+            if (endPort.portType == typeof(object) && startPort.portType != typeof(ExecutePin))
+            {
+                return true;
+            }
+
+            if (endPort.portType == typeof(Enum) && startPort.portType.IsEnum)
             {
                 return true;
             }
@@ -502,27 +532,27 @@ namespace VaporEditor.Blueprints
             {
                 return true;
             }
+
             return false;
         }
 
         #endregion
 
         #region - Edges -
-        public void CreateEdge(BlueprintEditorPort leftPort, BlueprintEditorPort rightPort, bool shouldModifyDataModel)
+        public void CreateEdge(BlueprintPortView leftPortView, BlueprintPortView rightPortView, bool shouldModifyDataModel)
         {
-            var edge = leftPort.ConnectTo(rightPort);
+            var edge = leftPortView.ConnectTo(rightPortView);
 
+            BlueprintWireReference wireReference = new BlueprintWireReference(
+                new BlueprintPinReference(leftPortView.Pin.PortName, leftPortView.NodeView.Controller.Model.Guid, leftPortView.Pin.IsExecutePin),
+                new BlueprintPinReference(rightPortView.Pin.PortName, rightPortView.NodeView.Controller.Model.Guid, rightPortView.Pin.IsExecutePin));
             if (shouldModifyDataModel)
             {
-                leftPort.Node.Model.OutputWires.Add(new BlueprintWireReference(
-                    new BlueprintPinReference(leftPort.Pin.PortName, leftPort.Node.Model.Guid, leftPort.Pin.IsExecutePin),
-                    new BlueprintPinReference(rightPort.Pin.PortName, rightPort.Node.Model.Guid, rightPort.Pin.IsExecutePin)));
-                rightPort.Node.Model.InputWires.Add(new BlueprintWireReference(
-                    new BlueprintPinReference(leftPort.Pin.PortName, leftPort.Node.Model.Guid, leftPort.Pin.IsExecutePin),
-                    new BlueprintPinReference(rightPort.Pin.PortName, rightPort.Node.Model.Guid, rightPort.Pin.IsExecutePin)));
+                leftPortView.NodeView.Controller.Model.OutputWires.Add(wireReference);
+                rightPortView.NodeView.Controller.Model.InputWires.Add(wireReference);
             }
 
-            rightPort.Node.OnConnectedInputEdge(rightPort.Pin.PortName);
+            rightPortView.NodeView.OnConnectedInputEdge(wireReference, shouldModifyDataModel);
             edge.RegisterCallback<MouseDownEvent>(OnEdgeMouseDown);
             
             AddElement(edge);
@@ -530,20 +560,20 @@ namespace VaporEditor.Blueprints
 
         public void RemoveEdge(Edge edge)
         {
-            if (edge.input != null && edge.output != null && edge.input.node is IBlueprintEditorNode rightNode && edge.output.node is IBlueprintEditorNode leftNode)
+            if (edge.input != null && edge.output != null && edge.input.node is IBlueprintNodeView rightNode && edge.output.node is IBlueprintNodeView leftNode)
             {
-                var leftModel = leftNode.Model;
-                var rightModel = rightNode.Model;
+                var leftModel = leftNode.Controller;
+                var rightModel = rightNode.Controller;
 
                 // NEW
                 var rightPin = edge.input.GetPin();
                 var leftPin = edge.output.GetPin();
                 BlueprintWireReference edgeToMatch = new BlueprintWireReference(
-                    new BlueprintPinReference(leftPin.PortName, leftModel.Guid, false),
-                    new BlueprintPinReference(rightPin.PortName, rightModel.Guid, false));
+                    new BlueprintPinReference(leftPin.PortName, leftModel.Model.Guid, false),
+                    new BlueprintPinReference(rightPin.PortName, rightModel.Model.Guid, false));
 
-                rightModel.InputWires.Remove(edgeToMatch);
-                leftModel.OutputWires.Remove(edgeToMatch);
+                rightModel.Model.InputWires.Remove(edgeToMatch);
+                leftModel.Model.OutputWires.Remove(edgeToMatch);
 
                 rightNode.OnDisconnectedInputEdge(rightPin.PortName);
             }
@@ -553,8 +583,8 @@ namespace VaporEditor.Blueprints
 
         public void ConnectPins(BlueprintPinReference leftPin, BlueprintPinReference rightPin)
         {
-            var leftNode = EditorNodes.FirstOrDefault(n => n.Model.Guid == leftPin.NodeGuid);
-            var rightNode = EditorNodes.FirstOrDefault(n => n.Model.Guid == rightPin.NodeGuid);
+            var leftNode = EditorNodes.FirstOrDefault(n => n.Controller.Model.Guid == leftPin.NodeGuid);
+            var rightNode = EditorNodes.FirstOrDefault(n => n.Controller.Model.Guid == rightPin.NodeGuid);
             if (leftNode != null && rightNode != null)
             {
                 bool leftValid = leftNode.OutPorts.TryGetValue(leftPin.PinName, out var leftOutPort);
@@ -562,6 +592,69 @@ namespace VaporEditor.Blueprints
                 if (leftValid && rightValid)
                 {
                     CreateEdge(leftOutPort, rightInPort, true);
+                }
+            }
+        }
+
+        public void RebuildEdgesOnNode(IBlueprintNodeView nodeToRebuild)
+        {
+            // Rebuild Inputs
+            _CreateEdgesFromRightNode(nodeToRebuild);
+
+            // Rebuild Outputs
+            foreach (var rightNode in nodeToRebuild.Controller.Model.OutputWires.Select(wire => EditorNodes.FirstOrDefault(iNode => wire.RightSidePin.NodeGuid == iNode.Controller.Model.Guid)))
+            {
+                _CreateEdgesFromRightNode(rightNode);
+            }
+
+            void _CreateEdgesFromRightNode(IBlueprintNodeView nodeView)
+            {
+                var wireReferences = nodeView.Controller.Model.InputWires;
+                foreach (var wireReference in wireReferences)
+                {
+                    var leftNode = EditorNodes.FirstOrDefault(iNode => wireReference.LeftSidePin.NodeGuid == iNode.Controller.Model.Guid);
+                    if (leftNode != null)
+                    {
+                        // Get Connected Pins
+                        if (leftNode.OutPorts.TryGetValue(wireReference.LeftSidePin.PinName, out var leftPort) && nodeView.InPorts.TryGetValue(wireReference.RightSidePin.PinName, out var rightPort))
+                        {
+                            var leftPin = leftPort.GetPin();
+                            var rightPin = rightPort.GetPin();
+
+                            // Left Pin Is Already Connect
+                            if (leftPort.connected)
+                            {
+                                // Break if it is an execute pin or doesn't allow multiple wires.
+                                // Executes can only have one output but multiple inputs.
+                                if (leftPin.IsExecutePin || !leftPin.AllowMultipleWires)
+                                {
+                                    Debug.LogWarning(
+                                        $"{TooltipMarkup.ClassMethod(nameof(BlueprintView), nameof(Load))} - A port already has a connection. {wireReference.LeftSidePin.PinName}: {leftPort.connected} -> {wireReference.RightSidePin.PinName} {rightPort.connected}");
+                                    continue;
+                                }
+                            }
+
+                            if (rightPort.connected && !rightPin.IsExecutePin)
+                            {
+                                // Break if right port is connected and it is not an execute pin.
+                                // Right ports can only have one input value wire.
+                                Debug.LogWarning(
+                                    $"{TooltipMarkup.ClassMethod(nameof(BlueprintView), nameof(Load))} - A port already has a connection. {wireReference.LeftSidePin.PinName}: {leftPort.connected} -> {wireReference.RightSidePin.PinName} {rightPort.connected}");
+                                continue;
+                            }
+
+                            CreateEdge(leftPort, rightPort, false);
+                        }
+                        else
+                        {
+                            Debug.Log($"{TooltipMarkup.ClassMethod(nameof(BlueprintView), nameof(Load))} - Could Not Connect {wireReference.LeftSidePin.PinName} -> {wireReference.RightSidePin.PinName}");
+                        }
+                    }
+                    else
+                    {
+                        Debug.Log(
+                            $"{TooltipMarkup.ClassMethod(nameof(BlueprintView), nameof(Load))} - Could Not Find Output Node {wireReference.LeftSidePin.PinName} -> {wireReference.RightSidePin.PinName}");
+                    }
                 }
             }
         }
@@ -589,19 +682,19 @@ namespace VaporEditor.Blueprints
 
         private void MockEvaluate()
         {
-            var en = GraphObject.DesignGraph.Current.Nodes.FirstOrDefault(x => x.Type == typeof(EntryNodeType));
+            var en = GraphObject.Current.Nodes.FirstOrDefault(x => x.Model.NodeType == NodeType.Entry);
             if (en != null)
             {
-                var mock = new BlueprintFunctionGraph(GraphObject, true);
-                mock.Invoke((from outPortsValue in en.OutPorts.Values where outPortsValue.HasInlineValue select outPortsValue.InlineValue.Get()).ToArray(), 
-                    x =>
-                    {
-                        Debug.Log("Mock Evaluated");
-                        foreach (var pair in x.GetResults())
-                        {
-                            Debug.Log($"{pair.Key} - {pair.Value}");
-                        }
-                    });
+                // var mock = new BlueprintFunctionGraph(GraphObject, true);
+                // mock.Invoke((from outPortsValue in en.OutPorts.Values where outPortsValue.HasInlineValue select outPortsValue.InlineValue.Get()).ToArray(), 
+                //     x =>
+                //     {
+                //         Debug.Log("Mock Evaluated");
+                //         foreach (var pair in x.GetResults())
+                //         {
+                //             Debug.Log($"{pair.Key} - {pair.Value}");
+                //         }
+                //     });
             }
         }
 
@@ -622,9 +715,31 @@ namespace VaporEditor.Blueprints
         #endregion
 
         #region - Helper -
-        public bool CanConvert(Type source, Type target)
+        // public bool CanConvert(Type source, Type target)
+        // {
+        //     return _canConvertMap.TryGetValue(source, out var map) && map.ContainsKey(target);
+        // }
+        
+        public static bool CanConvert(Type from, Type to)
         {
-            return _canConvertMap.TryGetValue(source, out var map) && map.ContainsKey(target);
+            if (from == to) return false; // Same type
+            if (to.IsAssignableFrom(from)) return true; // Inheritance check
+            if (typeof(IConvertible).IsAssignableFrom(from) && typeof(IConvertible).IsAssignableFrom(to)) return true; // IConvertible
+            if(to == typeof(string)) return true; // Implicit Convert To ToString();
+
+            // Check for implicit or explicit conversion operators
+            return HasConversionOperator(from, to, "op_Implicit") || HasConversionOperator(from, to, "op_Explicit");
+        }
+
+        private static bool HasConversionOperator(Type from, Type to, string opMethodName)
+        {
+            return from.GetMethods(BindingFlags.Static | BindingFlags.Public)
+                       .Any(m => m.Name == opMethodName && m.ReturnType == to &&
+                                 m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType == from)
+                   ||
+                   to.GetMethods(BindingFlags.Static | BindingFlags.Public)
+                       .Any(m => m.Name == opMethodName && m.ReturnType == to &&
+                                 m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType == from);
         }
 
         private bool TryGetConvertMethod(Type outputSlotType, Type inputSlotType, out MethodInfo methodInfo)

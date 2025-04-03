@@ -1,8 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Reflection.Emit;
-using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using UnityEngine;
@@ -13,85 +12,175 @@ namespace VaporEditor.Blueprints
 {
     public abstract class BlueprintSyntaxNodeBase
     {
-        protected readonly BlueprintDesignNode MyNode;
+        protected internal readonly BlueprintNodeController MyNodeController;
 
-        protected BlueprintSyntaxNodeBase(BlueprintDesignNode node)
+        protected bool IsEvaluated { get; set; }
+        protected int Counter { get; set; }
+
+        protected BlueprintSyntaxNodeBase(BlueprintNodeController nodeController)
         {
-            MyNode = node;
+            MyNodeController = nodeController;
         }
-        
-        public abstract BlockSyntax AddStatementAndContinue(BlockSyntax block);
 
-        public virtual BlockSyntax GetStatementForPin(BlueprintWireReference wire, BlockSyntax block)
+        public virtual BlockSyntax AddStatementAndContinue(BlockSyntax block)
+        {
+            if (IsEvaluated)
+            {
+                Debug.LogError("Node is already evaluated");
+                return block;
+            }
+
+            block = GetInputPinStatements(block);
+            // block = CreateActionStatement(block);
+            block = SetOutputPinStatements(block);
+            IsEvaluated = true;
+
+            var idx = MyNodeController.Model.OutputWires.FindIndex(w => w.IsExecuteWire);
+            if (idx == -1)
+            {
+                return block;
+            }
+
+            var nextNodeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.IsExecuteWire);
+            if (!nextNodeWire.IsValid() || !BlueprintScriptWriter.NodeMap.TryGetValue(nextNodeWire.RightSidePin.NodeGuid, out var nextNode))
+            {
+                Debug.LogError($"Invalid Node Guid: {nextNodeWire.RightSidePin.PinName}");
+                return block;
+            }
+
+            block = nextNode.AddStatementAndContinue(block);
+            return block;
+        }
+
+        protected BlockSyntax GetInputPinStatements(BlockSyntax block)
+        {
+            foreach (var pin in MyNodeController.InPorts.Values)
+            {
+                if (pin.IsExecutePin)
+                {
+                    continue;
+                }
+
+                if (pin.PortName == PinNames.IGNORE)
+                {
+                    continue;
+                }
+
+                var wire = MyNodeController.Model.InputWires.FirstOrDefault(w => w.RightSidePin.PinName == pin.PortName);
+                if (wire.IsValid())
+                {
+                    if (!BlueprintScriptWriter.NodeMap.TryGetValue(wire.LeftSidePin.NodeGuid, out var pinNode))
+                    {
+                        Debug.LogError($"Invalid Node Guid: {wire.LeftSidePin.NodeGuid}");
+                        return block;
+                    }
+                    block = pinNode.GetStatementForPin(wire, block);
+                }
+                else
+                {
+                    // Use Default Value
+                    var defaultValue = pin.InlineValue == null ? BlueprintScriptWriter.GetDefaultValueSyntax(pin.Type) : BlueprintScriptWriter.GetExpressionForObjectInitializer(pin.InlineValue.Get());
+
+                    var variableDeclaration = SyntaxFactory.LocalDeclarationStatement(
+                        SyntaxFactory.VariableDeclaration(BlueprintScriptWriter.GetTypeSyntax(pin.Type))
+                            .AddVariables(SyntaxFactory.VariableDeclarator(FormatWithUid(pin.PortName))
+                                .WithInitializer(SyntaxFactory.EqualsValueClause(defaultValue))) // Assign generated value
+                    );
+                    block = block.AddStatements(variableDeclaration);
+                }
+            }
+            return block;
+        }
+
+        // public virtual BlockSyntax CreateActionStatement(BlockSyntax block)
+        // {
+        //     return block;
+        // }
+
+        protected virtual BlockSyntax SetOutputPinStatements(BlockSyntax block)
         {
             return block;
         }
 
-        public string FormatWithUid(string prefix) => MyNode.FormatWithUuid(prefix);
-
-        public string FormatWithGuid(string prefix, string guid) => $"{prefix}_{guid.GetStableHashU32()}";
-
-        public static BlueprintSyntaxNodeBase ConvertToSyntaxNode(BlueprintDesignNode node)
+        private BlockSyntax GetStatementForPin(BlueprintWireReference wire, BlockSyntax block)
         {
-            switch (node.NodeType)
+            // If the node hasn't been evaluated meaning a variable has not been set for it yet.
+            if (!IsEvaluated)
             {
-                case BranchNodeType:
-                    return new BranchSyntaxNode(node);
-                case ConverterNodeType:
-                    break;
-                case EntryNodeType:
-                    return new EntrySyntaxNode(node);
-                case FieldGetterNodeType:
-                    break;
-                case FieldSetterNodeType:
-                    break;
-                case ForEachNodeType:
-                    break;
-                case ForNodeType:
-                    break;
-                case GraphNodeType:
-                    break;
-                case MakeSerializableNodeType:
-                    break;
-                case MethodNodeType:
-                    return new MethodSyntaxNode(node);
-                case RerouteNodeType:
-                    break;
-                case ReturnNodeType:
-                    return new ReturnSyntaxNode(node);
-                case SequenceNodeType:
-                    break;
-                case SwitchNodeType:
-                    break;
-                case TemporaryDataGetterNodeType:
-                    break;
-                case TemporaryDataSetterNodeType:
-                    return new SetLocalVariableSyntaxNode(node);
-                case WhileNodeType:
-                    break;
+                Counter++;
+                block = GetInputPinStatements(block);
+                block = SetOutputPinStatements(block);
             }
 
-            return null;
+            var pinType = MyNodeController.OutPorts[wire.LeftSidePin.PinName].Type;
+            var rightCounter = BlueprintScriptWriter.NodeMap[wire.RightSidePin.NodeGuid].Counter;
+
+            // Then create a variable {Type RightNameIn = LeftNameOut}
+            var variableDeclaration = SyntaxFactory.LocalDeclarationStatement(
+                SyntaxFactory.VariableDeclaration(BlueprintScriptWriter.GetTypeSyntax(pinType))
+                    .AddVariables(SyntaxFactory.VariableDeclarator(FormatWithGuid(wire.RightSidePin.PinName, wire.RightSidePin.NodeGuid, rightCounter))
+                        .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.IdentifierName(FormatWithGuid(wire.LeftSidePin.PinName, wire.LeftSidePin.NodeGuid, Counter))))) // Assign default value
+            );
+            block = block.AddStatements(variableDeclaration);
+
+            return block;
+        }
+
+        protected string FormatWithUid(string prefix) => $"{MyNodeController.FormatWithUuid(prefix)}_{Counter}";
+
+        private static string FormatWithGuid(string prefix, string guid, int count) => $"{prefix}_{guid.GetStableHashU32()}_{count}";
+
+        public static BlueprintSyntaxNodeBase ConvertToSyntaxNode(BlueprintNodeController nodeController)
+        {
+            return nodeController.Model.NodeType switch
+            {
+                NodeType.Entry => new EntrySyntaxNode(nodeController),
+                NodeType.Method => new MethodSyntaxNode(nodeController),
+                NodeType.MemberAccess => new MemberAccessSyntaxNode(nodeController),
+                NodeType.Return => new ReturnSyntaxNode(nodeController),
+                NodeType.Branch => new BranchSyntaxNode(nodeController),
+                NodeType.Switch => new SwitchSyntaxNode(nodeController),
+                NodeType.Sequence => new SequenceSyntaxNode(nodeController),
+                NodeType.For => new ForSyntaxNode(nodeController),
+                NodeType.ForEach => new ForEachSyntaxNode(nodeController),
+                NodeType.While => new WhileSyntaxNode(nodeController),
+                NodeType.Break => new BreakSyntaxNode(nodeController),
+                NodeType.Continue => new ContinueSyntaxNode(nodeController),
+                NodeType.Conversion => new ConversionSyntaxNode(nodeController),
+                NodeType.Cast => new CastSyntaxNode(nodeController),
+                NodeType.Redirect => new RedirectSyntaxNode(nodeController),
+                NodeType.Inline => new ConstructorSyntaxNode(nodeController),
+                _ => null
+            };
         }
     }
 
     public class EntrySyntaxNode : BlueprintSyntaxNodeBase
     {
-        public EntrySyntaxNode(BlueprintDesignNode node) : base(node)
+        public EntrySyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
         {
         }
 
-        public override BlockSyntax AddStatementAndContinue(BlockSyntax block)
+        protected override BlockSyntax SetOutputPinStatements(BlockSyntax block)
         {
-            var nextNodeGuid = MyNode.OutputWires.First(w => w.IsExecuteWire).RightSidePin.NodeGuid;
-            if (!BlueprintScriptWriter.NodeMap.TryGetValue(nextNodeGuid, out var nextNode))
+            // Create All Input Args
+            foreach (var arg in MyNodeController.OutPorts.Values)
             {
-                Debug.LogError($"Invalid Node Guid: {nextNodeGuid}");
-                return block;
+                if (arg.IsExecutePin)
+                {
+                    continue;
+                }
+                
+                var variableDeclaration = SyntaxFactory.LocalDeclarationStatement(
+                    SyntaxFactory.VariableDeclaration(BlueprintScriptWriter.GetTypeSyntax(arg.Type))
+                        .AddVariables(SyntaxFactory.VariableDeclarator(FormatWithUid(arg.PortName))
+                            .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.IdentifierName(arg.PortName)))) // Assign generated value
+                );
+                block = block.AddStatements(variableDeclaration);
             }
-
+            
             // Create all Local Variables First when entered
-            foreach (var tmp in MyNode.Graph.TemporaryVariables)
+            foreach (var tmp in MyNodeController.Graph.TemporaryVariables)
             {
                 // Use Default Value
                 var defaultValue = BlueprintScriptWriter.GetDefaultValueSyntax(tmp.Type);
@@ -103,97 +192,7 @@ namespace VaporEditor.Blueprints
                 );
                 block = block.AddStatements(variableDeclaration);
             }
-            
-            block = nextNode.AddStatementAndContinue(block);
-            return block;
-        }
 
-        public override BlockSyntax GetStatementForPin(BlueprintWireReference wire, BlockSyntax block)
-        {
-            if (MyNode.OutPorts.ContainsKey(wire.LeftSidePin.PinName))
-            {
-                block = block.AddStatements(SyntaxFactory.ParseStatement($"var {wire.RightSidePin.PinName}_{wire.RightSidePin.NodeGuid.GetStableHashU32()} = {wire.LeftSidePin.PinName};"));
-            }
-            return block;
-        }
-    }
-
-    public class ReturnSyntaxNode : BlueprintSyntaxNodeBase
-    {
-        public ReturnSyntaxNode(BlueprintDesignNode node) : base(node)
-        {
-        }
-
-        public override BlockSyntax AddStatementAndContinue(BlockSyntax block)
-        {
-            if (MyNode.InPorts.Count == 1)
-            {
-                block = block.AddStatements(SyntaxFactory.ReturnStatement());
-            }
-            else
-            {
-                foreach (var pin in MyNode.InPorts.Values)
-                {
-                    if (pin.IsExecutePin)
-                    {
-                        continue;
-                    }
-
-                    var wire = MyNode.InputWires.FirstOrDefault(w => w.RightSidePin.PinName == pin.PortName);
-                    if (wire.IsValid())
-                    {
-                        block = GetStatementForPin(wire, block);
-                    }
-                    else
-                    {
-                        // Use Default Value
-                        var defaultValue = pin.InlineValue == null ? BlueprintScriptWriter.GetDefaultValueSyntax(pin.Type) : BlueprintScriptWriter.GetExpressionForObjectInitializer(pin.InlineValue.Get());
-
-                        var variableDeclaration = SyntaxFactory.LocalDeclarationStatement(
-                            SyntaxFactory.VariableDeclaration(BlueprintScriptWriter.GetTypeSyntax(pin.Type))
-                                .AddVariables(SyntaxFactory.VariableDeclarator(MyNode.FormatWithUuid(pin.PortName))
-                                    .WithInitializer(SyntaxFactory.EqualsValueClause(defaultValue))) // Assign generated value
-                        );
-                        block = block.AddStatements(variableDeclaration);
-                    }
-                }
-                
-                block = block.AddStatements(SyntaxFactory.ReturnStatement(
-                    SyntaxFactory.IdentifierName(MyNode.FormatWithUuid("Return"))
-                ));
-            }
-            return block;
-        }
-
-        public override BlockSyntax GetStatementForPin(BlueprintWireReference wire, BlockSyntax block)
-        {
-            if (MyNode.InPorts.TryGetValue(wire.RightSidePin.PinName, out var pin))
-            {
-                if (!BlueprintScriptWriter.NodeMap.TryGetValue(wire.LeftSidePin.NodeGuid, out var nextNode))
-                {
-                    // Use Default Value
-                    var defaultValue = pin.InlineValue == null ? BlueprintScriptWriter.GetDefaultValueSyntax(pin.Type) :BlueprintScriptWriter.GetExpressionForObjectInitializer(pin.InlineValue.Get());
-
-                    var variableDeclaration = SyntaxFactory.LocalDeclarationStatement(
-                        SyntaxFactory.VariableDeclaration(BlueprintScriptWriter.GetTypeSyntax(pin.Type))
-                            .AddVariables(SyntaxFactory.VariableDeclarator(MyNode.FormatWithUuid(pin.PortName))
-                                .WithInitializer(SyntaxFactory.EqualsValueClause(defaultValue))) // Assign generated value
-                    );
-                    block = block.AddStatements(variableDeclaration);
-                }
-                else
-                {
-                    block = nextNode.GetStatementForPin(wire, block);
-
-                    // Create a variable declaration: <ReturnType> __returnValue = <defaultValue>;
-                    var variableDeclaration = SyntaxFactory.LocalDeclarationStatement(
-                        SyntaxFactory.VariableDeclaration(BlueprintScriptWriter.GetTypeSyntax(pin.Type))
-                            .AddVariables(SyntaxFactory.VariableDeclarator(MyNode.FormatWithUuid(pin.PortName))
-                                .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.IdentifierName(nextNode.FormatWithUid(wire.LeftSidePin.PinName))))) // Assign default value
-                    );
-                    block = block.AddStatements(variableDeclaration);
-                }
-            }
             return block;
         }
     }
@@ -202,163 +201,934 @@ namespace VaporEditor.Blueprints
     {
         private readonly MethodInfo _methodInfo;
         
-        public MethodSyntaxNode(BlueprintDesignNode node) : base(node)
+        public MethodSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
         {
-            node.TryGetProperty(BlueprintDesignNode.K_METHOD_INFO, out _methodInfo);
+            _methodInfo = nodeController.ModelAs<MethodNodeModel>().MethodInfo;
         }
-        
+
         public override BlockSyntax AddStatementAndContinue(BlockSyntax block)
         {
-            var wire = MyNode.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.EXECUTE_OUT);
-            if (wire.IsValid())
+            if (IsEvaluated)
             {
-                var @params = MyNode.InPorts.Values.ToList().FindAll(w => !w.IsExecutePin);
-                var argNames = @params.Select(w => w.PortName).Where(n => n != PinNames.OWNER).ToArray();
-                for (int i = 0; i < argNames.Length; i++)
-                {
-                    argNames[i] = MyNode.FormatWithUuid(argNames[i]);
-                }
-                var nextNodeGuid = wire.RightSidePin.NodeGuid;
-                string invokingVarName = null;
-                if (MyNode.InPorts.ContainsKey(PinNames.OWNER))
-                {
-                    invokingVarName = $"{PinNames.OWNER}_{MyNode.Uuid}";
-                }
-
-                block = BlueprintScriptWriter.AddMethodInfoToBody(string.Empty, argNames, invokingVarName, _methodInfo, block);
-                if (!BlueprintScriptWriter.NodeMap.TryGetValue(nextNodeGuid, out var nextNode))
-                {
-                    Debug.LogError($"Invalid Node Guid: {nextNodeGuid}");
-                    return block;
-                }
-                block = nextNode.AddStatementAndContinue(block);
+                Debug.LogError("Node is already evaluated");
+                return block;
             }
-            return block;
-        }
+            
+            block = GetInputPinStatements(block);
+            block = SetOutputPinStatements(block);
+            IsEvaluated = true;
 
-        public override BlockSyntax GetStatementForPin(BlueprintWireReference wire, BlockSyntax block)
-        {
-            var executeWire = MyNode.OutputWires.FirstOrDefault(w => w.IsExecuteWire);
-            if (!executeWire.IsValid() && MyNode.OutPorts.TryGetValue(wire.LeftSidePin.PinName, out var pin))
+            var @params = MyNodeController.InPorts.Values.ToList().FindAll(w => !w.IsExecutePin);
+            var outParams = MyNodeController.OutPorts.Values.ToList().FindAll(w => !w.IsExecutePin);
+            var argNames = @params.Select(w => w.PortName).Where(n => n != PinNames.OWNER).ToArray();
+            var outArgNames = outParams.Select(w => w.PortName).Where(n => n != PinNames.RETURN).ToArray();
+            var paramInfos = _methodInfo.GetParameters();
+            
+            var parameters = (from t in argNames let pi = paramInfos.First(p => p.Name == t) select (pi, FormatWithUid(t))).ToList();
+            parameters.AddRange(from t in outArgNames let pi = paramInfos.First(p => p.Name == t) select (pi, FormatWithUid(t)));
+
+
+            string invokingVarName = null;
+            if (MyNodeController.InPorts.ContainsKey(PinNames.OWNER))
             {
-                foreach (var p in MyNode.InPorts.Values)
+                invokingVarName = FormatWithUid(PinNames.OWNER);
+            }
+
+            var returnPinName = string.Empty;
+            Type returnPinType = null;
+            if (MyNodeController.OutPorts.TryGetValue(PinNames.RETURN, out var pin))
+            {
+                returnPinName = FormatWithUid(PinNames.RETURN);
+                returnPinType = pin.Type;
+            }
+            
+            var genericTypes = new List<Type>();
+            if (_methodInfo.IsGenericMethod)
+            {
+                var genArgs = _methodInfo.GetGenericArguments();
+                foreach (var arg in genArgs)
                 {
-                    if (p.IsExecutePin)
+                    if (!MyNodeController.GenericArgumentPortMap.TryGetValue(arg, out var p))
                     {
                         continue;
                     }
-                    var w = MyNode.InputWires.FirstOrDefault(w => w.RightSidePin.PinName == p.PortName);
-                    if (w.IsValid())
-                    {
-                        if (!BlueprintScriptWriter.NodeMap.TryGetValue(w.LeftSidePin.NodeGuid, out var node))
-                        {
-                            Debug.LogError($"Invalid Node Guid: {w.LeftSidePin.NodeGuid}");
-                            continue;
-                        }
 
-                        block = node.GetStatementForPin(w, block);
-                    }
-                    else
-                    {
-                        // Use Default Value
-                        var defaultValue = p.InlineValue == null ? BlueprintScriptWriter.GetDefaultValueSyntax(p.Type) : BlueprintScriptWriter.GetExpressionForObjectInitializer(p.InlineValue.Get());
+                    genericTypes.Add(p.Type);
+                }
+            }
+            
+            // var genericTypes = (from p in MyNodeController.GenericArgumentPortMap select p.Value.Type).ToList();
 
-                        var variableDeclaration = SyntaxFactory.LocalDeclarationStatement(
-                            SyntaxFactory.VariableDeclaration(BlueprintScriptWriter.GetTypeSyntax(p.Type))
-                                .AddVariables(SyntaxFactory.VariableDeclarator(MyNode.FormatWithUuid(p.PortName))
-                                    .WithInitializer(SyntaxFactory.EqualsValueClause(defaultValue))) // Assign generated value
-                        );
-                        block = block.AddStatements(variableDeclaration);
-                    }
-                }
-                
-                var @params = MyNode.InPorts.Values.ToList().FindAll(w => !w.IsExecutePin);
-                var argNames = @params.Select(w => w.PortName).Where(n => n != PinNames.OWNER).ToArray();
-                for (int i = 0; i < argNames.Length; i++)
-                {
-                    argNames[i] = MyNode.FormatWithUuid(argNames[i]);
-                }
-                string invokingVarName = null;
-                if (MyNode.InPorts.ContainsKey(PinNames.OWNER))
-                {
-                    invokingVarName = $"{PinNames.OWNER}_{MyNode.Uuid}";
-                }
-                block = BlueprintScriptWriter.AddMethodInfoToBody(MyNode.FormatWithUuid(wire.LeftSidePin.PinName), argNames, invokingVarName, _methodInfo, block);
+            block = BlueprintScriptWriter.AddMethodInfoToBody((returnPinType, returnPinName), parameters, genericTypes, invokingVarName, _methodInfo, block);
+
+            var idx = MyNodeController.Model.OutputWires.FindIndex(w => w.IsExecuteWire);
+            if (idx == -1)
+            {
+                return block;
             }
 
-            return block;
-        }
-    }
-
-    public class BranchSyntaxNode : BlueprintSyntaxNodeBase
-    {
-        public BranchSyntaxNode(BlueprintDesignNode node) : base(node)
-        {
-        }
-
-        public override BlockSyntax AddStatementAndContinue(BlockSyntax block)
-        {
-            // Evaluate True Expression
-            var conditionBlock = SyntaxFactory.Block();
-            
-            var boolVariableName = "conditionMet";
-            var boolVariableDeclaration = SyntaxFactory.LocalDeclarationStatement(
-                SyntaxFactory.VariableDeclaration(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.BoolKeyword)))
-                    .AddVariables(SyntaxFactory.VariableDeclarator(boolVariableName)));
-            
-            // Create an if-else statement
-            var ifBlock = SyntaxFactory.Block();
-            var elseBlock = SyntaxFactory.Block();
-            
-            // Follow Path
-            
-            IfStatementSyntax ifElseStatement = SyntaxFactory
-                .IfStatement(SyntaxFactory.IdentifierName(boolVariableName), ifBlock)
-                .WithElse(SyntaxFactory.ElseClause(elseBlock));
-
-            // Add the if-else statement to the existing block and return
-            block = block.AddStatements(boolVariableDeclaration, ifElseStatement);
-            return block;
-        }
-    }
-
-    public class SetLocalVariableSyntaxNode : BlueprintSyntaxNodeBase
-    {
-        public SetLocalVariableSyntaxNode(BlueprintDesignNode node) : base(node)
-        {
-        }
-
-        public override BlockSyntax AddStatementAndContinue(BlockSyntax block)
-        {
-            MyNode.TryGetProperty<string>(BlueprintDesignNode.VARIABLE_NAME, out var tempFieldName);
-            
-            var wire = MyNode.InputWires.FirstOrDefault(w => !w.IsExecuteWire);
-            if (wire.IsValid())
+            var nextNodeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.IsExecuteWire);
+            if (!nextNodeWire.IsValid() || !BlueprintScriptWriter.NodeMap.TryGetValue(nextNodeWire.RightSidePin.NodeGuid, out var nextNode))
             {
-                if (!BlueprintScriptWriter.NodeMap.TryGetValue(wire.LeftSidePin.NodeGuid, out var node))
+                Debug.LogError($"Invalid Node Guid: {nextNodeWire.RightSidePin.PinName}");
+                return block;
+            }
+
+            block = nextNode.AddStatementAndContinue(block);
+            return block;
+        }
+
+        protected override BlockSyntax SetOutputPinStatements(BlockSyntax block)
+        {
+            if (!MyNodeController.ModelAs<MethodNodeModel>().IsPure)
+            {
+                return block;
+            }
+
+            var @params = MyNodeController.InPorts.Values.ToList().FindAll(w => !w.IsExecutePin);
+            var outParams = MyNodeController.OutPorts.Values.ToList().FindAll(w => !w.IsExecutePin);
+            var argNames = @params.Select(w => w.PortName).Where(n => n != PinNames.OWNER).ToArray();
+            var outArgNames = outParams.Select(w => w.PortName).Where(n => n != PinNames.RETURN).ToArray();
+            var paramInfos = _methodInfo.GetParameters();
+            
+            var parameters = (from t in argNames let pi = paramInfos.First(p => p.Name == t) select (pi, FormatWithUid(t))).ToList();
+            parameters.AddRange(from t in outArgNames let pi = paramInfos.First(p => p.Name == t) select (pi, FormatWithUid(t)));
+
+
+            string invokingVarName = null;
+            if (MyNodeController.InPorts.ContainsKey(PinNames.OWNER))
+            {
+                invokingVarName = $"{PinNames.OWNER}_{MyNodeController.Model.Uuid}";
+            }
+
+            var returnPinName = string.Empty;
+            Type returnPinType = null;
+            if (MyNodeController.OutPorts.TryGetValue(PinNames.RETURN, out var pin))
+            {
+                returnPinName = FormatWithUid(PinNames.RETURN);
+                returnPinType = pin.Type;
+            }
+            
+            var genericTypes = (from p in MyNodeController.GenericArgumentPortMap select p.Value.Type).ToList();
+
+            block = BlueprintScriptWriter.AddMethodInfoToBody((returnPinType, returnPinName), parameters, genericTypes, invokingVarName, _methodInfo, block);
+            return block;
+        }
+    }
+
+    public class MemberAccessSyntaxNode : BlueprintSyntaxNodeBase
+    {
+        public MemberAccessSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        {
+        }
+
+        // public override BlockSyntax CreateActionStatement(BlockSyntax block)
+        // {
+        //     var model = MyNodeController.ModelAs<MemberNodeModel>();
+        //     if (model.FieldInfo == null)
+        //     {
+        //         if (model.VariableAccess == VariableAccessType.Set)
+        //         {
+        //             var assignmentExpression = SyntaxFactory.AssignmentExpression(
+        //                 SyntaxKind.SimpleAssignmentExpression,
+        //                 SyntaxFactory.IdentifierName(model.VariableName), // Left-hand side
+        //                 SyntaxFactory.IdentifierName(FormatWithUid(PinNames.SET_IN)) // Right-hand side
+        //             );
+        //             var statement = SyntaxFactory.ExpressionStatement(assignmentExpression);
+        //             block = block.AddStatements(statement);
+        //         }
+        //     }
+        //     else
+        //     {
+        //         if (model.VariableAccess == VariableAccessType.Set)
+        //         {
+        //            block = BlueprintScriptWriter.AddSetFieldToBody(model.FieldInfo,  FormatWithUid(PinNames.SET_IN), FormatWithUid(PinNames.OWNER), block);
+        //         }
+        //     }
+        //     
+        //     var pinType = MyNodeController.OutPorts[PinNames.GET_OUT].Type;
+        //     // Then create a variable {Type RightNameIn = LeftNameOut}
+        //     var variableDeclaration = SyntaxFactory.LocalDeclarationStatement(
+        //         SyntaxFactory.VariableDeclaration(BlueprintScriptWriter.GetTypeSyntax(pinType))
+        //             .AddVariables(SyntaxFactory.VariableDeclarator(FormatWithUid(PinNames.GET_OUT)))
+        //     );
+        //     block = block.AddStatements(variableDeclaration);
+        //     
+        //     return block;
+        // }
+
+        protected override BlockSyntax SetOutputPinStatements(BlockSyntax block)
+        {
+            var model = MyNodeController.ModelAs<MemberNodeModel>();
+            if (model.FieldInfo == null)
+            {
+                if (model.VariableAccess == VariableAccessType.Set)
                 {
-                    Debug.LogError($"Invalid Node Guid: {wire.LeftSidePin.NodeGuid}");
-                    return block;
+                    var assignmentExpression = SyntaxFactory.AssignmentExpression(
+                        SyntaxKind.SimpleAssignmentExpression,
+                        SyntaxFactory.IdentifierName(model.VariableName), // Left-hand side
+                        SyntaxFactory.IdentifierName(FormatWithUid(PinNames.SET_IN)) // Right-hand side
+                    );
+                    var statement = SyntaxFactory.ExpressionStatement(assignmentExpression);
+                    block = block.AddStatements(statement);
                 }
-                block = node.GetStatementForPin(wire, block);
-                
+            }
+            else
+            {
+                if (model.VariableAccess == VariableAccessType.Set)
+                {
+                    block = BlueprintScriptWriter.AddSetFieldToBody(model.FieldInfo,  FormatWithUid(PinNames.SET_IN), FormatWithUid(PinNames.OWNER), block);
+                }
+            }
+            
+            var pinType = MyNodeController.OutPorts[PinNames.GET_OUT].Type;
+            // Then create a variable {Type RightNameIn = LeftNameOut}
+            var variableDeclaration = SyntaxFactory.LocalDeclarationStatement(
+                SyntaxFactory.VariableDeclaration(BlueprintScriptWriter.GetTypeSyntax(pinType))
+                    .AddVariables(SyntaxFactory.VariableDeclarator(FormatWithUid(PinNames.GET_OUT)))
+            );
+            block = block.AddStatements(variableDeclaration);
+            
+            if (model.FieldInfo == null)
+            {
                 var assignmentExpression = SyntaxFactory.AssignmentExpression(
                     SyntaxKind.SimpleAssignmentExpression,
-                    SyntaxFactory.IdentifierName(tempFieldName), // Left-hand side
-                    SyntaxFactory.IdentifierName(node.FormatWithUid(wire.LeftSidePin.PinName)) // Right-hand side
+                    SyntaxFactory.IdentifierName(FormatWithUid(PinNames.GET_OUT)), // Left-hand side
+                    SyntaxFactory.IdentifierName(model.VariableName) // Right-hand side
                 );
                 var statement = SyntaxFactory.ExpressionStatement(assignmentExpression);
                 block = block.AddStatements(statement);
             }
-            
-            var nextNodeGuid = MyNode.OutputWires.First(w => w.IsExecuteWire).RightSidePin.NodeGuid;
-            if (!BlueprintScriptWriter.NodeMap.TryGetValue(nextNodeGuid, out var nextNode))
+            else
             {
-                Debug.LogError($"Invalid Node Guid: {nextNodeGuid}");
-                return block;
+                block = BlueprintScriptWriter.AddGetFieldToBody(model.FieldInfo,  FormatWithUid(PinNames.GET_OUT), FormatWithUid(PinNames.OWNER), block);
             }
             
+            return block;
+        }
+    }
+
+    public class ReturnSyntaxNode : BlueprintSyntaxNodeBase
+    {
+        public ReturnSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        {
+        }
+
+        protected override BlockSyntax SetOutputPinStatements(BlockSyntax block)
+        {
+            if (MyNodeController.InPorts.Count == 1)
+            {
+                block = block.AddStatements(SyntaxFactory.ReturnStatement());
+            }
+            else
+            {
+                block = block.AddStatements(SyntaxFactory.ReturnStatement(
+                    SyntaxFactory.IdentifierName(FormatWithUid(PinNames.RETURN))
+                ));
+            }
+            return block;
+        }
+
+        // public override BlockSyntax AddStatementAndContinue(BlockSyntax block)
+        // {
+        //     if (MyNodeController.InPorts.Count == 1)
+        //     {
+        //         block = block.AddStatements(SyntaxFactory.ReturnStatement());
+        //     }
+        //     else
+        //     {
+        //         foreach (var pin in MyNodeController.InPorts.Values)
+        //         {
+        //             if (pin.IsExecutePin)
+        //             {
+        //                 continue;
+        //             }
+        //
+        //             var wire = MyNodeController.Model.InputWires.FirstOrDefault(w => w.RightSidePin.PinName == pin.PortName);
+        //             if (wire.IsValid())
+        //             {
+        //                 block = GetStatementForPin(wire, block);
+        //             }
+        //             else
+        //             {
+        //                 // Use Default Value
+        //                 var defaultValue = pin.InlineValue == null ? BlueprintScriptWriter.GetDefaultValueSyntax(pin.Type) : BlueprintScriptWriter.GetExpressionForObjectInitializer(pin.InlineValue.Get());
+        //
+        //                 var variableDeclaration = SyntaxFactory.LocalDeclarationStatement(
+        //                     SyntaxFactory.VariableDeclaration(BlueprintScriptWriter.GetTypeSyntax(pin.Type))
+        //                         .AddVariables(SyntaxFactory.VariableDeclarator(MyNodeController.FormatWithUuid(pin.PortName))
+        //                             .WithInitializer(SyntaxFactory.EqualsValueClause(defaultValue))) // Assign generated value
+        //                 );
+        //                 block = block.AddStatements(variableDeclaration);
+        //             }
+        //         }
+        //         
+        //         block = block.AddStatements(SyntaxFactory.ReturnStatement(
+        //             SyntaxFactory.IdentifierName(MyNodeController.FormatWithUuid("Return"))
+        //         ));
+        //     }
+        //     return block;
+        // }
+
+        // public override BlockSyntax GetStatementForPin(BlueprintWireReference wire, BlockSyntax block)
+        // {
+        //     if (MyNodeController.InPorts.TryGetValue(wire.RightSidePin.PinName, out var pin))
+        //     {
+        //         if (!BlueprintScriptWriter.NodeMap.TryGetValue(wire.LeftSidePin.NodeGuid, out var nextNode))
+        //         {
+        //             // Use Default Value
+        //             var defaultValue = pin.InlineValue == null ? BlueprintScriptWriter.GetDefaultValueSyntax(pin.Type) :BlueprintScriptWriter.GetExpressionForObjectInitializer(pin.InlineValue.Get());
+        //
+        //             var variableDeclaration = SyntaxFactory.LocalDeclarationStatement(
+        //                 SyntaxFactory.VariableDeclaration(BlueprintScriptWriter.GetTypeSyntax(pin.Type))
+        //                     .AddVariables(SyntaxFactory.VariableDeclarator(MyNodeController.FormatWithUuid(pin.PortName))
+        //                         .WithInitializer(SyntaxFactory.EqualsValueClause(defaultValue))) // Assign generated value
+        //             );
+        //             block = block.AddStatements(variableDeclaration);
+        //         }
+        //         else
+        //         {
+        //             block = nextNode.GetStatementForPin(wire, block);
+        //
+        //             // Create a variable declaration: <ReturnType> __returnValue = <defaultValue>;
+        //             var variableDeclaration = SyntaxFactory.LocalDeclarationStatement(
+        //                 SyntaxFactory.VariableDeclaration(BlueprintScriptWriter.GetTypeSyntax(pin.Type))
+        //                     .AddVariables(SyntaxFactory.VariableDeclarator(MyNodeController.FormatWithUuid(pin.PortName))
+        //                         .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.IdentifierName(nextNode.FormatWithUid(wire.LeftSidePin.PinName))))) // Assign default value
+        //             );
+        //             block = block.AddStatements(variableDeclaration);
+        //         }
+        //     }
+        //     return block;
+        // }
+    }
+    
+    public class BranchSyntaxNode : BlueprintSyntaxNodeBase
+    {
+        public BranchSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        {
+        }
+
+        public override BlockSyntax AddStatementAndContinue(BlockSyntax block)
+        {
+            if (IsEvaluated)
+            {
+                Debug.LogError("Node is already evaluated");
+                return block;
+            }
+
+            block = GetInputPinStatements(block);
+            // block = CreateActionStatement(block);
+            block = SetOutputPinStatements(block);
+            IsEvaluated = true;
+            
+            // Create an if-else statement
+            var ifBlock = SyntaxFactory.Block();
+            var elseBlock = SyntaxFactory.Block();
+
+            var ifNodeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.TRUE_OUT);
+            if (ifNodeWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(ifNodeWire.RightSidePin.NodeGuid, out var ifNode))
+            {
+                ifBlock = ifNode.AddStatementAndContinue(ifBlock);
+            }
+
+            var elseNodeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.FALSE_OUT);
+            if (elseNodeWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(elseNodeWire.RightSidePin.NodeGuid, out var elseNode))
+            {
+                elseBlock = elseNode.AddStatementAndContinue(elseBlock);
+            }
+
+            IfStatementSyntax ifElseStatement = SyntaxFactory
+                .IfStatement(SyntaxFactory.IdentifierName(FormatWithUid(PinNames.VALUE_IN)), ifBlock)
+                .WithElse(SyntaxFactory.ElseClause(elseBlock));
+            
+            // Add the if-else statement to the existing block and return
+            block = block.AddStatements(ifElseStatement);
+            return block;
+        }
+    }
+
+    public class SwitchSyntaxNode : BlueprintSyntaxNodeBase
+    {
+        public SwitchSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        {
+        }
+
+        public override BlockSyntax AddStatementAndContinue(BlockSyntax block)
+        {
+            if (IsEvaluated)
+            {
+                Debug.LogError("Node is already evaluated");
+                return block;
+            }
+
+            block = GetInputPinStatements(block);
+            // block = CreateActionStatement(block);
+            block = SetOutputPinStatements(block);
+            IsEvaluated = true;
+
+            // Create a switch statement
+            var switchType = MyNodeController.InPorts[PinNames.VALUE_IN].Type;
+            if(switchType == typeof(Enum))
+            {
+                var typeWire = MyNodeController.Model.InputWires.FirstOrDefault(w => w.RightSidePin.PinName == PinNames.VALUE_IN);
+                if (typeWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(typeWire.LeftSidePin.NodeGuid, out var typeNode))
+                {
+                    switchType = typeNode.MyNodeController.OutPorts[typeWire.LeftSidePin.PinName].Type;
+                }
+            }
+            
+            var switchVariableName = FormatWithUid(MyNodeController.InPorts[PinNames.VALUE_IN].PortName);
+
+            var cases = new List<SwitchSectionSyntax>();
+            BlockSyntax defaultCase = null;
+            foreach (var outputWire in MyNodeController.Model.OutputWires)
+            {
+                if (!BlueprintScriptWriter.NodeMap.TryGetValue(outputWire.RightSidePin.NodeGuid, out var node))
+                {
+                    continue;
+                }
+
+                var caseBody = SyntaxFactory.Block();
+                caseBody = node.AddStatementAndContinue(caseBody);
+
+                // Handle default case
+                if (outputWire.LeftSidePin.PinName == PinNames.DEFAULT_OUT)
+                {
+                    defaultCase = caseBody;
+                    continue;
+                }
+
+                // Determine case label based on switch type
+                SwitchLabelSyntax caseLabel;
+
+                if (switchType.IsEnum)
+                {
+                    // Convert string to an enum member expression: MyEnum.SomeValue
+                    caseLabel = SyntaxFactory.CaseSwitchLabel(
+                        SyntaxFactory.MemberAccessExpression(
+                            SyntaxKind.SimpleMemberAccessExpression,
+                            SyntaxFactory.IdentifierName(switchType.Name), // Enum type name
+                            SyntaxFactory.IdentifierName(outputWire.LeftSidePin.PinName) // Enum case
+                        )
+                    );
+                }
+                else if (switchType == typeof(string))
+                {
+                    // Use string literal case: case "SomeString":
+                    caseLabel = SyntaxFactory.CaseSwitchLabel(
+                        SyntaxFactory.LiteralExpression(
+                            SyntaxKind.StringLiteralExpression,
+                            SyntaxFactory.Literal(outputWire.LeftSidePin.PinName)
+                        )
+                    );
+                }
+                else if (switchType == typeof(int))
+                {
+                    // Convert to an integer case: case 1:
+                    if (int.TryParse(outputWire.LeftSidePin.PinName, out int intValue))
+                    {
+                        caseLabel = SyntaxFactory.CaseSwitchLabel(
+                            SyntaxFactory.LiteralExpression(
+                                SyntaxKind.NumericLiteralExpression,
+                                SyntaxFactory.Literal(intValue)
+                            )
+                        );
+                    }
+                    else
+                    {
+                        continue; // Skip invalid integer cases
+                    }
+                }
+                else
+                {
+                    continue; // Skip unsupported types
+                }
+
+                // Create the switch section with the case label and body
+                var switchSection = SyntaxFactory.SwitchSection()
+                    .AddLabels(caseLabel)
+                    .AddStatements(caseBody.Statements.Concat(new[] { SyntaxFactory.BreakStatement() }).ToArray());
+
+                cases.Add(switchSection);
+            }
+
+            // Add default case if provided
+            if (defaultCase != null)
+            {
+                cases.Add(
+                    SyntaxFactory.SwitchSection()
+                        .AddLabels(SyntaxFactory.DefaultSwitchLabel())
+                        .AddStatements(defaultCase.Statements.Concat(new[] { SyntaxFactory.BreakStatement() }).ToArray())
+                );
+            }
+
+            // Create the switch statement
+            var switchStatement = SyntaxFactory.SwitchStatement(SyntaxFactory.IdentifierName(switchVariableName))
+                .AddSections(cases.ToArray());
+
+            // Add the switch statement to the existing block and return
+            block = block.AddStatements(switchStatement);
+            return block;
+        }
+    }
+
+    public class SequenceSyntaxNode : BlueprintSyntaxNodeBase
+    {
+        public SequenceSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        {
+        }
+
+        public override BlockSyntax AddStatementAndContinue(BlockSyntax block)
+        {
+            if (IsEvaluated)
+            {
+                Debug.LogError("Node is already evaluated");
+                return block;
+            }
+
+            block = GetInputPinStatements(block);
+            // block = CreateActionStatement(block);
+            block = SetOutputPinStatements(block);
+            IsEvaluated = true;
+
+            for (int i = 0; i < MyNodeController.Model.OutputWires.Count; i++)
+            {
+                var pinName = $"{PinNames.SEQUENCE_OUT}_{i}";
+                var wire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == pinName);
+                if (!wire.IsValid() || !BlueprintScriptWriter.NodeMap.TryGetValue(wire.RightSidePin.NodeGuid, out var node))
+                {
+                    continue;
+                }
+
+                var b = SyntaxFactory.Block();
+                b = node.AddStatementAndContinue(b);
+                block = block.AddStatements(b);
+            }
+
+            // foreach (var outputWire in MyNodeController.Model.OutputWires)
+            // {
+            //     if (!BlueprintScriptWriter.NodeMap.TryGetValue(outputWire.RightSidePin.NodeGuid, out var node))
+            //     {
+            //         continue;
+            //     }
+            //
+            //     var b = SyntaxFactory.Block();
+            //     b = node.AddStatementAndContinue(b);
+            //     block = block.AddStatements(b);
+            // }
+            return block;
+        }
+    }
+
+    public class ForSyntaxNode : BlueprintSyntaxNodeBase
+    {
+        public ForSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        {
+        }
+        
+        public override BlockSyntax AddStatementAndContinue(BlockSyntax block)
+        {
+            if (IsEvaluated)
+            {
+                Debug.LogError("Node is already evaluated");
+                return block;
+            }
+
+            block = GetInputPinStatements(block);
+            // block = CreateActionStatement(block);
+            block = SetOutputPinStatements(block);
+            IsEvaluated = true;
+
+            // Create a for statement
+            var arrayVarName = FormatWithUid(PinNames.ARRAY_IN);
+            var indexEqualClauseName = FormatWithUid(PinNames.START_INDEX_IN);
+            var lengthVarName = FormatWithUid(PinNames.LENGTH_IN);
+            
+            var indexVarName = FormatWithUid(PinNames.INDEX_OUT);
+            var elementVarName = FormatWithUid(PinNames.ELEMENT_OUT);
+            
+            // Eval loop
+            BlockSyntax loopBlock = SyntaxFactory.Block();
+            // Create 'var element = array[index];' statement
+            var elementAssignment = SyntaxFactory.LocalDeclarationStatement(
+                SyntaxFactory.VariableDeclaration(SyntaxFactory.IdentifierName("var"))
+                    .AddVariables(SyntaxFactory.VariableDeclarator(elementVarName)
+                        .WithInitializer(SyntaxFactory.EqualsValueClause(
+                            SyntaxFactory.ElementAccessExpression(SyntaxFactory.IdentifierName(arrayVarName))
+                                .WithArgumentList(
+                                    SyntaxFactory.BracketedArgumentList(
+                                        SyntaxFactory.SingletonSeparatedList(
+                                            SyntaxFactory.Argument(SyntaxFactory.IdentifierName(indexVarName))
+                                        )
+                                    )
+                                )
+                        ))
+                    )
+            );
+            loopBlock = loopBlock.AddStatements(elementAssignment);
+            
+            var loopWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.LOOP_OUT);
+            if (loopWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(loopWire.RightSidePin.NodeGuid, out var node))
+            {
+                loopBlock = node.AddStatementAndContinue(loopBlock);
+            }
+            
+            // Create the for loop: for (int index = START_INDEX_IN; index < LENGTH_IN; index++)
+            var forLoop = SyntaxFactory.ForStatement(loopBlock)
+                .WithDeclaration(
+                    SyntaxFactory.VariableDeclaration(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.IntKeyword))) // int index
+                        .AddVariables(SyntaxFactory.VariableDeclarator(indexVarName)
+                                .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.IdentifierName(indexEqualClauseName))) // index = START_INDEX_IN
+                        )
+                )
+                .WithCondition(
+                    SyntaxFactory.BinaryExpression(
+                        SyntaxKind.LessThanExpression,
+                        SyntaxFactory.IdentifierName(indexVarName),
+                        SyntaxFactory.IdentifierName(lengthVarName) // index < LENGTH_IN
+                    )
+                )
+                .WithIncrementors(
+                    SyntaxFactory.SingletonSeparatedList<ExpressionSyntax>(
+                        SyntaxFactory.PostfixUnaryExpression(
+                            SyntaxKind.PostIncrementExpression,
+                            SyntaxFactory.IdentifierName(indexVarName) // index++
+                        )
+                    )
+                );
+            
+            // Add the switch statement to the existing block and return
+            block = block.AddStatements(forLoop);
+            
+            // Continue
+            var completeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.COMPLETE_OUT);
+            if (completeWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(completeWire.RightSidePin.NodeGuid, out var completeNode))
+            {
+                block = completeNode.AddStatementAndContinue(block);
+            }
+            
+            return block;
+        }
+    }
+
+    public class ForEachSyntaxNode : BlueprintSyntaxNodeBase
+    {
+        public ForEachSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        {
+        }
+        
+        public override BlockSyntax AddStatementAndContinue(BlockSyntax block)
+        {
+            if (IsEvaluated)
+            {
+                Debug.LogError("Node is already evaluated");
+                return block;
+            }
+
+            block = GetInputPinStatements(block);
+            // block = CreateActionStatement(block);
+            block = SetOutputPinStatements(block);
+            IsEvaluated = true;
+
+            // Create a for statement
+            string arrayVarName = FormatWithUid(PinNames.ARRAY_IN);
+            string elementVarName = FormatWithUid(PinNames.ELEMENT_OUT);
+            
+            // Eval loop
+            BlockSyntax loopBlock = SyntaxFactory.Block();
+            var loopWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.LOOP_OUT);
+            if (loopWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(loopWire.RightSidePin.NodeGuid, out var node))
+            {
+                loopBlock = node.AddStatementAndContinue(loopBlock);
+            }
+            
+            // Create foreach statement: foreach (var elementVarName in arrayVarName)
+            var foreachLoop = SyntaxFactory.ForEachStatement(
+                SyntaxFactory.IdentifierName("var"), // var elementVarName
+                SyntaxFactory.Identifier(elementVarName),
+                SyntaxFactory.IdentifierName(arrayVarName), // in arrayVarName
+                loopBlock
+            );
+
+            // Add the foreach loop to the block
+            block = block.AddStatements(foreachLoop);
+            
+            // Continue
+            var completeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.COMPLETE_OUT);
+            if (completeWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(completeWire.RightSidePin.NodeGuid, out var completeNode))
+            {
+                block = completeNode.AddStatementAndContinue(block);
+            }
+            
+            return block;
+        }
+    }
+
+    public class WhileSyntaxNode : BlueprintSyntaxNodeBase
+    {
+        public WhileSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        {
+        }
+
+        public override BlockSyntax AddStatementAndContinue(BlockSyntax block)
+        {
+            if (IsEvaluated)
+            {
+                Debug.LogError("Node is already evaluated");
+                return block;
+            }
+
+            block = GetInputPinStatements(block);
+            // block = CreateActionStatement(block);
+            block = SetOutputPinStatements(block);
+            IsEvaluated = true;
+
+            // Create a for statement
+            var conditionVarName = FormatWithUid(PinNames.VALUE_IN);
+            
+            // Eval loop
+            BlockSyntax loopBlock = SyntaxFactory.Block();
+            var loopWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.LOOP_OUT);
+            if (loopWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(loopWire.RightSidePin.NodeGuid, out var node))
+            {
+                loopBlock = node.AddStatementAndContinue(loopBlock);
+            }
+
+            var whileStatement = SyntaxFactory.WhileStatement(SyntaxFactory.IdentifierName(conditionVarName), loopBlock);
+
+            // Add the foreach loop to the block
+            block = block.AddStatements(whileStatement);
+            
+            // Continue
+            var completeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.COMPLETE_OUT);
+            if (completeWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(completeWire.RightSidePin.NodeGuid, out var completeNode))
+            {
+                block = completeNode.AddStatementAndContinue(block);
+            }
+            
+            return block;
+        }
+    }
+    
+    public class BreakSyntaxNode : BlueprintSyntaxNodeBase
+    {
+        public BreakSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        {
+        }
+
+        public override BlockSyntax AddStatementAndContinue(BlockSyntax block)
+        {
+            if (IsEvaluated)
+            {
+                Debug.LogError("Node is already evaluated");
+                return block;
+            }
+            IsEvaluated = true;
+            block = block.AddStatements(SyntaxFactory.BreakStatement());
+            return block;
+        }
+    }
+
+    public class ContinueSyntaxNode : BlueprintSyntaxNodeBase
+    {
+        public ContinueSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        {
+        }
+        
+        public override BlockSyntax AddStatementAndContinue(BlockSyntax block)
+        {
+            if (IsEvaluated)
+            {
+                Debug.LogError("Node is already evaluated");
+                return block;
+            }
+            IsEvaluated = true;
+            block = block.AddStatements(SyntaxFactory.ContinueStatement());
+            return block;
+        }
+    }
+
+    public class ConversionSyntaxNode : BlueprintSyntaxNodeBase
+    {
+        public ConversionSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        {
+        }
+
+        protected override BlockSyntax SetOutputPinStatements(BlockSyntax block)
+        {
+            var nameOfObjToCast = FormatWithUid(MyNodeController.InPorts[PinNames.SET_IN].PortName);
+            var typeToCast = MyNodeController.OutPorts[PinNames.GET_OUT].Type;
+            var nameOfObjToSet = FormatWithUid(MyNodeController.OutPorts[PinNames.GET_OUT].PortName);
+
+            ExpressionSyntax valueExpression;
+
+            if (typeToCast == typeof(string))
+            {
+                // Generate: nameOfObjToCast.ToString()
+                valueExpression = SyntaxFactory.InvocationExpression(
+                    SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName(nameOfObjToCast),
+                        SyntaxFactory.IdentifierName("ToString")
+                    )
+                );
+            }
+            else
+            {
+                // Generate: (TargetType) nameOfObjToCast
+                valueExpression = SyntaxFactory.CastExpression(
+                    SyntaxFactory.ParseTypeName(typeToCast.FullName!), // Target type
+                    SyntaxFactory.IdentifierName(nameOfObjToCast) // Object being cast
+                );
+            }
+
+            // Create an assignment statement: var nameOfObjToSet = valueExpression;
+            var assignmentStatement = SyntaxFactory.LocalDeclarationStatement(
+                SyntaxFactory.VariableDeclaration(SyntaxFactory.IdentifierName("var")) // Use 'var'
+                    .AddVariables(SyntaxFactory.VariableDeclarator(nameOfObjToSet)
+                            .WithInitializer(SyntaxFactory.EqualsValueClause(valueExpression)) // Assign cast or ToString() value
+                    ));
+
+
+            // // Create a cast expression: (TargetType) nameOfObjToCast
+            // var castExpression = SyntaxFactory.CastExpression(
+            //     SyntaxFactory.ParseTypeName(typeToCast.FullName!), // Target type
+            //     SyntaxFactory.IdentifierName(nameOfObjToCast) // Object being cast
+            // );
+            //
+            // // Create an assignment statement: var nameOfObjToSet = (TargetType) nameOfObjToCast;
+            // var assignmentStatement = SyntaxFactory.LocalDeclarationStatement(
+            //     SyntaxFactory.VariableDeclaration(SyntaxFactory.IdentifierName("var")) // Use 'var'
+            //         .AddVariables(SyntaxFactory.VariableDeclarator(nameOfObjToSet)
+            //                 .WithInitializer(SyntaxFactory.EqualsValueClause(castExpression)) // Assign cast value
+            //         )
+            // );
+
+            // Add the assignment statement to the block
+            block = block.AddStatements(assignmentStatement);
+            return block;
+        }
+    }
+
+    public class CastSyntaxNode : BlueprintSyntaxNodeBase
+    {
+        public CastSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        {
+        }
+
+        public override BlockSyntax AddStatementAndContinue(BlockSyntax block)
+        {
+            if (IsEvaluated)
+            {
+                Debug.LogError("Node is already evaluated");
+                return block;
+            }
+
+            block = GetInputPinStatements(block);
+            // block = CreateActionStatement(block);
+            block = SetOutputPinStatements(block);
+            IsEvaluated = true;
+            
+            var inputName = FormatWithUid(MyNodeController.InPorts[PinNames.VALUE_IN].PortName);
+            var outputName = FormatWithUid(MyNodeController.OutPorts[PinNames.AS_OUT].PortName);
+            var asType = MyNodeController.OutPorts[PinNames.AS_OUT].Type;
+            
+            var ifBlock = SyntaxFactory.Block();
+            var elseBlock = SyntaxFactory.Block();
+
+            var validNodeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.VALID_OUT);
+            if (validNodeWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(validNodeWire.RightSidePin.NodeGuid, out var ifNode))
+            {
+                ifBlock = ifNode.AddStatementAndContinue(ifBlock);
+            }
+
+            var invalidNodeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.INVALID_OUT);
+            if (invalidNodeWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(invalidNodeWire.RightSidePin.NodeGuid, out var elseNode))
+            {
+                elseBlock = elseNode.AddStatementAndContinue(elseBlock);
+            }
+
+            // Create the type-checking expression: "inputName is OutputType outputName"
+            var isExpression = SyntaxFactory.IsPatternExpression(
+                SyntaxFactory.IdentifierName(inputName), // The variable being checked
+                SyntaxFactory.DeclarationPattern(
+                    SyntaxFactory.ParseTypeName(asType.FullName!), // Type name
+                    SyntaxFactory.SingleVariableDesignation(SyntaxFactory.Identifier(outputName)) // Variable to assign the cast value
+                )
+            );
+
+            // Create the if-else statement: if (inputName is OutputType outputName) { ifBlock } else { elseBlock }
+            IfStatementSyntax ifElseStatement = SyntaxFactory.IfStatement(isExpression, ifBlock)
+                .WithElse(SyntaxFactory.ElseClause(elseBlock));
+
+            block = block.AddStatements(ifElseStatement);
+            return block;
+        }
+    }
+
+    public class RedirectSyntaxNode : BlueprintSyntaxNodeBase
+    {
+        public RedirectSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        {
+        }
+
+        public override BlockSyntax AddStatementAndContinue(BlockSyntax block)
+        {
+            if (!MyNodeController.OutPorts.ContainsKey(PinNames.EXECUTE_OUT))
+            {
+                return block;
+            }
+
+            var nextNodeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.IsExecuteWire);
+            if (!nextNodeWire.IsValid() || !BlueprintScriptWriter.NodeMap.TryGetValue(nextNodeWire.RightSidePin.NodeGuid, out var nextNode))
+            {
+                Debug.LogError($"Invalid Node Guid: {nextNodeWire.RightSidePin.PinName}");
+                return block;
+            }
+
             block = nextNode.AddStatementAndContinue(block);
+
+            return block;
+        }
+
+        protected override BlockSyntax SetOutputPinStatements(BlockSyntax block)
+        {
+            if (!MyNodeController.OutPorts.TryGetValue(PinNames.GET_OUT, out var pin))
+            {
+                return block;
+            }
+
+            var variableDeclaration = SyntaxFactory.LocalDeclarationStatement(
+                SyntaxFactory.VariableDeclaration(BlueprintScriptWriter.GetTypeSyntax(pin.Type))
+                    .AddVariables(SyntaxFactory.VariableDeclarator(FormatWithUid(pin.PortName))
+                        .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.IdentifierName(FormatWithUid(PinNames.SET_IN))))) // Assign generated value
+            );
+            block = block.AddStatements(variableDeclaration);
+
+            return block;
+        }
+    }
+
+    public class ConstructorSyntaxNode : BlueprintSyntaxNodeBase
+    {
+        public ConstructorSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        {
+        }
+
+        protected override BlockSyntax SetOutputPinStatements(BlockSyntax block)
+        {
+            var pin = MyNodeController.OutPorts[PinNames.RETURN];
+            
+            // Use Default Value
+            var defaultValue = pin.InlineValue == null ? BlueprintScriptWriter.GetDefaultValueSyntax(pin.Type) : BlueprintScriptWriter.GetExpressionForObjectInitializer(pin.InlineValue.Get());
+
+            var variableDeclaration = SyntaxFactory.LocalDeclarationStatement(
+                SyntaxFactory.VariableDeclaration(BlueprintScriptWriter.GetTypeSyntax(pin.Type))
+                    .AddVariables(SyntaxFactory.VariableDeclarator(FormatWithUid(PinNames.RETURN))
+                        .WithInitializer(SyntaxFactory.EqualsValueClause(defaultValue))) // Assign generated value pin. PortName
+            );
+            block = block.AddStatements(variableDeclaration);
             return block;
         }
     }

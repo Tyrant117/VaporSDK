@@ -3,4 +3,14 @@
     public struct ExecutePin
     {
     }
+
+    public struct UndefinedPin
+    {
+        
+    }
+
+    public struct GenericPin
+    {
+        
+    }
 }

@@ -2,17 +2,16 @@
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
-using UnityEditor;
-using Vapor.Blueprints;
 
 namespace VaporEditor.Blueprints
 {
+    [Obsolete]
     public readonly struct BlueprintSearchEntry
     {
         // Required
         public readonly string CombinedMenuName;
         public readonly string[] MenuName;
-        public readonly BlueprintNodeType NodeType;
+        // public readonly BlueprintNodeType NodeType;
 
         // Optional
         public readonly string[] Synonyms;
@@ -24,7 +23,7 @@ namespace VaporEditor.Blueprints
         public readonly Type[] TypeData;
 
         // Constructor
-        private BlueprintSearchEntry(string combinedMenuName, string[] menuName, MethodInfo methodInfo, FieldInfo fieldInfo, string[] synonyms, BlueprintNodeType nodeType, string[] nameData,
+        private BlueprintSearchEntry(string combinedMenuName, string[] menuName, MethodInfo methodInfo, FieldInfo fieldInfo, string[] synonyms, /*BlueprintNodeType nodeType,*/ string[] nameData,
             Type[] typeData)
         {
             CombinedMenuName = combinedMenuName;
@@ -32,7 +31,7 @@ namespace VaporEditor.Blueprints
             MethodInfo = methodInfo;
             FieldInfo = fieldInfo;
             Synonyms = synonyms;
-            NodeType = nodeType;
+            // NodeType = nodeType;
             NameData = nameData;
             TypeData = typeData;
         }
@@ -44,7 +43,7 @@ namespace VaporEditor.Blueprints
             private MethodInfo _methodInfo;
             private FieldInfo _fieldInfo;
             private List<string> _synonyms;
-            private BlueprintNodeType _nodeType;
+            // private BlueprintNodeType _nodeType;
             private List<Type> _typeData;
             private List<string> _nameData;
 
@@ -86,11 +85,11 @@ namespace VaporEditor.Blueprints
                 return this;
             }
 
-            public Builder WithNodeType(BlueprintNodeType nodeType)
-            {
-                _nodeType = nodeType;
-                return this;
-            }
+            // public Builder WithNodeType(BlueprintNodeType nodeType)
+            // {
+            //     _nodeType = nodeType;
+            //     return this;
+            // }
 
             public Builder WithNameData(params string[] names)
             {
@@ -121,7 +120,7 @@ namespace VaporEditor.Blueprints
                 }
                 
 
-                return new BlueprintSearchEntry(sb.ToString(), _menuName?.ToArray(), _methodInfo, _fieldInfo, _synonyms?.ToArray(), _nodeType, _nameData?.ToArray(), _typeData?.ToArray());
+                return new BlueprintSearchEntry(sb.ToString(), _menuName?.ToArray(), _methodInfo, _fieldInfo, _synonyms?.ToArray(), /*_nodeType,*/ _nameData?.ToArray(), _typeData?.ToArray());
             }
         }
     }

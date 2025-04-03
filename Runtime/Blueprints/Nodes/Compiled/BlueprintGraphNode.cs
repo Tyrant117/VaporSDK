@@ -15,100 +15,36 @@ namespace Vapor.Blueprints
         private readonly string _nextNodeGuid;
         private BlueprintBaseNode _nextNode;
 
-        public BlueprintGraphNode(BlueprintNodeDataModel dataModel)
-        {
-            Guid = dataModel.Guid;
-            InEdges = dataModel.InEdges;
-#if UNITY_EDITOR
-            if (Application.isPlaying)
-            {
-                _graph = RuntimeDataStore<IBlueprintGraph>.Get(dataModel.IntData);
-            }
-            else
-            {
-                var path = UnityEditor.AssetDatabase.GUIDToAssetPath(dataModel.MethodName);
-                var found = UnityEditor.AssetDatabase.LoadAssetAtPath<BlueprintGraphSo>(path);
-                found.OpenGraph();
-                _graph = new BlueprintFunctionGraph(found);
-            }
-#else
-            _graph = RuntimeDataStore<IBlueprintGraph>.Get(dataModel.IntData);
-#endif
-            
-            InPortValues = new Dictionary<string, object>(dataModel.InPorts.Count);
-            int paramCount = 0;
-            foreach (var inPort in dataModel.InPorts.Values)
-            {
-                if (inPort.HasInlineValue)
-                {
-                    InPortValues[inPort.PortName] = inPort.GetContent();
-                }
-
-                if (!inPort.IsExecutePin)
-                {
-                    paramCount++;
-                }
-            }
-            _parameterValues = new object[paramCount];
-            
-            OutPortValues = new Dictionary<string, object>(dataModel.OutPorts.Count);
-            foreach (var outPort in dataModel.OutPorts.Values)
-            {
-                if (!outPort.IsExecutePin)
-                {
-                    OutPortValues[outPort.PortName] = null;
-                }
-            }
-            
-            var outEdge = dataModel.OutEdges.FirstOrDefault(x => x.LeftSidePin.PinName == "OUT");
-            if (outEdge.RightSidePin.IsValid())
-            {
-                _nextNodeGuid = outEdge.RightSidePin.NodeGuid;
-            }
-        }
-
-        public BlueprintGraphNode(BlueprintCompiledNodeDto dto, int graphKey, string assetGuid, string nextNodeGuid)
+        public BlueprintGraphNode(BlueprintDesignNodeDto dto)
         {
             Guid = dto.Guid;
-            InEdges = dto.InputWires;
+            InputWires = dto.InputWires;
+            OutputWires = dto.OutputWires;
+            
+            // dto.Properties.TryGetValue(INodeType.NAME_DATA_PARAM, out var assetGuid);
+            // dto.Properties.TryGetValue(INodeType.KEY_DATA_PARAM, out var graphKey);
+            
 #if UNITY_EDITOR
-            if (Application.isPlaying)
-            {
-                _graph = RuntimeDataStore<IBlueprintGraph>.Get(graphKey);
-            }
-            else
-            {
-                var path = UnityEditor.AssetDatabase.GUIDToAssetPath(assetGuid);
-                var found = UnityEditor.AssetDatabase.LoadAssetAtPath<BlueprintGraphSo>(path);
-                found.OpenGraph();
-                _graph = new BlueprintFunctionGraph(found);
-            }
+            // if (Application.isPlaying)
+            // {
+            //     _graph = RuntimeDataStore<IBlueprintGraph>.Get((int)graphKey.Item2);
+            // }
+            // else
+            // {
+            //     var path = UnityEditor.AssetDatabase.GUIDToAssetPath((string)assetGuid.Item2);
+            //     var found = UnityEditor.AssetDatabase.LoadAssetAtPath<BlueprintGraphSo>(path);
+            //     found.OpenGraph();
+            //     _graph = new BlueprintFunctionGraph(found);
+            // }
 #else
             _graph = RuntimeDataStore<IBlueprintGraph>.Get(graphKey);
 #endif
 
-            InPortValues = new Dictionary<string, object>(dto.InputPinValues.Count);
-            int paramCount = 0;
-            foreach (var (key, tuple) in dto.InputPinValues)
-            {
-                if (!key.EmptyOrNull())
-                {
-                    var val = TypeUtility.CastToType(tuple.Item2, tuple.Item1);
-                    InPortValues[key] = val;
-                }
-
-                paramCount++;
-            }
-
-            _parameterValues = new object[paramCount];
-
-            OutPortValues = new Dictionary<string, object>(dto.OutputPinNames.Count);
-            foreach (var outPort in dto.OutputPinNames)
-            {
-                OutPortValues[outPort] = null;
-            }
-
-            _nextNodeGuid = nextNodeGuid;
+            SetupInputPins(dto);
+            SetupOutputPins(dto);
+            
+            _parameterValues = new object[dto.InputPins.Count];
+            _nextNodeGuid = GetNodeGuidForPinName(dto);
         }
 
         public override void Init(IBlueprintGraph graph)
@@ -122,24 +58,7 @@ namespace Vapor.Blueprints
 
         protected override void CacheInputValues()
         {
-            foreach (var edge in InEdges)
-            {
-                if (edge.LeftSidePin.IsExecutePin)
-                {
-                    continue;
-                }
-                
-                if (!Graph.TryGetNode(edge.LeftSidePin.NodeGuid, out var leftNode))
-                {
-                    continue;
-                }
-
-                leftNode.Invoke();
-                if (leftNode.TryGetOutputValue(edge.LeftSidePin.PinName, out var outputValue))
-                {
-                    InPortValues[edge.RightSidePin.PinName] = outputValue;
-                }
-            }
+            GetAllInputPinValues();
 
             int idx = 0;
             foreach (var param in InPortValues.Values)

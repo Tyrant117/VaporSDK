@@ -1,72 +1,30 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
+﻿using UnityEngine;
 using Vapor.Inspector;
 
 namespace Vapor.Blueprints
 {
+    [System.Obsolete]
     public class BlueprintSetterNode : BlueprintBaseNode
     {
         private readonly string _tempFieldName;
         
         private readonly string _nextNodeGuid;
         private BlueprintBaseNode _nextNode;
-        
-        public BlueprintSetterNode(BlueprintNodeDataModel dataModel)
-        {
-            Guid = dataModel.Guid;
-            _tempFieldName = dataModel.MethodName;
-            InEdges = dataModel.InEdges;
-            
-            InPortValues = new Dictionary<string, object>(dataModel.InPorts.Count);
-            foreach (var inPort in dataModel.InPorts.Values)
-            {
-                if (inPort.HasInlineValue)
-                {
-                    InPortValues[inPort.PortName] = inPort.GetContent();
-                }
-            }
-            
-            OutPortValues = new Dictionary<string, object>(dataModel.OutPorts.Count);
-            foreach (var outPort in dataModel.OutPorts.Values)
-            {
-                if (!outPort.IsExecutePin)
-                {
-                    OutPortValues[outPort.PortName] = null;
-                }
-            }
-            
-            var outEdge = dataModel.OutEdges.FirstOrDefault(x => x.LeftSidePin.PinName == "OUT");
-            if (outEdge.RightSidePin.IsValid())
-            {
-                _nextNodeGuid = outEdge.RightSidePin.NodeGuid;
-            }
-        }
 
-        public BlueprintSetterNode(BlueprintCompiledNodeDto dto, string tempFieldName)
+        public BlueprintSetterNode(BlueprintDesignNodeDto dto)
         {
             Guid = dto.Guid;
-            _tempFieldName = tempFieldName;
-            InEdges = dto.InputWires;
+            if(dto.Properties.TryGetValue(NodePropertyNames.VARIABLE_NAME, out var tempFieldName))
+            {
+                _tempFieldName = (string)tempFieldName.Item2;
+            }
+
+            InputWires = dto.InputWires;
+            OutputWires = dto.OutputWires;
             
-            InPortValues = new Dictionary<string, object>(dto.InputPinValues.Count);
-            foreach (var (key, tuple) in dto.InputPinValues)
-            {
-                var val = TypeUtility.CastToType(tuple.Item2, tuple.Item1);
-                InPortValues[key] = val;
-            }
-
-            OutPortValues = new Dictionary<string, object>(dto.OutputPinNames.Count);
-            foreach (var outPort in dto.OutputPinNames)
-            {
-                OutPortValues[outPort] = null;
-            }
-
-            if (dto.Properties.TryGetValue(NEXT_NODE_GUID, out var nextNodeGuid))
-            {
-                _nextNodeGuid = nextNodeGuid as string;
-            }
+            SetupInputPins(dto);
+            SetupOutputPins(dto);
+            _nextNodeGuid = GetNodeGuidForPinName(dto);
         }
 
         public override void Init(IBlueprintGraph graph)
@@ -80,24 +38,7 @@ namespace Vapor.Blueprints
 
         protected override void CacheInputValues()
         {
-            foreach (var edge in InEdges)
-            {
-                if (edge.LeftSidePin.IsExecutePin)
-                {
-                    continue;
-                }
-
-                if (!Graph.TryGetNode(edge.LeftSidePin.NodeGuid, out var leftNode))
-                {
-                    continue;
-                }
-
-                leftNode.Invoke();
-                if (leftNode.TryGetOutputValue(edge.LeftSidePin.PinName, out var outputValue))
-                {
-                    InPortValues[edge.RightSidePin.PinName] = outputValue;
-                }
-            }
+            GetAllInputPinValues();
 
             foreach (var ipv in InPortValues.Values)
             {

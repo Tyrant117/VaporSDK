@@ -1,43 +1,30 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Reflection;
 
 namespace Vapor.Blueprints
 {
+    [System.Obsolete]
     public class BlueprintFieldGetterNode : BlueprintBaseNode
     {
         private readonly Delegate _function;
         private readonly bool _isStatic;
 
-        public BlueprintFieldGetterNode(BlueprintNodeDataModel dataModel)
-        {
-            Guid = dataModel.Guid;
-            _function = FieldDelegateHelper.GetDelegateForFieldGetter(dataModel.FieldInfo);
-            _isStatic = dataModel.FieldInfo.IsStatic;
-            InEdges = dataModel.InEdges;
-            
-            InPortValues = new Dictionary<string, object>(dataModel.InPorts.Count)
-            {
-                [PinNames.OWNER] = null
-            };
-            OutPortValues = new Dictionary<string, object>(dataModel.OutPorts.Count)
-            {
-                [PinNames.RETURN] = null
-            };
-        }
-
-        public BlueprintFieldGetterNode(BlueprintCompiledNodeDto dto, FieldInfo fieldInfo)
+        public BlueprintFieldGetterNode(BlueprintDesignNodeDto dto)
         {
             Guid = dto.Guid;
+            dto.Properties.TryGetValue(NodePropertyNames.FIELD_TYPE, out var fieldType);
+            dto.Properties.TryGetValue(NodePropertyNames.FIELD_NAME, out var fieldName);
+            var fieldInfo = RuntimeReflectionUtility.GetFieldInfo((Type)fieldType.Item2, (string)fieldName.Item2);
             _function = FieldDelegateHelper.GetDelegateForFieldGetter(fieldInfo);
             _isStatic = fieldInfo.IsStatic;
-            InEdges = dto.InputWires;
+            InputWires = dto.InputWires;
+            OutputWires = dto.OutputWires;
             
-            InPortValues = new Dictionary<string, object>(dto.InputPinValues.Count)
+            InPortValues = new Dictionary<string, object>(dto.InputWires.Count)
             {
                 [PinNames.OWNER] = null
             };
-            OutPortValues = new Dictionary<string, object>(dto.OutputPinNames.Count)
+            OutPortValues = new Dictionary<string, object>(dto.OutputWires.Count)
             {
                 [PinNames.RETURN] = null
             };
@@ -50,24 +37,7 @@ namespace Vapor.Blueprints
         
         protected override void CacheInputValues()
         {
-            foreach (var edge in InEdges)
-            {
-                if (edge.LeftSidePin.IsExecutePin)
-                {
-                    continue;
-                }
-                
-                if (!Graph.TryGetNode(edge.LeftSidePin.NodeGuid, out var leftNode))
-                {
-                    continue;
-                }
-
-                leftNode.Invoke();
-                if (leftNode.TryGetOutputValue(edge.LeftSidePin.PinName, out var outputValue))
-                {
-                    InPortValues[edge.RightSidePin.PinName] = outputValue;
-                }
-            }
+            GetAllInputPinValues();
         }
 
         protected override void WriteOutputValues()

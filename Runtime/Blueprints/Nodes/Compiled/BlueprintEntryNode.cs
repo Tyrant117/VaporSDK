@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
+﻿using UnityEngine;
 using Vapor.Inspector;
 
 namespace Vapor.Blueprints
@@ -10,41 +8,15 @@ namespace Vapor.Blueprints
         
         private readonly string _nextNodeGuid;
         private BlueprintBaseNode _nextNode;
-        
-        public BlueprintEntryNode(BlueprintNodeDataModel dataModel)
-        {
-            Guid = dataModel.Guid;
-            
-            OutPortValues = new Dictionary<string, object>(dataModel.OutPorts.Count);
-            foreach (var outPort in dataModel.OutPorts.Values)
-            {
-                if (!outPort.IsExecutePin)
-                {
-                    OutPortValues[outPort.PortName] = null;
-                }
-            }
 
-            var outEdge = dataModel.OutEdges.FirstOrDefault(x => x.LeftSidePin.PinName == "OUT");
-            if (outEdge.RightSidePin.IsValid())
-            {
-                _nextNodeGuid = outEdge.RightSidePin.NodeGuid;
-            }
-        }
-
-        public BlueprintEntryNode(BlueprintCompiledNodeDto dto)
+        public BlueprintEntryNode(BlueprintDesignNodeDto dto)
         {
             Guid = dto.Guid;
+            InputWires = dto.InputWires;
+            OutputWires = dto.OutputWires;
             
-            OutPortValues = new Dictionary<string, object>(dto.OutputPinNames.Count);
-            foreach (var outPort in dto.OutputPinNames)
-            {
-                OutPortValues[outPort] = null;
-            }
-
-            if (dto.Properties.TryGetValue(NEXT_NODE_GUID, out var nextNodeGuid))
-            {
-                _nextNodeGuid = nextNodeGuid as string;
-            }
+            SetupOutputPins(dto);
+            _nextNodeGuid = GetNodeGuidForPinName(dto);
         }
 
         public override void Init(IBlueprintGraph graph)

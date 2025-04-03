@@ -5,22 +5,22 @@ namespace Vapor.Blueprints
 {
     public class BlueprintMakeSerializableNode : BlueprintBaseNode
     {
-        public BlueprintMakeSerializableNode(BlueprintCompiledNodeDto dto)
+        public BlueprintMakeSerializableNode(BlueprintDesignNodeDto dto)
         {
             Guid = dto.Guid;
-            InEdges = dto.InputWires;
+            InputWires = dto.InputWires;
             
-            InPortValues = new Dictionary<string, object>(dto.InputPinValues.Count);
-            foreach (var (key, tuple) in dto.InputPinValues)
+            InPortValues = new Dictionary<string, object>(dto.InputPins.Count);
+            foreach (var pin in dto.InputPins)
             {
-                var val = TypeUtility.CastToType(tuple.Item2, tuple.Item1);
-                InPortValues[key] = val;
+                var val = TypeUtility.CastToType(pin.Content, pin.PinType);
+                InPortValues[pin.PinName] = val;
             }
 
-            OutPortValues = new Dictionary<string, object>(dto.OutputPinNames.Count);
-            foreach (var outPort in dto.OutputPinNames)
+            OutPortValues = new Dictionary<string, object>(dto.OutputWires.Count);
+            foreach (var outPort in dto.OutputWires)
             {
-                OutPortValues[outPort] = null;
+                OutPortValues[outPort.LeftSidePin.PinName] = null;
             }
         }
 

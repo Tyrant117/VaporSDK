@@ -18,7 +18,7 @@ namespace VaporEditor.Blueprints
         private static BlockSyntax s_CurrentBody;
         public static readonly Dictionary<string, BlueprintSyntaxNodeBase> NodeMap = new();
 
-        public static void WriteScript(BlueprintGraphSo graphSo, string filePath)
+        public static void WriteScript(BlueprintGraphSo graphSo, BlueprintDesignGraph designGraph, string filePath)
         {
             var baseType = Type.GetType(graphSo.AssemblyQualifiedTypeName);
             if (baseType == null)
@@ -29,7 +29,7 @@ namespace VaporEditor.Blueprints
 
             WriteEmptyClass(baseType.Namespace, graphSo.name, baseType.Name, out var namespaceSyntax, out var classSyntax);
 
-            foreach (var field in graphSo.DesignGraph.Variables)
+            foreach (var field in designGraph.Variables)
             {
                 var fieldDeclaration = SyntaxFactory.FieldDeclaration(
                         SyntaxFactory.VariableDeclaration(GetTypeSyntax(field.Type)) // field.Key = type
@@ -39,7 +39,7 @@ namespace VaporEditor.Blueprints
                 classSyntax = classSyntax.AddMembers(fieldDeclaration);
             }
 
-            foreach (var method in graphSo.DesignGraph.Methods)
+            foreach (var method in designGraph.Methods)
             {
                 NodeMap.Clear();
                 EntrySyntaxNode entry = null;
@@ -51,7 +51,7 @@ namespace VaporEditor.Blueprints
                         entry = esn;
                     }
 
-                    NodeMap.Add(n.Guid, syntaxNode);
+                    NodeMap.Add(n.Model.Guid, syntaxNode);
                 }
 
                 if (entry == null)
@@ -110,16 +110,16 @@ namespace VaporEditor.Blueprints
 
             // Replace the old class in the namespace with the modified one
             namespaceSyntax = namespaceSyntax.AddMembers(classSyntax);
-            var compilationUnit = CreateCompilationUnit(namespaceSyntax, graphSo.GetAllTypes());
+            var compilationUnit = CreateCompilationUnit(namespaceSyntax, designGraph.GetAllTypes());
             
             WriteFile(compilationUnit, filePath);
         }
 
-        public static void WriteStaticMethodScript(BlueprintGraphSo graphSo, string filePath)
+        public static void WriteStaticMethodScript(BlueprintGraphSo graphSo, BlueprintDesignGraph designGraph, string filePath)
         {
             NodeMap.Clear();
             EntrySyntaxNode entry = null;
-            foreach (var n in graphSo.DesignGraph.Current.Nodes)
+            foreach (var n in designGraph.Current.Nodes)
             {
                 var syntaxNode = BlueprintSyntaxNodeBase.ConvertToSyntaxNode(n);
                 if (syntaxNode is EntrySyntaxNode esn)
@@ -127,15 +127,15 @@ namespace VaporEditor.Blueprints
                     entry = esn;
                 }
 
-                NodeMap.Add(n.Guid, syntaxNode);
+                NodeMap.Add(n.Model.Guid, syntaxNode);
             }
             
             WriteGraphTemplateClass("Vapor.Blueprints.Testing", graphSo.name, out var namespaceSyntax, out var classSyntax);
             
             // Generate the method name (e.g., "CallMethodsAndReturnOutputs")
             var methodNameSyntax = SyntaxFactory.Identifier($"{graphSo.name}_Implementation");
-            var parameters = CreateMethodParameters(graphSo.DesignGraph.Current.InputArguments);
-            var returnType = CreateMethodReturnType(graphSo.DesignGraph.Current.OutputArguments);
+            var parameters = CreateMethodParameters(designGraph.Current.InputArguments);
+            var returnType = CreateMethodReturnType(designGraph.Current.OutputArguments);
             var methodDeclaration = CreateMethodDeclaration(methodNameSyntax, parameters, returnType);
             s_CurrentBody = SyntaxFactory.Block();
             s_CurrentBody = entry.AddStatementAndContinue(s_CurrentBody);
@@ -151,7 +151,7 @@ namespace VaporEditor.Blueprints
             WriteFile(compilationUnit, filePath);
         }
         
-        private static void VisitNode(BlueprintDesignNode node)
+        private static void VisitNode(BlueprintNodeController nodeController)
         {
             // Need to get all input data required for this node.
             // Need to then create the syntax for the node.
@@ -204,10 +204,8 @@ namespace VaporEditor.Blueprints
         {
             // Create parameters for the input arguments
             return SyntaxFactory.ParameterList(
-                SyntaxFactory.SeparatedList(arguments.Select(arg =>
-                    SyntaxFactory.Parameter(SyntaxFactory.Identifier(arg.Name))
-                        .WithType(SyntaxFactory.ParseTypeName(arg.Type.FullName ?? arg.Type.Name))
-                ))
+                SyntaxFactory.SeparatedList(arguments.Select(arg => SyntaxFactory.Parameter(SyntaxFactory.Identifier(arg.Name))
+                    .WithType(GetTypeSyntax(arg.Type))))
             );
         }
 
@@ -565,25 +563,35 @@ namespace VaporEditor.Blueprints
             if (value is bool b) return SyntaxFactory.LiteralExpression(b ? SyntaxKind.TrueLiteralExpression : SyntaxKind.FalseLiteralExpression);
             if (value is string s) return SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(s));
 
+            var assignments = new List<AssignmentExpressionSyntax>();
             // Handle structs and classes with object initializer syntax
-            var propertyAssignments = type.GetProperties()
-                .Where(p => p.CanRead && p.CanWrite) // Only writable properties
+            var propertyAssignments = type.GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .Where(p => p.CanWrite && p.GetIndexParameters().Length == 0)
+                .Select(p => SyntaxFactory.AssignmentExpression(
+                        SyntaxKind.SimpleAssignmentExpression,
+                        SyntaxFactory.IdentifierName(p.Name), // Property name
+                        GetExpressionForObjectInitializer(p.GetValue(value)) // Recursively assign property values
+                    )
+                ).ToList();
+            assignments.AddRange(propertyAssignments);
+            
+            var fieldAssignments = type.GetFields(BindingFlags.Instance | BindingFlags.Public) // Only writable properties
                 .Select(p =>
                     SyntaxFactory.AssignmentExpression(
                         SyntaxKind.SimpleAssignmentExpression,
                         SyntaxFactory.IdentifierName(p.Name), // Property name
                         GetExpressionForObjectInitializer(p.GetValue(value)) // Recursively assign property values
                     )
-                )
-                .ToArray();
+                ).ToList();
+            assignments.AddRange(fieldAssignments);
 
-            if (propertyAssignments.Length > 0)
+            if (assignments.Count > 0)
             {
                 return SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName(type.Name))
                     .WithInitializer(
                         SyntaxFactory.InitializerExpression(
                             SyntaxKind.ObjectInitializerExpression,
-                            SyntaxFactory.SeparatedList<ExpressionSyntax>(propertyAssignments)
+                            SyntaxFactory.SeparatedList<ExpressionSyntax>(assignments)
                         )
                     );
             }
@@ -592,57 +600,127 @@ namespace VaporEditor.Blueprints
             return SyntaxFactory.DefaultExpression(SyntaxFactory.ParseTypeName(type.Name));
         }
 
-        internal static BlockSyntax AddMethodInfoToBody(string variableName, string[] argumentNames, string invokingVariableName, MethodInfo method, BlockSyntax methodBody)
+        internal static BlockSyntax AddMethodInfoToBody((Type, string ) variableTuple, List<(ParameterInfo, string)> argumentNames, List<Type> genericTypes, string invokingVariableName, MethodInfo method, BlockSyntax methodBody)
         {
-            // Create the arguments (method parameters)
             var arguments = SyntaxFactory.ArgumentList(
-                SyntaxFactory.SeparatedList(argumentNames.Select(arg =>
-                    SyntaxFactory.Argument(SyntaxFactory.IdentifierName(arg))
-                ))
+                SyntaxFactory.SeparatedList(argumentNames.Select(tuple =>
+                {
+                    var argumentSyntax = SyntaxFactory.Argument(SyntaxFactory.IdentifierName(tuple.Item2));
+
+                    // Check if the parameter is 'out' or 'ref' and add the appropriate keyword
+                    if (tuple.Item1.IsOut)
+                    {
+                        // Use 'out var' inline declaration
+                        argumentSyntax = SyntaxFactory.Argument(
+                            SyntaxFactory.DeclarationExpression(
+                                SyntaxFactory.IdentifierName("var"), // Use 'var'
+                                SyntaxFactory.SingleVariableDesignation(SyntaxFactory.Identifier(tuple.Item2)) // Variable name
+                            )
+                        ).WithRefOrOutKeyword(SyntaxFactory.Token(SyntaxKind.OutKeyword));
+                        
+                        // argumentSyntax = argumentSyntax.WithRefOrOutKeyword(SyntaxFactory.Token(SyntaxKind.OutKeyword));
+                    }
+                    else if (tuple.Item1.ParameterType.IsByRef) // Check for 'ref'
+                    {
+                        argumentSyntax = argumentSyntax.WithRefOrOutKeyword(SyntaxFactory.Token(SyntaxKind.RefKeyword));
+                    }
+
+                    return argumentSyntax;
+                }))
             );
 
             // Determine the invocation expression
-            ExpressionSyntax invocationExpr;
-
-            if (method.IsStatic)
+            // ExpressionSyntax invocationExpr;
+            // Determine if the method is generic and create generic type argument syntax
+            ExpressionSyntax methodAccess;
+            if (method.IsGenericMethod)
             {
-                // Fully qualified name (Namespace + Class)
-                string fullMethodName = $"{method.DeclaringType.Namespace}.{method.DeclaringType.Name}";
-                var declaringType = SyntaxFactory.IdentifierName(fullMethodName);
+                var genericArgs = genericTypes.Select(t => SyntaxFactory.ParseTypeName(t.Name));
+                var genericNameSyntax = SyntaxFactory.GenericName(SyntaxFactory.Identifier(method.Name))
+                    .WithTypeArgumentList(SyntaxFactory.TypeArgumentList(SyntaxFactory.SeparatedList(genericArgs)));
 
-                invocationExpr = SyntaxFactory.InvocationExpression(
-                    SyntaxFactory.MemberAccessExpression(
-                        SyntaxKind.SimpleMemberAccessExpression,
-                        declaringType,
-                        SyntaxFactory.IdentifierName(method.Name)
-                    ),
-                    arguments
-                );
-            }
-            else
-            {
-                // Instance method invocation
-                if (invokingVariableName.EmptyOrNull())
+                if (method.IsStatic)
                 {
-                    invocationExpr = SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.IdentifierName(method.Name),
-                        arguments
+                    string fullMethodName = $"{method.DeclaringType.Namespace}.{method.DeclaringType.Name}";
+                    methodAccess = SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName(fullMethodName),
+                        genericNameSyntax
                     );
                 }
                 else
                 {
-                    // Instance method invocation
-                    invocationExpr = SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.MemberAccessExpression(
+                    methodAccess = invokingVariableName.EmptyOrNull()
+                        ? (ExpressionSyntax)genericNameSyntax
+                        : SyntaxFactory.MemberAccessExpression(
                             SyntaxKind.SimpleMemberAccessExpression,
-                            SyntaxFactory.IdentifierName(invokingVariableName), // Assuming 'instance' is available
-                            SyntaxFactory.IdentifierName(method.Name)
-                        ),
-                        arguments
-                    );
+                            SyntaxFactory.IdentifierName(invokingVariableName),
+                            genericNameSyntax
+                        );
                 }
             }
+            else
+            {
+                if (method.IsStatic)
+                {
+                    string fullMethodName = $"{method.DeclaringType.Namespace}.{method.DeclaringType.Name}";
+                    methodAccess = SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName(fullMethodName),
+                        SyntaxFactory.IdentifierName(method.Name)
+                    );
+                }
+                else
+                {
+                    methodAccess = invokingVariableName.EmptyOrNull()
+                        ? (ExpressionSyntax)SyntaxFactory.IdentifierName(method.Name)
+                        : SyntaxFactory.MemberAccessExpression(
+                            SyntaxKind.SimpleMemberAccessExpression,
+                            SyntaxFactory.IdentifierName(invokingVariableName),
+                            SyntaxFactory.IdentifierName(method.Name)
+                        );
+                }
+                // if (method.IsStatic)
+                // {
+                //     // Fully qualified name (Namespace + Class)
+                //     string fullMethodName = $"{method.DeclaringType.Namespace}.{method.DeclaringType.Name}";
+                //     var declaringType = SyntaxFactory.IdentifierName(fullMethodName);
+                //
+                //     invocationExpr = SyntaxFactory.InvocationExpression(
+                //         SyntaxFactory.MemberAccessExpression(
+                //             SyntaxKind.SimpleMemberAccessExpression,
+                //             declaringType,
+                //             SyntaxFactory.IdentifierName(method.Name)
+                //         ),
+                //         arguments
+                //     );
+                // }
+                // else
+                // {
+                //     // Instance method invocation
+                //     if (invokingVariableName.EmptyOrNull())
+                //     {
+                //         invocationExpr = SyntaxFactory.InvocationExpression(
+                //             SyntaxFactory.IdentifierName(method.Name),
+                //             arguments
+                //         );
+                //     }
+                //     else
+                //     {
+                //         // Instance method invocation
+                //         invocationExpr = SyntaxFactory.InvocationExpression(
+                //             SyntaxFactory.MemberAccessExpression(
+                //                 SyntaxKind.SimpleMemberAccessExpression,
+                //                 SyntaxFactory.IdentifierName(invokingVariableName), // Assuming 'instance' is available
+                //                 SyntaxFactory.IdentifierName(method.Name)
+                //             ),
+                //             arguments
+                //         );
+                //     }
+                // }
+            }
 
+            var invocationExpr = SyntaxFactory.InvocationExpression(methodAccess, arguments);
             // If method returns void, just execute it
             if (method.ReturnType == typeof(void))
             {
@@ -650,25 +728,64 @@ namespace VaporEditor.Blueprints
             }
             else
             {
-                // Choose whether to use `var` or an explicit type
-                TypeSyntax returnTypeSyntax = GetTypeSyntax(method.ReturnType);
-                bool useVar = method.ReturnType.IsGenericType || method.ReturnType == typeof(object);
+                TypeSyntax returnTypeSyntax = GetTypeSyntax(variableTuple.Item1);
+                bool useVar = method.ReturnType.IsGenericParameter || variableTuple.Item1 == typeof(object);
 
-                // Variable declaration using either `var` or explicit type
-                VariableDeclarationSyntax variableDeclaration = SyntaxFactory.VariableDeclaration(
+                var variableDeclaration = SyntaxFactory.VariableDeclaration(
                     useVar ? SyntaxFactory.IdentifierName("var") : returnTypeSyntax
                 ).AddVariables(
-                    SyntaxFactory.VariableDeclarator(variableName)
-                        .WithInitializer(SyntaxFactory.EqualsValueClause(invocationExpr)) // Assign invocation result
+                    SyntaxFactory.VariableDeclarator(variableTuple.Item2)
+                        .WithInitializer(SyntaxFactory.EqualsValueClause(invocationExpr))
                 );
 
-                // Add the variable declaration to the method body
                 methodBody = methodBody.AddStatements(SyntaxFactory.LocalDeclarationStatement(variableDeclaration));
             }
 
             return methodBody;
         }
 
+        #endregion
+
+        #region - Field Generation Helpers -
+
+        private static ExpressionSyntax GetFieldAccessExpression(FieldInfo field, string invokingVariableName)
+        {
+            // Instance field: invokingVariableName.FieldName
+            // Static field: TypeName.FieldName
+            return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, field.IsStatic 
+                ? SyntaxFactory.IdentifierName(field.DeclaringType.FullName) 
+                : SyntaxFactory.IdentifierName(invokingVariableName), SyntaxFactory.IdentifierName(field.Name));
+        }
+
+        internal static BlockSyntax AddGetFieldToBody(FieldInfo field, string variableName, string invokingVariableName, BlockSyntax block)
+        {
+            var fieldAccess = GetFieldAccessExpression(field, invokingVariableName);
+
+            // Generate: <FieldType> variableName = invokingVariableName.FieldName OR TypeName.FieldName;
+            var assignmentExpression = SyntaxFactory.AssignmentExpression(
+                SyntaxKind.SimpleAssignmentExpression,
+                SyntaxFactory.IdentifierName(variableName),
+                fieldAccess
+            );
+            
+            block = block.AddStatements(SyntaxFactory.ExpressionStatement(assignmentExpression));
+            return block;
+        }
+        
+        internal static BlockSyntax AddSetFieldToBody(FieldInfo field, string variableName, string invokingVariableName, BlockSyntax block)
+        {
+            var fieldAccess = GetFieldAccessExpression(field, invokingVariableName);
+
+            // Generate: invokingVariableName.FieldName = variableName OR TypeName.FieldName = variableName;
+            var assignmentExpression = SyntaxFactory.AssignmentExpression(
+                SyntaxKind.SimpleAssignmentExpression,
+                fieldAccess,
+                SyntaxFactory.IdentifierName(variableName)
+            );
+            
+            block = block.AddStatements(SyntaxFactory.ExpressionStatement(assignmentExpression));
+            return block;
+        }
         #endregion
     }
 }
