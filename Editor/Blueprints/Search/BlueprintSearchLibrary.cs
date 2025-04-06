@@ -60,17 +60,17 @@ namespace VaporEditor.Blueprints
             return this;
         }
 
-        public BlueprintSearchModel WithGraph(BlueprintDesignGraph graph)
+        public BlueprintSearchModel WithGraph(BlueprintClassGraphModel graphModel)
         {
             Parameters ??= new List<ValueTuple<string, object>>();
             var idx = Parameters.FindIndex(v => v.Item1 == SearchModelParams.GRAPH_PARAM);
             if (idx != -1)
             {
-                Parameters[idx] = (SearchModelParams.GRAPH_PARAM, graph.Current);
+                Parameters[idx] = (SearchModelParams.GRAPH_PARAM, graphModel.Current);
             }
             else
             {
-                Parameters.Add((SearchModelParams.GRAPH_PARAM, graph.Current));
+                Parameters.Add((SearchModelParams.GRAPH_PARAM, graphModel.Current));
             }
             
             return this;

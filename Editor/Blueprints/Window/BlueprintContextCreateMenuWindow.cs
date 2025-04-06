@@ -92,7 +92,7 @@ namespace VaporEditor.Blueprints
                 {
                     var so = (BlueprintGraphSo)x;
                     so.GraphType = BlueprintGraphSo.BlueprintGraphType.BehaviourGraph;
-                    so.AssemblyQualifiedTypeName = type.AssemblyQualifiedName;
+                    so.ParentType = type.AssemblyQualifiedName;
                 });
             }
             else
@@ -101,7 +101,7 @@ namespace VaporEditor.Blueprints
                 {
                     var so = (BlueprintGraphSo)x;
                     so.GraphType = BlueprintGraphSo.BlueprintGraphType.ClassGraph;
-                    so.AssemblyQualifiedTypeName = type.AssemblyQualifiedName;
+                    so.ParentType = type.AssemblyQualifiedName;
                 });
             }
         }

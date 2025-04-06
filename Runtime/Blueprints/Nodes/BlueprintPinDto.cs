@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace Vapor.Blueprints
 {
@@ -8,5 +9,6 @@ namespace Vapor.Blueprints
         public string PinName;
         public Type PinType;
         public object Content;
+        public List<string> WireGuids;
     }
 }

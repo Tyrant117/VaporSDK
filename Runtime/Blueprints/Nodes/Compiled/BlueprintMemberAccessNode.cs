@@ -60,9 +60,6 @@ namespace Vapor.Blueprints
                 {
                     switch (_scope)
                     {
-                        case VariableScopeType.Block:
-                            Graph.TrySetTempValue(_variableName, InPortValues[PinNames.SET_IN]);
-                            break;
                         case VariableScopeType.Method:
                             Graph.TrySetTempValue(_variableName, InPortValues[PinNames.SET_IN]);
                             break;
@@ -79,10 +76,6 @@ namespace Vapor.Blueprints
             {
                 switch (_scope)
                 {
-                    case VariableScopeType.Block:
-                        Graph.TryGetTempValue(_variableName, out var blockVar);
-                        OutPortValues[PinNames.RETURN] = blockVar;
-                        break;
                     case VariableScopeType.Method:
                         Graph.TryGetTempValue(_variableName, out var methodVar);
                         OutPortValues[PinNames.RETURN] = methodVar;

@@ -103,7 +103,7 @@ namespace VaporEditor.Blueprints
             }
         }
 
-        public void SetDrawTarget(object drawTarget)
+        public void SetInspectorTarget(object drawTarget)
         {
             CurrentDrawTarget = drawTarget;
             if (CurrentDrawTarget != null)
@@ -150,52 +150,32 @@ namespace VaporEditor.Blueprints
             parentField.Q<Label>().AddToClassList("flex-label");
             _settingsElement.Add(parentField);
             
-            // List<VariableAccessModifier> accessChoices = new() { VariableAccessModifier.Public, VariableAccessModifier.Protected, VariableAccessModifier.Private };
-            // var popup = new PopupField<VariableAccessModifier>("Access", accessChoices, Window.DesignGraph.AccessModifier,
-            //     v => v.ToString(), v => v.ToString());
-            // popup.RegisterValueChangedCallback(OnAccessModifierChanged);
-            // popup.styleSheets.Add(labelStyle);
-            // popup.Q<Label>().AddToClassList("flex-label");
-            // _settingsElement.Add(popup);
-            
             var deprecatedField = new Toggle("Deprecated")
             {
                 toggleOnLabelClick = false,
             };
-            deprecatedField.SetValueWithoutNotify(Window.DesignGraph.IsDeprecated);
-            deprecatedField.RegisterValueChangedCallback(evt => Window.DesignGraph.IsDeprecated = evt.newValue);
+            deprecatedField.SetValueWithoutNotify(Window.ClassGraphModel.IsObsolete);
+            deprecatedField.RegisterValueChangedCallback(evt => Window.ClassGraphModel.IsObsolete = evt.newValue);
             deprecatedField.styleSheets.Add(labelStyle);
             deprecatedField.AddToClassList("toggle-fix");
             deprecatedField.Q<Label>().AddToClassList("flex-label");
             _settingsElement.Add(deprecatedField);
             
-            var abstractField = new Toggle("Abstract")
-            {
-                toggleOnLabelClick = false
-            };
-            abstractField.SetValueWithoutNotify(Window.DesignGraph.IsAbstract);
-            abstractField.RegisterValueChangedCallback(evt => Window.DesignGraph.IsAbstract = evt.newValue);
-            abstractField.styleSheets.Add(labelStyle);
-            abstractField.AddToClassList("toggle-fix");
-            abstractField.Q<Label>().AddToClassList("flex-label");
-            _settingsElement.Add(abstractField);
-            
             var namespaceField = new TextField("Namespace");
-            namespaceField.SetValueWithoutNotify(Window.DesignGraph.Namespace ?? string.Empty);
-            namespaceField.RegisterValueChangedCallback(evt => Window.DesignGraph.Namespace = evt.newValue);
+            namespaceField.SetValueWithoutNotify(Window.ClassGraphModel.Namespace ?? string.Empty);
+            namespaceField.RegisterValueChangedCallback(evt => Window.ClassGraphModel.Namespace = evt.newValue);
             namespaceField.styleSheets.Add(labelStyle);
             namespaceField.Q<Label>().AddToClassList("flex-label");
             _settingsElement.Add(namespaceField);
             
             
-            var interfacesList = new ListView(Window.DesignGraph.ImplementedInterfaces, makeItem: () => new VisualElement(), bindItem: (element, i) =>
+            var interfacesList = new ListView(Window.ClassGraphModel.ImplementedInterfaceTypes, makeItem: () => new VisualElement(), bindItem: (element, i) =>
             {
                 element.Clear();
                 int idx = i;
-                var aqn = Window.DesignGraph.ImplementedInterfaces[idx];
-                var currentType = aqn.EmptyOrNull() ? null : Type.GetType(aqn);
-                var typeSelector = new TypeSelectorField(string.Empty, currentType, t => (t.IsPublic || t.IsNestedPublic) && t.IsInterface);
-                typeSelector.AssemblyQualifiedTypeChanged += (_, cur, _) => Window.DesignGraph.ImplementedInterfaces[idx] = cur;
+                var interfaceType = Window.ClassGraphModel.ImplementedInterfaceTypes[idx];
+                var typeSelector = new TypeSelectorField(string.Empty, interfaceType, t => (t.IsPublic || t.IsNestedPublic) && t.IsInterface);
+                typeSelector.TypeChanged += (_, cur, old) => Window.ClassGraphModel.OnInterfaceUpdated(old, cur);
                 element.Add(typeSelector);
             })
             {
@@ -203,8 +183,10 @@ namespace VaporEditor.Blueprints
                 headerTitle = "Implemented Interfaces",
                 showAddRemoveFooter = true,
                 showBorder = true,
-                showBoundCollectionSize = true,
+                showBoundCollectionSize = false,
                 showAlternatingRowBackgrounds = AlternatingRowBackground.All,
+                onAdd = OnAddInterface,
+                onRemove = OnRemoveInterface,
                 style = 
                 {
                     marginLeft = 3f,
@@ -214,9 +196,15 @@ namespace VaporEditor.Blueprints
             _settingsElement.Add(interfacesList);
         }
 
-        // private void OnAccessModifierChanged(ChangeEvent<VariableAccessModifier> evt)
-        // {
-        //     Window.DesignGraph.AccessModifier = evt.newValue;
-        // }
+        private void OnAddInterface(BaseListView obj)
+        {
+            Window.ClassGraphModel.AddInterface(null);
+        }
+        
+        private void OnRemoveInterface(BaseListView obj)
+        {
+            Window.ClassGraphModel.RemoveInterfaceAt(Window.ClassGraphModel.ImplementedInterfaceTypes.Count - 1);
+            obj.Rebuild();
+        }
     }
 }

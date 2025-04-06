@@ -17,7 +17,7 @@ namespace VaporEditor.Blueprints
 
     public class BlueprintRedirectNodeView : Node, IBlueprintNodeView
     {
-        public BlueprintNodeController Controller { get; }
+        public NodeModelBase Controller { get; }
         public Dictionary<string, BlueprintPortView> InPorts { get; private set; } = new();
         public Dictionary<string, BlueprintPortView> OutPorts { get; private set; } = new();
         public BlueprintView View { get; }
@@ -25,7 +25,7 @@ namespace VaporEditor.Blueprints
         public event Action<string> ConnectedPort;
         public event Action<string> DisconnectedPort;
 
-        public BlueprintRedirectNodeView(BlueprintView view, BlueprintNodeController nodeController)
+        public BlueprintRedirectNodeView(BlueprintView view, NodeModelBase nodeController)
         {
             View = view;
             Controller = nodeController;
@@ -38,12 +38,12 @@ namespace VaporEditor.Blueprints
 
         private void CreateFlowInPorts()
         {
-            if (Controller.InPorts == null)
+            if (Controller.InputPins == null)
             {
                 return;
             }
-            InPorts = new(Controller.InPorts.Count);
-            foreach (var slot in Controller.InPorts.Values)
+            InPorts = new(Controller.InputPins.Count);
+            foreach (var slot in Controller.InputPins.Values)
             {
                 var portContainer = BlueprintPortView.Create(this, slot, out var port);
                 if (slot.IsOptional)
@@ -59,13 +59,13 @@ namespace VaporEditor.Blueprints
 
         private void CreateFlowOutPorts()
         {
-            if (Controller.OutPorts == null)
+            if (Controller.OutputPins == null)
             {
                 return;
             }
             
-            OutPorts = new(Controller.OutPorts.Count);
-            foreach (var slot in Controller.OutPorts.Values)
+            OutPorts = new(Controller.OutputPins.Count);
+            foreach (var slot in Controller.OutputPins.Values)
             {
                 var portContainer = BlueprintPortView.Create(this, slot, out var port);
                 if (slot.IsOptional)
@@ -104,7 +104,7 @@ namespace VaporEditor.Blueprints
     
     public class BlueprintToken : TokenNode, IBlueprintNodeView
     {
-        public BlueprintNodeController Controller { get; }
+        public NodeModelBase Controller { get; }
         public Dictionary<string, BlueprintPortView> InPorts { get; private set; } = new();
         public Dictionary<string, BlueprintPortView> OutPorts { get; private set; } = new();
         public BlueprintView View { get; }
@@ -112,7 +112,7 @@ namespace VaporEditor.Blueprints
         public event Action<string> ConnectedPort;
         public event Action<string> DisconnectedPort;
         
-        public BlueprintToken(BlueprintView view, BlueprintNodeController nodeController) : base(null, null)
+        public BlueprintToken(BlueprintView view, NodeModelBase nodeController) : base(null, null)
         {
             View = view;
             Controller = nodeController;
@@ -183,12 +183,12 @@ namespace VaporEditor.Blueprints
 
         private void CreateFlowInPorts()
         {
-            if (Controller.InPorts == null)
+            if (Controller.InputPins == null)
             {
                 return;
             }
-            InPorts = new(Controller.InPorts.Count);
-            foreach (var slot in Controller.InPorts.Values)
+            InPorts = new(Controller.InputPins.Count);
+            foreach (var slot in Controller.InputPins.Values)
             {
                 var portContainer = BlueprintPortView.Create(this, slot, out var port);
                 if (slot.IsOptional)
@@ -227,12 +227,12 @@ namespace VaporEditor.Blueprints
 
         private void CreateFlowOutPorts()
         {
-            if (Controller.OutPorts == null)
+            if (Controller.OutputPins == null)
             {
                 return;
             }
-            OutPorts = new(Controller.OutPorts.Count);
-            foreach (var slot in Controller.OutPorts.Values)
+            OutPorts = new(Controller.InputPins.Count);
+            foreach (var slot in Controller.OutputPins.Values)
             {
                 var portContainer = BlueprintPortView.Create(this, slot, out var port);
                 if (slot.IsOptional)
@@ -270,7 +270,7 @@ namespace VaporEditor.Blueprints
     
     public class BlueprintNodeView : Node, IBlueprintNodeView
     {
-        public BlueprintNodeController Controller { get; protected set; }
+        public NodeModelBase Controller { get; protected set; }
         
         public Dictionary<string, BlueprintPortView> InPorts { get; private set; } = new();
         public Dictionary<string, BlueprintPortView> OutPorts { get; private set; } = new();
@@ -282,7 +282,7 @@ namespace VaporEditor.Blueprints
         public event Action<BlueprintWireReference, bool> ConnectedPort;
         public event Action<string> DisconnectedPort;
 
-        public BlueprintNodeView(BlueprintView view, BlueprintNodeController nodeController)
+        public BlueprintNodeView(BlueprintView view, NodeModelBase nodeController)
         {
             View = view;
             Controller = nodeController;
@@ -345,7 +345,7 @@ namespace VaporEditor.Blueprints
 
         protected virtual void OnConnectedPort(BlueprintWireReference wire, bool shouldModifyDataModel)
         {
-            if (Controller.Model.NodeType == NodeType.Switch && wire.RightSidePin.PinName == PinNames.VALUE_IN)
+            if (Controller.NodeType == NodeType.Switch && wire.RightSidePin.PinName == PinNames.VALUE_IN)
             {
                 if(shouldModifyDataModel && Controller.OnEnumChanged())
                 {
@@ -410,12 +410,12 @@ namespace VaporEditor.Blueprints
         
         private void CreateFlowInPorts()
         {
-            if (Controller.InPorts == null)
+            if (Controller.InputPins == null)
             {
                 return;
             }
-            InPorts = new Dictionary<string, BlueprintPortView>(Controller.InPorts.Count);
-            foreach (var pin in Controller.InPorts.Values)
+            InPorts = new Dictionary<string, BlueprintPortView>(Controller.InputPins.Count);
+            foreach (var pin in Controller.InputPins.Values)
             {
                 CreateInputPin(pin);
             }
@@ -454,12 +454,12 @@ namespace VaporEditor.Blueprints
         
         private void CreateFlowOutPorts()
         {
-            if (Controller.OutPorts == null)
+            if (Controller.OutputPins == null)
             {
                 return;
             }
-            OutPorts = new Dictionary<string, BlueprintPortView>(Controller.OutPorts.Count);
-            foreach (var pin in Controller.OutPorts.Values)
+            OutPorts = new Dictionary<string, BlueprintPortView>(Controller.OutputPins.Count);
+            foreach (var pin in Controller.OutputPins.Values)
             {
                 CreateOutputPin(pin);
             }
@@ -578,7 +578,7 @@ namespace VaporEditor.Blueprints
 
         public void InvalidateType()
         {
-            if (Controller.Model.NodeType == NodeType.Entry)
+            if (Controller.NodeType == NodeType.Entry)
             {
                 foreach (var ports in OutPorts.Values)
                 {
@@ -586,7 +586,7 @@ namespace VaporEditor.Blueprints
                 }
             }
 
-            if (Controller.Model.NodeType == NodeType.Return)
+            if (Controller.NodeType == NodeType.Return)
             {
                 foreach (var ports in InPorts.Values)
                 {
@@ -594,7 +594,7 @@ namespace VaporEditor.Blueprints
                 }
             }
             
-            if (Controller.Model.NodeType == NodeType.MemberAccess)
+            if (Controller.NodeType == NodeType.MemberAccess)
             {
                 foreach (var ports in InPorts.Values)
                 {
@@ -689,7 +689,7 @@ namespace VaporEditor.Blueprints
     public class BlueprintCastNodeView : BlueprintNodeView
     {
         
-        public BlueprintCastNodeView(BlueprintView view, BlueprintNodeController nodeController) : base(view, nodeController)
+        public BlueprintCastNodeView(BlueprintView view, NodeModelBase nodeController) : base(view, nodeController)
         {
             GetDrawnFieldForOutPort<TypeSelectorField>(PinNames.AS_OUT).TypeChanged += OnTypeChanged;
         }
@@ -707,8 +707,10 @@ namespace VaporEditor.Blueprints
     
     public class BlueprintSequenceNodeView : BlueprintNodeView
     {
-        public BlueprintSequenceNodeView(BlueprintView view, BlueprintNodeController nodeController) : base(view, nodeController)
+        private SequenceNode sequenceNode;
+        public BlueprintSequenceNodeView(BlueprintView view, SequenceNode nodeController) : base(view, nodeController)
         {
+            sequenceNode = nodeController;
             titleContainer[0].style.paddingLeft = 28;
             titleContainer.Add(new Button(OnAddSequencePin)
             {
@@ -726,30 +728,46 @@ namespace VaporEditor.Blueprints
 
         private void OnAddSequencePin()
         {
-            var i = Controller.OutPorts.Count;
+            var i = Controller.OutputPins.Count;
             string formattedName = $"{PinNames.SEQUENCE_OUT}_{i}";
-            var pin = new BlueprintPin(formattedName, PinDirection.Out, typeof(ExecutePin), false)
+            var pin = new BlueprintPin(Controller, formattedName, PinDirection.Out, typeof(ExecutePin), false)
                 .WithDisplayName(formattedName);
-            Controller.OutPorts.Add(formattedName, pin);
+            Controller.OutputPins.Add(formattedName, pin);
 
-            Controller.ModelAs<DataNodeModel<int>>().Data = Controller.OutPorts.Count;
+            sequenceNode.SetSequenceCount(Controller.OutputPins.Count);
             
             CreateOutputPin(pin);
         }
 
         public void DeletePin(string pinName)
         {
-            if (!Controller.OutPorts.ContainsKey(pinName))
+            if (!Controller.OutputPins.ContainsKey(pinName))
             {
                 return;
             }
 
-            Controller.OutPorts.Remove(pinName);
-            Controller.ModelAs<DataNodeModel<int>>().Data = Controller.OutPorts.Count;
+            Controller.OutputPins.Remove(pinName);
+            sequenceNode.SetSequenceCount(Controller.OutputPins.Count);
                 
             RemoveOutputPin(pinName);
             
             InvalidateName();
+        }
+    }
+
+    public class BlueprintSwitchNodeView : BlueprintNodeView
+    {
+        public BlueprintSwitchNodeView(BlueprintView view, SwitchNode nodeController) : base(view, nodeController)
+        {
+        }
+
+        public override void OnSelected()
+        {
+            base.OnSelected();
+            if(View.selection.Count == 1)
+            {
+                View.Window.InspectorView.SetInspectorTarget(new BlueprintInspectorSwitchView(this));
+            }
         }
     }
 }

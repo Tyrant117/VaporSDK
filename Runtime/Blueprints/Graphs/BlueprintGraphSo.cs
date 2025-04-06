@@ -35,23 +35,21 @@ namespace Vapor.Blueprints
         }
 
         public BlueprintGraphType GraphType;
-        public string AssemblyQualifiedTypeName;
-        [TypeSelector(TypeSelectorAttribute.T.Subclass, typeof(Component))]
-        public string TypeTest;
+        [HideInInspector]
+        public string ParentType;
+        [HideInInspector]
+        public BlueprintGraphSo ParentObject;
+        
         [HideLabel]
         public string GraphJson;
-        // [HideInInspector] public string CompiledGraphJson;
-        
         
         [Button]
         private void ResetGraph()
         {
             GraphJson = string.Empty;
-            // CompiledGraphJson = string.Empty;
         }
         
         public IBlueprintGraph Graph { get; set; }
-        // public BlueprintDesignGraph DesignGraph { get; private set; }
 
         public void InitializedInDatabase()
         {
@@ -65,27 +63,5 @@ namespace Vapor.Blueprints
             Debug.Log("Post Initialized Graph: " + Key);
             RuntimeDataStore<IBlueprintGraph>.Add(Key, Graph);
         }
-
-        #region - Design Graph -
-        // public void OpenGraph()
-        // {
-        //     if (DesignGraphJson.EmptyOrNull())
-        //     {
-        //         DesignGraph = new BlueprintDesignGraph(this, new BlueprintDesignGraphDto());
-        //         DesignGraph.Validate();
-        //     }
-        //     else
-        //     {
-        //         var dto = JsonConvert.DeserializeObject<BlueprintDesignGraphDto>(DesignGraphJson, NewtonsoftUtility.SerializerSettings);
-        //         DesignGraph = new BlueprintDesignGraph(this, dto);
-        //     }
-        // }
-        
-        // public void SaveGraph()
-        // {
-        //     DesignGraph.Validate();
-        //     DesignGraphJson = DesignGraph?.Serialize();
-        // }
-        #endregion
     }
 }

@@ -12,12 +12,12 @@ namespace VaporEditor.Blueprints
 {
     public abstract class BlueprintSyntaxNodeBase
     {
-        protected internal readonly BlueprintNodeController MyNodeController;
+        protected internal readonly NodeModelBase MyNodeController;
 
         protected bool IsEvaluated { get; set; }
         protected int Counter { get; set; }
 
-        protected BlueprintSyntaxNodeBase(BlueprintNodeController nodeController)
+        protected BlueprintSyntaxNodeBase(NodeModelBase nodeController)
         {
             MyNodeController = nodeController;
         }
@@ -35,13 +35,13 @@ namespace VaporEditor.Blueprints
             block = SetOutputPinStatements(block);
             IsEvaluated = true;
 
-            var idx = MyNodeController.Model.OutputWires.FindIndex(w => w.IsExecuteWire);
+            var idx = MyNodeController.OutputWires.FindIndex(w => w.IsExecuteWire);
             if (idx == -1)
             {
                 return block;
             }
 
-            var nextNodeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.IsExecuteWire);
+            var nextNodeWire = MyNodeController.OutputWires.FirstOrDefault(w => w.IsExecuteWire);
             if (!nextNodeWire.IsValid() || !BlueprintScriptWriter.NodeMap.TryGetValue(nextNodeWire.RightSidePin.NodeGuid, out var nextNode))
             {
                 Debug.LogError($"Invalid Node Guid: {nextNodeWire.RightSidePin.PinName}");
@@ -54,7 +54,7 @@ namespace VaporEditor.Blueprints
 
         protected BlockSyntax GetInputPinStatements(BlockSyntax block)
         {
-            foreach (var pin in MyNodeController.InPorts.Values)
+            foreach (var pin in MyNodeController.InputPins.Values)
             {
                 if (pin.IsExecutePin)
                 {
@@ -66,7 +66,7 @@ namespace VaporEditor.Blueprints
                     continue;
                 }
 
-                var wire = MyNodeController.Model.InputWires.FirstOrDefault(w => w.RightSidePin.PinName == pin.PortName);
+                var wire = MyNodeController.InputWires.FirstOrDefault(w => w.RightSidePin.PinName == pin.PortName);
                 if (wire.IsValid())
                 {
                     if (!BlueprintScriptWriter.NodeMap.TryGetValue(wire.LeftSidePin.NodeGuid, out var pinNode))
@@ -112,7 +112,7 @@ namespace VaporEditor.Blueprints
                 block = SetOutputPinStatements(block);
             }
 
-            var pinType = MyNodeController.OutPorts[wire.LeftSidePin.PinName].Type;
+            var pinType = MyNodeController.OutputPins[wire.LeftSidePin.PinName].Type;
             var rightCounter = BlueprintScriptWriter.NodeMap[wire.RightSidePin.NodeGuid].Counter;
 
             // Then create a variable {Type RightNameIn = LeftNameOut}
@@ -130,13 +130,13 @@ namespace VaporEditor.Blueprints
 
         private static string FormatWithGuid(string prefix, string guid, int count) => $"{prefix}_{guid.GetStableHashU32()}_{count}";
 
-        public static BlueprintSyntaxNodeBase ConvertToSyntaxNode(BlueprintNodeController nodeController)
+        public static BlueprintSyntaxNodeBase ConvertToSyntaxNode(NodeModelBase nodeController)
         {
-            return nodeController.Model.NodeType switch
+            return nodeController.NodeType switch
             {
                 NodeType.Entry => new EntrySyntaxNode(nodeController),
-                NodeType.Method => new MethodSyntaxNode(nodeController),
-                NodeType.MemberAccess => new MemberAccessSyntaxNode(nodeController),
+                NodeType.Method => new MethodSyntaxNode((MethodNodeModel)nodeController),
+                NodeType.MemberAccess => new MemberAccessSyntaxNode((MemberNodeModel)nodeController),
                 NodeType.Return => new ReturnSyntaxNode(nodeController),
                 NodeType.Branch => new BranchSyntaxNode(nodeController),
                 NodeType.Switch => new SwitchSyntaxNode(nodeController),
@@ -150,21 +150,21 @@ namespace VaporEditor.Blueprints
                 NodeType.Cast => new CastSyntaxNode(nodeController),
                 NodeType.Redirect => new RedirectSyntaxNode(nodeController),
                 NodeType.Inline => new ConstructorSyntaxNode(nodeController),
-                _ => null
+                _ => throw new ArgumentOutOfRangeException()
             };
         }
     }
 
     public class EntrySyntaxNode : BlueprintSyntaxNodeBase
     {
-        public EntrySyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        public EntrySyntaxNode(NodeModelBase nodeController) : base(nodeController)
         {
         }
 
         protected override BlockSyntax SetOutputPinStatements(BlockSyntax block)
         {
             // Create All Input Args
-            foreach (var arg in MyNodeController.OutPorts.Values)
+            foreach (var arg in MyNodeController.OutputPins.Values)
             {
                 if (arg.IsExecutePin)
                 {
@@ -180,7 +180,7 @@ namespace VaporEditor.Blueprints
             }
             
             // Create all Local Variables First when entered
-            foreach (var tmp in MyNodeController.Graph.TemporaryVariables)
+            foreach (var tmp in MyNodeController.Method.Variables)
             {
                 // Use Default Value
                 var defaultValue = BlueprintScriptWriter.GetDefaultValueSyntax(tmp.Type);
@@ -199,11 +199,13 @@ namespace VaporEditor.Blueprints
     
     public class MethodSyntaxNode : BlueprintSyntaxNodeBase
     {
+        private readonly MethodNodeModel _model;
         private readonly MethodInfo _methodInfo;
         
-        public MethodSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        public MethodSyntaxNode(MethodNodeModel nodeController) : base(nodeController)
         {
-            _methodInfo = nodeController.ModelAs<MethodNodeModel>().MethodInfo;
+            _model = nodeController;
+            _methodInfo = nodeController.MethodInfo;
         }
 
         public override BlockSyntax AddStatementAndContinue(BlockSyntax block)
@@ -218,8 +220,8 @@ namespace VaporEditor.Blueprints
             block = SetOutputPinStatements(block);
             IsEvaluated = true;
 
-            var @params = MyNodeController.InPorts.Values.ToList().FindAll(w => !w.IsExecutePin);
-            var outParams = MyNodeController.OutPorts.Values.ToList().FindAll(w => !w.IsExecutePin);
+            var @params = MyNodeController.InputPins.Values.ToList().FindAll(w => !w.IsExecutePin);
+            var outParams = MyNodeController.OutputPins.Values.ToList().FindAll(w => !w.IsExecutePin);
             var argNames = @params.Select(w => w.PortName).Where(n => n != PinNames.OWNER).ToArray();
             var outArgNames = outParams.Select(w => w.PortName).Where(n => n != PinNames.RETURN).ToArray();
             var paramInfos = _methodInfo.GetParameters();
@@ -229,14 +231,14 @@ namespace VaporEditor.Blueprints
 
 
             string invokingVarName = null;
-            if (MyNodeController.InPorts.ContainsKey(PinNames.OWNER))
+            if (MyNodeController.InputPins.ContainsKey(PinNames.OWNER))
             {
                 invokingVarName = FormatWithUid(PinNames.OWNER);
             }
 
             var returnPinName = string.Empty;
             Type returnPinType = null;
-            if (MyNodeController.OutPorts.TryGetValue(PinNames.RETURN, out var pin))
+            if (MyNodeController.OutputPins.TryGetValue(PinNames.RETURN, out var pin))
             {
                 returnPinName = FormatWithUid(PinNames.RETURN);
                 returnPinType = pin.Type;
@@ -248,7 +250,7 @@ namespace VaporEditor.Blueprints
                 var genArgs = _methodInfo.GetGenericArguments();
                 foreach (var arg in genArgs)
                 {
-                    if (!MyNodeController.GenericArgumentPortMap.TryGetValue(arg, out var p))
+                    if (!_model.GenericArgumentPortMap.TryGetValue(arg, out var p))
                     {
                         continue;
                     }
@@ -261,13 +263,13 @@ namespace VaporEditor.Blueprints
 
             block = BlueprintScriptWriter.AddMethodInfoToBody((returnPinType, returnPinName), parameters, genericTypes, invokingVarName, _methodInfo, block);
 
-            var idx = MyNodeController.Model.OutputWires.FindIndex(w => w.IsExecuteWire);
+            var idx = MyNodeController.OutputWires.FindIndex(w => w.IsExecuteWire);
             if (idx == -1)
             {
                 return block;
             }
 
-            var nextNodeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.IsExecuteWire);
+            var nextNodeWire = MyNodeController.OutputWires.FirstOrDefault(w => w.IsExecuteWire);
             if (!nextNodeWire.IsValid() || !BlueprintScriptWriter.NodeMap.TryGetValue(nextNodeWire.RightSidePin.NodeGuid, out var nextNode))
             {
                 Debug.LogError($"Invalid Node Guid: {nextNodeWire.RightSidePin.PinName}");
@@ -280,13 +282,13 @@ namespace VaporEditor.Blueprints
 
         protected override BlockSyntax SetOutputPinStatements(BlockSyntax block)
         {
-            if (!MyNodeController.ModelAs<MethodNodeModel>().IsPure)
+            if (!_model.IsPure)
             {
                 return block;
             }
 
-            var @params = MyNodeController.InPorts.Values.ToList().FindAll(w => !w.IsExecutePin);
-            var outParams = MyNodeController.OutPorts.Values.ToList().FindAll(w => !w.IsExecutePin);
+            var @params = MyNodeController.InputPins.Values.ToList().FindAll(w => !w.IsExecutePin);
+            var outParams = MyNodeController.OutputPins.Values.ToList().FindAll(w => !w.IsExecutePin);
             var argNames = @params.Select(w => w.PortName).Where(n => n != PinNames.OWNER).ToArray();
             var outArgNames = outParams.Select(w => w.PortName).Where(n => n != PinNames.RETURN).ToArray();
             var paramInfos = _methodInfo.GetParameters();
@@ -296,20 +298,20 @@ namespace VaporEditor.Blueprints
 
 
             string invokingVarName = null;
-            if (MyNodeController.InPorts.ContainsKey(PinNames.OWNER))
+            if (MyNodeController.InputPins.ContainsKey(PinNames.OWNER))
             {
-                invokingVarName = $"{PinNames.OWNER}_{MyNodeController.Model.Uuid}";
+                invokingVarName = $"{PinNames.OWNER}_{MyNodeController.Uuid}";
             }
 
             var returnPinName = string.Empty;
             Type returnPinType = null;
-            if (MyNodeController.OutPorts.TryGetValue(PinNames.RETURN, out var pin))
+            if (MyNodeController.OutputPins.TryGetValue(PinNames.RETURN, out var pin))
             {
                 returnPinName = FormatWithUid(PinNames.RETURN);
                 returnPinType = pin.Type;
             }
             
-            var genericTypes = (from p in MyNodeController.GenericArgumentPortMap select p.Value.Type).ToList();
+            var genericTypes = (from p in _model.GenericArgumentPortMap select p.Value.Type).ToList();
 
             block = BlueprintScriptWriter.AddMethodInfoToBody((returnPinType, returnPinName), parameters, genericTypes, invokingVarName, _methodInfo, block);
             return block;
@@ -318,8 +320,11 @@ namespace VaporEditor.Blueprints
 
     public class MemberAccessSyntaxNode : BlueprintSyntaxNodeBase
     {
-        public MemberAccessSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        private readonly MemberNodeModel _model;
+
+        public MemberAccessSyntaxNode(MemberNodeModel nodeController) : base(nodeController)
         {
+            _model = nodeController;
         }
 
         // public override BlockSyntax CreateActionStatement(BlockSyntax block)
@@ -346,7 +351,7 @@ namespace VaporEditor.Blueprints
         //         }
         //     }
         //     
-        //     var pinType = MyNodeController.OutPorts[PinNames.GET_OUT].Type;
+        //     var pinType = MyNodeController.OutputPins[PinNames.GET_OUT].Type;
         //     // Then create a variable {Type RightNameIn = LeftNameOut}
         //     var variableDeclaration = SyntaxFactory.LocalDeclarationStatement(
         //         SyntaxFactory.VariableDeclaration(BlueprintScriptWriter.GetTypeSyntax(pinType))
@@ -359,14 +364,13 @@ namespace VaporEditor.Blueprints
 
         protected override BlockSyntax SetOutputPinStatements(BlockSyntax block)
         {
-            var model = MyNodeController.ModelAs<MemberNodeModel>();
-            if (model.FieldInfo == null)
+            if (_model.FieldInfo == null)
             {
-                if (model.VariableAccess == VariableAccessType.Set)
+                if (_model.VariableAccess == VariableAccessType.Set)
                 {
                     var assignmentExpression = SyntaxFactory.AssignmentExpression(
                         SyntaxKind.SimpleAssignmentExpression,
-                        SyntaxFactory.IdentifierName(model.VariableName), // Left-hand side
+                        SyntaxFactory.IdentifierName(_model.VariableName), // Left-hand side
                         SyntaxFactory.IdentifierName(FormatWithUid(PinNames.SET_IN)) // Right-hand side
                     );
                     var statement = SyntaxFactory.ExpressionStatement(assignmentExpression);
@@ -375,13 +379,13 @@ namespace VaporEditor.Blueprints
             }
             else
             {
-                if (model.VariableAccess == VariableAccessType.Set)
+                if (_model.VariableAccess == VariableAccessType.Set)
                 {
-                    block = BlueprintScriptWriter.AddSetFieldToBody(model.FieldInfo,  FormatWithUid(PinNames.SET_IN), FormatWithUid(PinNames.OWNER), block);
+                    block = BlueprintScriptWriter.AddSetFieldToBody(_model.FieldInfo,  FormatWithUid(PinNames.SET_IN), FormatWithUid(PinNames.OWNER), block);
                 }
             }
             
-            var pinType = MyNodeController.OutPorts[PinNames.GET_OUT].Type;
+            var pinType = MyNodeController.OutputPins[PinNames.GET_OUT].Type;
             // Then create a variable {Type RightNameIn = LeftNameOut}
             var variableDeclaration = SyntaxFactory.LocalDeclarationStatement(
                 SyntaxFactory.VariableDeclaration(BlueprintScriptWriter.GetTypeSyntax(pinType))
@@ -389,19 +393,19 @@ namespace VaporEditor.Blueprints
             );
             block = block.AddStatements(variableDeclaration);
             
-            if (model.FieldInfo == null)
+            if (_model.FieldInfo == null)
             {
                 var assignmentExpression = SyntaxFactory.AssignmentExpression(
                     SyntaxKind.SimpleAssignmentExpression,
                     SyntaxFactory.IdentifierName(FormatWithUid(PinNames.GET_OUT)), // Left-hand side
-                    SyntaxFactory.IdentifierName(model.VariableName) // Right-hand side
+                    SyntaxFactory.IdentifierName(_model.VariableName) // Right-hand side
                 );
                 var statement = SyntaxFactory.ExpressionStatement(assignmentExpression);
                 block = block.AddStatements(statement);
             }
             else
             {
-                block = BlueprintScriptWriter.AddGetFieldToBody(model.FieldInfo,  FormatWithUid(PinNames.GET_OUT), FormatWithUid(PinNames.OWNER), block);
+                block = BlueprintScriptWriter.AddGetFieldToBody(_model.FieldInfo,  FormatWithUid(PinNames.GET_OUT), FormatWithUid(PinNames.OWNER), block);
             }
             
             return block;
@@ -410,13 +414,13 @@ namespace VaporEditor.Blueprints
 
     public class ReturnSyntaxNode : BlueprintSyntaxNodeBase
     {
-        public ReturnSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        public ReturnSyntaxNode(NodeModelBase nodeController) : base(nodeController)
         {
         }
 
         protected override BlockSyntax SetOutputPinStatements(BlockSyntax block)
         {
-            if (MyNodeController.InPorts.Count == 1)
+            if (MyNodeController.InputPins.Count == 1)
             {
                 block = block.AddStatements(SyntaxFactory.ReturnStatement());
             }
@@ -431,13 +435,13 @@ namespace VaporEditor.Blueprints
 
         // public override BlockSyntax AddStatementAndContinue(BlockSyntax block)
         // {
-        //     if (MyNodeController.InPorts.Count == 1)
+        //     if (MyNodeController.InputPins.Count == 1)
         //     {
         //         block = block.AddStatements(SyntaxFactory.ReturnStatement());
         //     }
         //     else
         //     {
-        //         foreach (var pin in MyNodeController.InPorts.Values)
+        //         foreach (var pin in MyNodeController.InputPins.Values)
         //         {
         //             if (pin.IsExecutePin)
         //             {
@@ -472,7 +476,7 @@ namespace VaporEditor.Blueprints
 
         // public override BlockSyntax GetStatementForPin(BlueprintWireReference wire, BlockSyntax block)
         // {
-        //     if (MyNodeController.InPorts.TryGetValue(wire.RightSidePin.PinName, out var pin))
+        //     if (MyNodeController.InputPins.TryGetValue(wire.RightSidePin.PinName, out var pin))
         //     {
         //         if (!BlueprintScriptWriter.NodeMap.TryGetValue(wire.LeftSidePin.NodeGuid, out var nextNode))
         //         {
@@ -505,7 +509,7 @@ namespace VaporEditor.Blueprints
     
     public class BranchSyntaxNode : BlueprintSyntaxNodeBase
     {
-        public BranchSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        public BranchSyntaxNode(NodeModelBase nodeController) : base(nodeController)
         {
         }
 
@@ -526,13 +530,13 @@ namespace VaporEditor.Blueprints
             var ifBlock = SyntaxFactory.Block();
             var elseBlock = SyntaxFactory.Block();
 
-            var ifNodeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.TRUE_OUT);
+            var ifNodeWire = MyNodeController.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.TRUE_OUT);
             if (ifNodeWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(ifNodeWire.RightSidePin.NodeGuid, out var ifNode))
             {
                 ifBlock = ifNode.AddStatementAndContinue(ifBlock);
             }
 
-            var elseNodeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.FALSE_OUT);
+            var elseNodeWire = MyNodeController.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.FALSE_OUT);
             if (elseNodeWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(elseNodeWire.RightSidePin.NodeGuid, out var elseNode))
             {
                 elseBlock = elseNode.AddStatementAndContinue(elseBlock);
@@ -550,7 +554,7 @@ namespace VaporEditor.Blueprints
 
     public class SwitchSyntaxNode : BlueprintSyntaxNodeBase
     {
-        public SwitchSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        public SwitchSyntaxNode(NodeModelBase nodeController) : base(nodeController)
         {
         }
 
@@ -568,21 +572,21 @@ namespace VaporEditor.Blueprints
             IsEvaluated = true;
 
             // Create a switch statement
-            var switchType = MyNodeController.InPorts[PinNames.VALUE_IN].Type;
+            var switchType = MyNodeController.InputPins[PinNames.VALUE_IN].Type;
             if(switchType == typeof(Enum))
             {
-                var typeWire = MyNodeController.Model.InputWires.FirstOrDefault(w => w.RightSidePin.PinName == PinNames.VALUE_IN);
+                var typeWire = MyNodeController.InputWires.FirstOrDefault(w => w.RightSidePin.PinName == PinNames.VALUE_IN);
                 if (typeWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(typeWire.LeftSidePin.NodeGuid, out var typeNode))
                 {
-                    switchType = typeNode.MyNodeController.OutPorts[typeWire.LeftSidePin.PinName].Type;
+                    switchType = typeNode.MyNodeController.OutputPins[typeWire.LeftSidePin.PinName].Type;
                 }
             }
             
-            var switchVariableName = FormatWithUid(MyNodeController.InPorts[PinNames.VALUE_IN].PortName);
+            var switchVariableName = FormatWithUid(MyNodeController.InputPins[PinNames.VALUE_IN].PortName);
 
             var cases = new List<SwitchSectionSyntax>();
             BlockSyntax defaultCase = null;
-            foreach (var outputWire in MyNodeController.Model.OutputWires)
+            foreach (var outputWire in MyNodeController.OutputWires)
             {
                 if (!BlueprintScriptWriter.NodeMap.TryGetValue(outputWire.RightSidePin.NodeGuid, out var node))
                 {
@@ -675,7 +679,7 @@ namespace VaporEditor.Blueprints
 
     public class SequenceSyntaxNode : BlueprintSyntaxNodeBase
     {
-        public SequenceSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        public SequenceSyntaxNode(NodeModelBase nodeController) : base(nodeController)
         {
         }
 
@@ -692,10 +696,10 @@ namespace VaporEditor.Blueprints
             block = SetOutputPinStatements(block);
             IsEvaluated = true;
 
-            for (int i = 0; i < MyNodeController.Model.OutputWires.Count; i++)
+            for (int i = 0; i < MyNodeController.OutputWires.Count; i++)
             {
                 var pinName = $"{PinNames.SEQUENCE_OUT}_{i}";
-                var wire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == pinName);
+                var wire = MyNodeController.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == pinName);
                 if (!wire.IsValid() || !BlueprintScriptWriter.NodeMap.TryGetValue(wire.RightSidePin.NodeGuid, out var node))
                 {
                     continue;
@@ -723,7 +727,7 @@ namespace VaporEditor.Blueprints
 
     public class ForSyntaxNode : BlueprintSyntaxNodeBase
     {
-        public ForSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        public ForSyntaxNode(NodeModelBase nodeController) : base(nodeController)
         {
         }
         
@@ -768,7 +772,7 @@ namespace VaporEditor.Blueprints
             );
             loopBlock = loopBlock.AddStatements(elementAssignment);
             
-            var loopWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.LOOP_OUT);
+            var loopWire = MyNodeController.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.LOOP_OUT);
             if (loopWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(loopWire.RightSidePin.NodeGuid, out var node))
             {
                 loopBlock = node.AddStatementAndContinue(loopBlock);
@@ -802,7 +806,7 @@ namespace VaporEditor.Blueprints
             block = block.AddStatements(forLoop);
             
             // Continue
-            var completeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.COMPLETE_OUT);
+            var completeWire = MyNodeController.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.COMPLETE_OUT);
             if (completeWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(completeWire.RightSidePin.NodeGuid, out var completeNode))
             {
                 block = completeNode.AddStatementAndContinue(block);
@@ -814,7 +818,7 @@ namespace VaporEditor.Blueprints
 
     public class ForEachSyntaxNode : BlueprintSyntaxNodeBase
     {
-        public ForEachSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        public ForEachSyntaxNode(NodeModelBase nodeController) : base(nodeController)
         {
         }
         
@@ -837,7 +841,7 @@ namespace VaporEditor.Blueprints
             
             // Eval loop
             BlockSyntax loopBlock = SyntaxFactory.Block();
-            var loopWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.LOOP_OUT);
+            var loopWire = MyNodeController.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.LOOP_OUT);
             if (loopWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(loopWire.RightSidePin.NodeGuid, out var node))
             {
                 loopBlock = node.AddStatementAndContinue(loopBlock);
@@ -855,7 +859,7 @@ namespace VaporEditor.Blueprints
             block = block.AddStatements(foreachLoop);
             
             // Continue
-            var completeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.COMPLETE_OUT);
+            var completeWire = MyNodeController.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.COMPLETE_OUT);
             if (completeWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(completeWire.RightSidePin.NodeGuid, out var completeNode))
             {
                 block = completeNode.AddStatementAndContinue(block);
@@ -867,7 +871,7 @@ namespace VaporEditor.Blueprints
 
     public class WhileSyntaxNode : BlueprintSyntaxNodeBase
     {
-        public WhileSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        public WhileSyntaxNode(NodeModelBase nodeController) : base(nodeController)
         {
         }
 
@@ -889,7 +893,7 @@ namespace VaporEditor.Blueprints
             
             // Eval loop
             BlockSyntax loopBlock = SyntaxFactory.Block();
-            var loopWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.LOOP_OUT);
+            var loopWire = MyNodeController.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.LOOP_OUT);
             if (loopWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(loopWire.RightSidePin.NodeGuid, out var node))
             {
                 loopBlock = node.AddStatementAndContinue(loopBlock);
@@ -901,7 +905,7 @@ namespace VaporEditor.Blueprints
             block = block.AddStatements(whileStatement);
             
             // Continue
-            var completeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.COMPLETE_OUT);
+            var completeWire = MyNodeController.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.COMPLETE_OUT);
             if (completeWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(completeWire.RightSidePin.NodeGuid, out var completeNode))
             {
                 block = completeNode.AddStatementAndContinue(block);
@@ -913,7 +917,7 @@ namespace VaporEditor.Blueprints
     
     public class BreakSyntaxNode : BlueprintSyntaxNodeBase
     {
-        public BreakSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        public BreakSyntaxNode(NodeModelBase nodeController) : base(nodeController)
         {
         }
 
@@ -932,7 +936,7 @@ namespace VaporEditor.Blueprints
 
     public class ContinueSyntaxNode : BlueprintSyntaxNodeBase
     {
-        public ContinueSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        public ContinueSyntaxNode(NodeModelBase nodeController) : base(nodeController)
         {
         }
         
@@ -951,15 +955,15 @@ namespace VaporEditor.Blueprints
 
     public class ConversionSyntaxNode : BlueprintSyntaxNodeBase
     {
-        public ConversionSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        public ConversionSyntaxNode(NodeModelBase nodeController) : base(nodeController)
         {
         }
 
         protected override BlockSyntax SetOutputPinStatements(BlockSyntax block)
         {
-            var nameOfObjToCast = FormatWithUid(MyNodeController.InPorts[PinNames.SET_IN].PortName);
-            var typeToCast = MyNodeController.OutPorts[PinNames.GET_OUT].Type;
-            var nameOfObjToSet = FormatWithUid(MyNodeController.OutPorts[PinNames.GET_OUT].PortName);
+            var nameOfObjToCast = FormatWithUid(MyNodeController.InputPins[PinNames.SET_IN].PortName);
+            var typeToCast = MyNodeController.OutputPins[PinNames.GET_OUT].Type;
+            var nameOfObjToSet = FormatWithUid(MyNodeController.OutputPins[PinNames.GET_OUT].PortName);
 
             ExpressionSyntax valueExpression;
 
@@ -1013,7 +1017,7 @@ namespace VaporEditor.Blueprints
 
     public class CastSyntaxNode : BlueprintSyntaxNodeBase
     {
-        public CastSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        public CastSyntaxNode(NodeModelBase nodeController) : base(nodeController)
         {
         }
 
@@ -1030,20 +1034,20 @@ namespace VaporEditor.Blueprints
             block = SetOutputPinStatements(block);
             IsEvaluated = true;
             
-            var inputName = FormatWithUid(MyNodeController.InPorts[PinNames.VALUE_IN].PortName);
-            var outputName = FormatWithUid(MyNodeController.OutPorts[PinNames.AS_OUT].PortName);
-            var asType = MyNodeController.OutPorts[PinNames.AS_OUT].Type;
+            var inputName = FormatWithUid(MyNodeController.InputPins[PinNames.VALUE_IN].PortName);
+            var outputName = FormatWithUid(MyNodeController.OutputPins[PinNames.AS_OUT].PortName);
+            var asType = MyNodeController.OutputPins[PinNames.AS_OUT].Type;
             
             var ifBlock = SyntaxFactory.Block();
             var elseBlock = SyntaxFactory.Block();
 
-            var validNodeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.VALID_OUT);
+            var validNodeWire = MyNodeController.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.VALID_OUT);
             if (validNodeWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(validNodeWire.RightSidePin.NodeGuid, out var ifNode))
             {
                 ifBlock = ifNode.AddStatementAndContinue(ifBlock);
             }
 
-            var invalidNodeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.INVALID_OUT);
+            var invalidNodeWire = MyNodeController.OutputWires.FirstOrDefault(w => w.LeftSidePin.PinName == PinNames.INVALID_OUT);
             if (invalidNodeWire.IsValid() && BlueprintScriptWriter.NodeMap.TryGetValue(invalidNodeWire.RightSidePin.NodeGuid, out var elseNode))
             {
                 elseBlock = elseNode.AddStatementAndContinue(elseBlock);
@@ -1069,18 +1073,18 @@ namespace VaporEditor.Blueprints
 
     public class RedirectSyntaxNode : BlueprintSyntaxNodeBase
     {
-        public RedirectSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        public RedirectSyntaxNode(NodeModelBase nodeController) : base(nodeController)
         {
         }
 
         public override BlockSyntax AddStatementAndContinue(BlockSyntax block)
         {
-            if (!MyNodeController.OutPorts.ContainsKey(PinNames.EXECUTE_OUT))
+            if (!MyNodeController.OutputPins.ContainsKey(PinNames.EXECUTE_OUT))
             {
                 return block;
             }
 
-            var nextNodeWire = MyNodeController.Model.OutputWires.FirstOrDefault(w => w.IsExecuteWire);
+            var nextNodeWire = MyNodeController.OutputWires.FirstOrDefault(w => w.IsExecuteWire);
             if (!nextNodeWire.IsValid() || !BlueprintScriptWriter.NodeMap.TryGetValue(nextNodeWire.RightSidePin.NodeGuid, out var nextNode))
             {
                 Debug.LogError($"Invalid Node Guid: {nextNodeWire.RightSidePin.PinName}");
@@ -1094,7 +1098,7 @@ namespace VaporEditor.Blueprints
 
         protected override BlockSyntax SetOutputPinStatements(BlockSyntax block)
         {
-            if (!MyNodeController.OutPorts.TryGetValue(PinNames.GET_OUT, out var pin))
+            if (!MyNodeController.OutputPins.TryGetValue(PinNames.GET_OUT, out var pin))
             {
                 return block;
             }
@@ -1112,13 +1116,13 @@ namespace VaporEditor.Blueprints
 
     public class ConstructorSyntaxNode : BlueprintSyntaxNodeBase
     {
-        public ConstructorSyntaxNode(BlueprintNodeController nodeController) : base(nodeController)
+        public ConstructorSyntaxNode(NodeModelBase nodeController) : base(nodeController)
         {
         }
 
         protected override BlockSyntax SetOutputPinStatements(BlockSyntax block)
         {
-            var pin = MyNodeController.OutPorts[PinNames.RETURN];
+            var pin = MyNodeController.OutputPins[PinNames.RETURN];
             
             // Use Default Value
             var defaultValue = pin.InlineValue == null ? BlueprintScriptWriter.GetDefaultValueSyntax(pin.Type) : BlueprintScriptWriter.GetExpressionForObjectInitializer(pin.InlineValue.Get());

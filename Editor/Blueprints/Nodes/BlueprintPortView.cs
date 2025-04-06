@@ -204,7 +204,7 @@ namespace VaporEditor.Blueprints
         
         private DropdownMenuAction.Status CTX_DeletePinStatus(DropdownMenuAction arg)
         {
-            return NodeView.Controller.Model.NodeType == NodeType.Sequence ? DropdownMenuAction.Status.Normal : DropdownMenuAction.Status.Hidden;
+            return NodeView.Controller.NodeType == NodeType.Sequence ? DropdownMenuAction.Status.Normal : DropdownMenuAction.Status.Hidden;
         }
 
         public override void Connect(Edge edge)
@@ -248,28 +248,15 @@ namespace VaporEditor.Blueprints
 
         private void CTX_PromoteToVariable(DropdownMenuAction obj)
         {
-            var baseName = $"LocalVar_{portType.Name}_";
-            int suffix = 0;
-            StringBuilder fieldNameBuilder = new StringBuilder(baseName);
-
-            do
-            {
-                fieldNameBuilder.Length = baseName.Length; // Reset to base name length
-                fieldNameBuilder.Append(suffix++);
-            } 
-            while (NodeView.View.GraphObject.Current.TemporaryVariables.Exists(x => x.Name == fieldNameBuilder.ToString()));
-            
-            var fieldName = fieldNameBuilder.ToString();
-            NodeView.View.GraphObject.Current.TemporaryVariables.Add(new BlueprintVariable(fieldName, portType, VariableType.Local).WithMethodGraph(NodeView.View.GraphObject.Current));
-            NodeView.View.Blackboard.UpdateTemporaryVariables();
+            var variable = NodeView.View.GraphModelObject.Current.AddVariable(portType);
 
             if (direction == Direction.Output)
             {
                 var position = parent.LocalToWorld(layout.position) + new Vector2(106, 16);
-                NodeView.View.OnSpawnNodeDirect(NodeType.MemberAccess, position, (SearchModelParams.VARIABLE_NAME_PARAM, fieldName), (SearchModelParams.VARIABLE_SCOPE_PARAM, VariableScopeType.Method), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Set));
+                NodeView.View.OnSpawnNodeDirect(NodeType.MemberAccess, position, (SearchModelParams.VARIABLE_NAME_PARAM, variable.Name), (SearchModelParams.VARIABLE_SCOPE_PARAM, VariableScopeType.Method), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Set));
 
                 var last = NodeView.View.EditorNodes[^1];
-                if (last.InPorts.TryGetValue(fieldName, out var inPort))
+                if (last.InPorts.TryGetValue(PinNames.SET_IN, out var inPort))
                 {
                     NodeView.View.CreateEdge(this, inPort, true);
                 }
@@ -277,10 +264,10 @@ namespace VaporEditor.Blueprints
             else
             {
                 var position = parent.LocalToWorld(layout.position) + new Vector2(-176, 16);
-                NodeView.View.OnSpawnNodeDirect(NodeType.MemberAccess, position, (SearchModelParams.VARIABLE_NAME_PARAM, fieldName), (SearchModelParams.VARIABLE_SCOPE_PARAM, VariableScopeType.Method), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Get));
+                NodeView.View.OnSpawnNodeDirect(NodeType.MemberAccess, position, (SearchModelParams.VARIABLE_NAME_PARAM, variable.Name), (SearchModelParams.VARIABLE_SCOPE_PARAM, VariableScopeType.Method), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Get));
 
                 var last = NodeView.View.EditorNodes[^1];
-                if (last.OutPorts.TryGetValue(fieldName, out var outPort))
+                if (last.OutPorts.TryGetValue(PinNames.GET_OUT, out var outPort))
                 {
                     NodeView.View.CreateEdge(outPort, this, true);
                 }

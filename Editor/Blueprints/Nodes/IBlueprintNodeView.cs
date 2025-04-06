@@ -5,7 +5,7 @@ namespace VaporEditor.Blueprints
 {
     public interface IBlueprintNodeView
     {
-        BlueprintNodeController Controller { get; }
+        NodeModelBase Controller { get; }
         BlueprintView View { get; }
         Dictionary<string, BlueprintPortView> InPorts { get; }
         Dictionary<string, BlueprintPortView> OutPorts { get; }

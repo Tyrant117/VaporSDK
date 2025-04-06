@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Assertions;
+using VaporEditor.Blueprints;
 
 namespace Vapor.Blueprints
 {
@@ -46,7 +47,8 @@ namespace Vapor.Blueprints
             // Custom Type Drawers
             typeof(Type),
         };
-        
+
+        public NodeModelBase Node { get; }
         public string PortName { get; private set; }
         public string DisplayName { get; private set; }
         public PinDirection Direction { get; }
@@ -57,6 +59,7 @@ namespace Vapor.Blueprints
         public Type[] WildcardTypes { get; private set; }
         public bool IsGenericPin { get; private set; }
         public Type GenericPinType { get; set; }
+        public List<string> WireGuids { get; private set; } = new();
         
         // Type
         private Type _type;
@@ -81,8 +84,9 @@ namespace Vapor.Blueprints
         private readonly bool _blockInlineContent;
         private bool _hasCustomDisplayName;
         
-        public BlueprintPin(string portName, PinDirection direction, Type type, bool blockInlineContent)
+        public BlueprintPin(NodeModelBase node, string portName, PinDirection direction, Type type, bool blockInlineContent)
         {
+            Node = node;
             PortName = portName;
             DisplayName = portName;
             Direction = direction;
@@ -288,6 +292,17 @@ namespace Vapor.Blueprints
             if (!_hasCustomDisplayName)
             {
                 DisplayName = newName;
+            }
+        }
+
+        public IEnumerable<BlueprintWire> GetWires()
+        {
+            foreach (var wireGuid in WireGuids)
+            {
+                if (Node.Method.Wires.TryGetValue(wireGuid, out var wire))
+                {
+                    yield return wire;
+                }
             }
         }
     }

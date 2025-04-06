@@ -18,18 +18,18 @@ namespace VaporEditor.Blueprints
         private static BlockSyntax s_CurrentBody;
         public static readonly Dictionary<string, BlueprintSyntaxNodeBase> NodeMap = new();
 
-        public static void WriteScript(BlueprintGraphSo graphSo, BlueprintDesignGraph designGraph, string filePath)
+        public static void WriteScript(BlueprintGraphSo graphSo, BlueprintClassGraphModel classGraphModel, string filePath)
         {
-            var baseType = Type.GetType(graphSo.AssemblyQualifiedTypeName);
+            var baseType = Type.GetType(graphSo.ParentType);
             if (baseType == null)
             {
-                Debug.LogError($"Can't find graph type {graphSo.AssemblyQualifiedTypeName}");
+                Debug.LogError($"Can't find graph type {graphSo.ParentType}");
                 return;
             }
 
             WriteEmptyClass(baseType.Namespace, graphSo.name, baseType.Name, out var namespaceSyntax, out var classSyntax);
 
-            foreach (var field in designGraph.Variables)
+            foreach (var field in classGraphModel.Variables)
             {
                 var fieldDeclaration = SyntaxFactory.FieldDeclaration(
                         SyntaxFactory.VariableDeclaration(GetTypeSyntax(field.Type)) // field.Key = type
@@ -39,11 +39,11 @@ namespace VaporEditor.Blueprints
                 classSyntax = classSyntax.AddMembers(fieldDeclaration);
             }
 
-            foreach (var method in designGraph.Methods)
+            foreach (var method in classGraphModel.Methods)
             {
                 NodeMap.Clear();
                 EntrySyntaxNode entry = null;
-                foreach (var n in method.Nodes)
+                foreach (var n in method.Nodes.Values)
                 {
                     var syntaxNode = BlueprintSyntaxNodeBase.ConvertToSyntaxNode(n);
                     if (syntaxNode is EntrySyntaxNode esn)
@@ -51,7 +51,7 @@ namespace VaporEditor.Blueprints
                         entry = esn;
                     }
 
-                    NodeMap.Add(n.Model.Guid, syntaxNode);
+                    NodeMap.Add(n.Guid, syntaxNode);
                 }
 
                 if (entry == null)
@@ -97,8 +97,8 @@ namespace VaporEditor.Blueprints
                 else
                 {
                     var methodNameSyntax = SyntaxFactory.Identifier(method.MethodName);
-                    var parameters = CreateMethodParameters(method.InputArguments);
-                    var returnType = CreateMethodReturnType(method.OutputArguments);
+                    var parameters = CreateMethodParameters(method.Arguments);
+                    var returnType = CreateMethodReturnType(method.Arguments);
                     var methodDeclaration = CreateMethodDeclaration(methodNameSyntax, parameters, returnType);
                     var body = SyntaxFactory.Block();
                     body = entry.AddStatementAndContinue(body);
@@ -110,16 +110,16 @@ namespace VaporEditor.Blueprints
 
             // Replace the old class in the namespace with the modified one
             namespaceSyntax = namespaceSyntax.AddMembers(classSyntax);
-            var compilationUnit = CreateCompilationUnit(namespaceSyntax, designGraph.GetAllTypes());
+            var compilationUnit = CreateCompilationUnit(namespaceSyntax, classGraphModel.GetAllTypes());
             
             WriteFile(compilationUnit, filePath);
         }
 
-        public static void WriteStaticMethodScript(BlueprintGraphSo graphSo, BlueprintDesignGraph designGraph, string filePath)
+        public static void WriteStaticMethodScript(BlueprintGraphSo graphSo, BlueprintClassGraphModel classGraphModel, string filePath)
         {
             NodeMap.Clear();
             EntrySyntaxNode entry = null;
-            foreach (var n in designGraph.Current.Nodes)
+            foreach (var n in classGraphModel.Current.Nodes.Values)
             {
                 var syntaxNode = BlueprintSyntaxNodeBase.ConvertToSyntaxNode(n);
                 if (syntaxNode is EntrySyntaxNode esn)
@@ -127,15 +127,15 @@ namespace VaporEditor.Blueprints
                     entry = esn;
                 }
 
-                NodeMap.Add(n.Model.Guid, syntaxNode);
+                NodeMap.Add(n.Guid, syntaxNode);
             }
             
             WriteGraphTemplateClass("Vapor.Blueprints.Testing", graphSo.name, out var namespaceSyntax, out var classSyntax);
             
             // Generate the method name (e.g., "CallMethodsAndReturnOutputs")
             var methodNameSyntax = SyntaxFactory.Identifier($"{graphSo.name}_Implementation");
-            var parameters = CreateMethodParameters(designGraph.Current.InputArguments);
-            var returnType = CreateMethodReturnType(designGraph.Current.OutputArguments);
+            var parameters = CreateMethodParameters(classGraphModel.Current.Arguments);
+            var returnType = CreateMethodReturnType(classGraphModel.Current.Arguments);
             var methodDeclaration = CreateMethodDeclaration(methodNameSyntax, parameters, returnType);
             s_CurrentBody = SyntaxFactory.Block();
             s_CurrentBody = entry.AddStatementAndContinue(s_CurrentBody);
@@ -151,7 +151,7 @@ namespace VaporEditor.Blueprints
             WriteFile(compilationUnit, filePath);
         }
         
-        private static void VisitNode(BlueprintNodeController nodeController)
+        private static void VisitNode(NodeModelBase nodeController)
         {
             // Need to get all input data required for this node.
             // Need to then create the syntax for the node.
@@ -200,21 +200,30 @@ namespace VaporEditor.Blueprints
                 );
         }
 
-        private static ParameterListSyntax CreateMethodParameters(List<BlueprintVariable> arguments)
+        private static ParameterListSyntax CreateMethodParameters(List<BlueprintArgument> arguments)
         {
             // Create parameters for the input arguments
             return SyntaxFactory.ParameterList(
-                SyntaxFactory.SeparatedList(arguments.Select(arg => SyntaxFactory.Parameter(SyntaxFactory.Identifier(arg.Name))
+                SyntaxFactory.SeparatedList(arguments.Where(arg => !arg.IsReturn).Select(arg => SyntaxFactory.Parameter(SyntaxFactory.Identifier(arg.DisplayName))
                     .WithType(GetTypeSyntax(arg.Type))))
             );
         }
 
-        private static TypeSyntax CreateMethodReturnType(List<BlueprintVariable> arguments)
+        private static TypeSyntax CreateMethodReturnType(List<BlueprintArgument> arguments)
         {
-            // Generate method signature (with input arguments)
-            return arguments == null || arguments.Count == 0
-                ? SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword))
-                : SyntaxFactory.TupleType(SyntaxFactory.SeparatedList(arguments.Select(a => a.Type).Select(t => SyntaxFactory.TupleElement(SyntaxFactory.ParseTypeName(t.FullName ?? t.Name)))));
+            if (arguments == null || !arguments.Any(arg => arg.IsReturn))
+            {
+                return SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword));
+            }
+            else
+            {
+                var arg = arguments.First(arg => arg.IsReturn);
+                return GetTypeSyntax(arg.Type);
+            }
+            // // Generate method signature (with input arguments)
+            // return arguments == null || !arguments.Any(arg => arg.IsReturn)
+            //     ? SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword))
+            //     : SyntaxFactory.type .type .TupleType(SyntaxFactory.SeparatedList(arguments.Select(a => a.Type).Select(t => SyntaxFactory.TupleElement(SyntaxFactory.ParseTypeName(t.FullName ?? t.Name)))));
         }
 
         private static MethodDeclarationSyntax CreateMethodDeclaration(SyntaxToken methodName, ParameterListSyntax parameters, TypeSyntax returnType)

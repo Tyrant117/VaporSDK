@@ -131,15 +131,15 @@ namespace VaporEditor.Blueprints
 
     internal class DefaultSearchProvider : SearchProviderBase
     {
-        private BlueprintDesignGraph _graph;
+        private BlueprintClassGraphModel _graphModel;
 
         public DefaultSearchProvider(Action<BlueprintSearchModel, Vector2> onSpawnNode) : base(onSpawnNode)
         {
         }
 
-        public DefaultSearchProvider WithGraph(BlueprintDesignGraph graph)
+        public DefaultSearchProvider WithGraph(BlueprintClassGraphModel graphModel)
         {
-            _graph = graph;
+            _graphModel = graphModel;
             return this;
         }
 
@@ -147,52 +147,52 @@ namespace VaporEditor.Blueprints
         {
             foreach (var model in ConstructGetterSetterNodes())
             {
-                yield return model.WithGraph(_graph);
+                yield return model.WithGraph(_graphModel);
             }
             
             foreach (var model in BlueprintSearchLibrary.GetUnityLibraries())
             {
-                yield return model.WithGraph(_graph);
+                yield return model.WithGraph(_graphModel);
             }
             
             foreach (var model in BlueprintSearchLibrary.GetBlueprintLibraries())
             {
-                yield return model.WithGraph(_graph);
+                yield return model.WithGraph(_graphModel);
             }
 
             foreach (var model in BlueprintSearchLibrary.GetInternalDescriptors())
             {
-                yield return model.WithGraph(_graph);
+                yield return model.WithGraph(_graphModel);
             }
             
             yield return new BlueprintSearchModel("Utilities/Flow Control", "Return")
                 .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Return))
-                .WithGraph(_graph);
+                .WithGraph(_graphModel);
             
         }
         
         private IEnumerable<BlueprintSearchModel> ConstructGetterSetterNodes()
         {
-            foreach (var classVar in _graph.Variables)
+            foreach (var classVar in _graphModel.Variables)
             {
                 yield return new BlueprintSearchModel("Variables/Global", $"Get {classVar.Name}")
                     .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.MemberAccess), (SearchModelParams.VARIABLE_NAME_PARAM, classVar.Name), (SearchModelParams.VARIABLE_SCOPE_PARAM, VariableScopeType.Class), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Get))
-                    .WithGraph(_graph);
+                    .WithGraph(_graphModel);
                 
                 yield return new BlueprintSearchModel("Variables/Global", $"Set {classVar.Name}")
                     .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.MemberAccess), (SearchModelParams.VARIABLE_NAME_PARAM, classVar.Name), (SearchModelParams.VARIABLE_SCOPE_PARAM, VariableScopeType.Class), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Set))
-                    .WithGraph(_graph);
+                    .WithGraph(_graphModel);
             }
 
-            foreach (var methodVar in _graph.Current.TemporaryVariables)
+            foreach (var methodVar in _graphModel.Current.Variables)
             {
                 yield return new BlueprintSearchModel("Variables/Local", $"Get {methodVar.Name}")
                     .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.MemberAccess), (SearchModelParams.VARIABLE_NAME_PARAM, methodVar.Name), (SearchModelParams.VARIABLE_SCOPE_PARAM, VariableScopeType.Method), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Get))
-                    .WithGraph(_graph);
+                    .WithGraph(_graphModel);
                 
                 yield return new BlueprintSearchModel("Variables/Local", $"Set {methodVar.Name}")
                     .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.MemberAccess), (SearchModelParams.VARIABLE_NAME_PARAM, methodVar.Name), (SearchModelParams.VARIABLE_SCOPE_PARAM, VariableScopeType.Method), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Set))
-                    .WithGraph(_graph);
+                    .WithGraph(_graphModel);
             }
         }
     }

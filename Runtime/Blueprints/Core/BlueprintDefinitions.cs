@@ -4,7 +4,6 @@ namespace Vapor.Blueprints
 {
     public enum VariableScopeType
     {
-        Block,
         Method,
         Class,
     }

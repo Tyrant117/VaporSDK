@@ -3,39 +3,47 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.Serialization;
+using UnityEngine;
 using Vapor.Inspector;
 using VaporEditor.Blueprints;
 using VaporEditor.Inspector;
 
 namespace Vapor.Blueprints
 {
-    public enum VariableType
-    {
-        Local,
-        Global,
-        Argument,
-        OutArgument,
-        Return
-    }
-    
     [Serializable]
     public struct BlueprintVariableDto
     {
         public string Name;
         public Type Type;
-        public VariableType VariableType;
+        public VariableScopeType Scope;
         public VariableAccessModifier AccessModifier;
         
         // Variable Constructions
         public string ConstructorName;
         public List<(Type, object)> DefaultParametersValue;
     }
+
+    [Serializable]
+    public struct BlueprintArgumentDto
+    {
+        public Type Type;
+        public string DisplayName;
+        public int ParameterIndex;
+        public bool IsRef;
+        public bool IsReturn;
+        public bool IsOut;
+    }
     
     public class BlueprintVariable
     {
+        public enum ChangeType
+        {
+            Name,
+            Type,
+            Delete,
+        }
         
-        
-        private BlueprintDesignGraph _classGraph;
+        private BlueprintClassGraphModel _classGraphModel;
         private BlueprintMethodGraph _methodGraph;
         private string _name;
         private Type _type;
@@ -60,34 +68,30 @@ namespace Vapor.Blueprints
                 Retype(oldType, _type);
             }
         }
-        public VariableType VariableType { get; }
+        public VariableScopeType Scope { get; }
         public VariableAccessModifier AccessModifier { get; set; }
 
         public object DefaultValue { get; set; }
         public string ConstructorName { get; set; }
         public List<object> ParameterValues { get; set; } = new();
 
-        public BlueprintVariable(string name, Type type, VariableType variableType)
+        public event Action<BlueprintVariable, ChangeType> Changed;
+
+        public BlueprintVariable(string name, Type type, VariableScopeType scope)
         {
             _name = name;
             _type = type;
-            VariableType = variableType;
+            Scope = scope;
             ConstructorName = "Default(T)";
-            switch (VariableType)
-            {
-                case VariableType.Local:
-                case VariableType.Global:
-                    DefaultValue = type.IsClass ? null : FormatterServices.GetUninitializedObject(type);
-                    ParameterValues.Add(DefaultValue);
-                    break;
-            }
+            DefaultValue = type.IsClass ? type.IsSerializable ? FormatterServices.GetUninitializedObject(type) : null : Activator.CreateInstance(type);
+            ParameterValues.Add(DefaultValue);
         }
 
         public BlueprintVariable(BlueprintVariableDto dto)
         {
             _name = dto.Name;
             _type = dto.Type;
-            VariableType = dto.VariableType;
+            Scope = dto.Scope;
             AccessModifier = dto.AccessModifier;
             ConstructorName = dto.ConstructorName;
             if (!ConstructorName.EmptyOrNull() && !ConstructorName.Equals("Default(T)"))
@@ -95,19 +99,12 @@ namespace Vapor.Blueprints
                 if (dto.DefaultParametersValue != null)
                 {
                     var convertedTypes = dto.DefaultParametersValue.Select(t => (t.Item1, TypeUtility.CastToType(t.Item2, t.Item1))).ToArray();
-                    // var types = convertedTypes.Select(t => t.Item1).ToArray();
                     var paramObjs = convertedTypes.Select(t => t.Item2).ToArray();
                     ParameterValues.AddRange(paramObjs);
                 }
-
-                switch (VariableType)
-                {
-                    case VariableType.Local:
-                    case VariableType.Global:
-                        var constructor = GetConstructor(_type, ConstructorName);
-                        DefaultValue = constructor.Invoke(ParameterValues.ToArray());
-                        break;
-                }
+                
+                var constructor = GetConstructor(_type, ConstructorName);
+                DefaultValue = constructor.Invoke(ParameterValues.ToArray());
             }
             else
             {
@@ -116,19 +113,20 @@ namespace Vapor.Blueprints
                     var converted = TypeUtility.CastToType(dto.DefaultParametersValue[0].Item2, dto.DefaultParametersValue[0].Item1);
                     ParameterValues.Add(converted);
                 }
-                switch (VariableType)
-                {
-                    case VariableType.Local:
-                    case VariableType.Global:
-                        DefaultValue = ParameterValues.Count == 1 ? ParameterValues[0] : _type.IsClass ? null : FormatterServices.GetUninitializedObject(_type);
-                        break;
-                }
+                
+                DefaultValue = ParameterValues.Count == 1 
+                    ? ParameterValues[0] 
+                    : _type.IsClass 
+                        ? _type.IsSerializable 
+                            ? FormatterServices.GetUninitializedObject(_type) 
+                            : null 
+                        : Activator.CreateInstance(_type);
             }
         }
 
-        public BlueprintVariable WithClassGraph(BlueprintDesignGraph graph)
+        public BlueprintVariable WithClassGraph(BlueprintClassGraphModel graphModel)
         {
-            _classGraph = graph;
+            _classGraphModel = graphModel;
             return this;
         }
 
@@ -144,7 +142,7 @@ namespace Vapor.Blueprints
             {
                 Name = Name,
                 Type = Type,
-                VariableType = VariableType,
+                Scope = Scope,
                 AccessModifier = AccessModifier,
                 ConstructorName = ConstructorName,
                 DefaultParametersValue = ParameterValues.Select(p => (p.GetType(), p)).ToList()
@@ -153,66 +151,68 @@ namespace Vapor.Blueprints
 
         private void Rename(string oldName, string newName)
         {
-            if (VariableType != VariableType.Global)
+            Updated(ChangeType.Name);
+            
+            if (Scope != VariableScopeType.Class)
             {
-                foreach (var n in _methodGraph.Nodes)
+                foreach (var n in _methodGraph.Nodes.Values)
                 {
                     // Works for Getters and Setters
-                    if (n.Model.NodeType == NodeType.MemberAccess &&
-                        n.ModelAs<MemberNodeModel>().VariableName == oldName)
+                    if (n.NodeType == NodeType.MemberAccess &&
+                        ((MemberNodeModel)n).VariableName == oldName)
                     {
-                        var model = n.ModelAs<MemberNodeModel>();
+                        var model = (MemberNodeModel)n;
                         model.VariableName = newName;
-                        n.NodeName = model.VariableAccess == VariableAccessType.Get ? $"Get <b><i>{newName}</i></b>" : $"Set <b><i>{newName}</i></b>";
-                        var edges = n.Model.OutputWires.FindAll(e => e.LeftSidePin.PinName == oldName);
+                        n.SetName(model.VariableAccess == VariableAccessType.Get ? $"Get <b><i>{newName}</i></b>" : $"Set <b><i>{newName}</i></b>");
+                        var edges = n.OutputWires.FindAll(e => e.LeftSidePin.PinName == oldName);
                         foreach (var edge in edges)
                         {
-                            int idx = n.Model.OutputWires.IndexOf(edge);
-                            var oldPort = n.Model.OutputWires[idx].LeftSidePin;
+                            int idx = n.OutputWires.IndexOf(edge);
+                            var oldPort = n.OutputWires[idx].LeftSidePin;
                             var newPort = new BlueprintPinReference(newName, oldPort.NodeGuid, oldPort.IsExecutePin);
-                            var newEdge = new BlueprintWireReference(newPort, n.Model.OutputWires[idx].RightSidePin);
-                            n.Model.OutputWires[idx] = newEdge;
+                            var newEdge = new BlueprintWireReference(newPort, n.OutputWires[idx].RightSidePin);
+                            n.OutputWires[idx] = newEdge;
                         }
 
-                        var edgesIn = n.Model.InputWires.FindAll(e => e.RightSidePin.PinName == oldName);
+                        var edgesIn = n.InputWires.FindAll(e => e.RightSidePin.PinName == oldName);
                         foreach (var edge in edgesIn)
                         {
-                            int idx = n.Model.InputWires.IndexOf(edge);
-                            var oldPort = n.Model.InputWires[idx].RightSidePin;
+                            int idx = n.InputWires.IndexOf(edge);
+                            var oldPort = n.InputWires[idx].RightSidePin;
                             var newPort = new BlueprintPinReference(newName, oldPort.NodeGuid, oldPort.IsExecutePin);
-                            var newEdge = new BlueprintWireReference(n.Model.InputWires[idx].LeftSidePin, newPort);
-                            n.Model.InputWires[idx] = newEdge;
+                            var newEdge = new BlueprintWireReference(n.InputWires[idx].LeftSidePin, newPort);
+                            n.InputWires[idx] = newEdge;
                         }
                     }
 
-                    if (n.Model.NodeType == NodeType.Entry)
+                    if (n.NodeType == NodeType.Entry)
                     {
-                        if (n.OutPorts.TryGetValue(oldName, out var pin))
+                        if (n.OutputPins.TryGetValue(oldName, out var pin))
                         {
                             pin.RenamePort(newName);
-                            n.OutPorts[newName] = pin;
-                            n.OutPorts.Remove(oldName);
+                            n.OutputPins[newName] = pin;
+                            n.OutputPins.Remove(oldName);
                         }
                     }
 
-                    if (n.Model.NodeType == NodeType.Return)
+                    if (n.NodeType == NodeType.Return)
                     {
-                        if (n.InPorts.TryGetValue(oldName, out var pin))
+                        if (n.InputPins.TryGetValue(oldName, out var pin))
                         {
                             pin.RenamePort(newName);
-                            n.InPorts[newName] = pin;
-                            n.InPorts.Remove(oldName);
+                            n.InputPins[newName] = pin;
+                            n.InputPins.Remove(oldName);
                         }
                     }
 
-                    var edgeConnections = n.Model.InputWires.FindAll(e => e.LeftSidePin.PinName == oldName);
+                    var edgeConnections = n.InputWires.FindAll(e => e.LeftSidePin.PinName == oldName);
                     foreach (var edge in edgeConnections)
                     {
-                        int idx = n.Model.InputWires.IndexOf(edge);
-                        var oldPort = n.Model.InputWires[idx].LeftSidePin;
+                        int idx = n.InputWires.IndexOf(edge);
+                        var oldPort = n.InputWires[idx].LeftSidePin;
                         var newPort = new BlueprintPinReference(newName, oldPort.NodeGuid, oldPort.IsExecutePin);
-                        var newEdge = new BlueprintWireReference(newPort, n.Model.InputWires[idx].RightSidePin);
-                        n.Model.InputWires[idx] = newEdge;
+                        var newEdge = new BlueprintWireReference(newPort, n.InputWires[idx].RightSidePin);
+                        n.InputWires[idx] = newEdge;
                     }
                 }
             }
@@ -221,50 +221,65 @@ namespace Vapor.Blueprints
         private void Retype(Type oldType, Type newType)
         {
             DefaultValue = newType.IsClass ? null : FormatterServices.GetUninitializedObject(newType);
-            if(VariableType != VariableType.Global)
+            Updated(ChangeType.Type);
+            
+            if(Scope != VariableScopeType.Class)
             {
-                foreach (var n in _methodGraph.Nodes)
+                foreach (var n in _methodGraph.Nodes.Values)
                 {
-                    if (n.Model.NodeType == NodeType.Entry)
+                    if (n.NodeType == NodeType.Entry)
                     {
-                        if (n.OutPorts.TryGetValue(Name, out var pin))
+                        if (n.OutputPins.TryGetValue(Name, out var pin))
                         {
                             pin.Type = newType;
                         }
                     }
 
-                    if (n.Model.NodeType == NodeType.Return)
+                    if (n.NodeType == NodeType.Return)
                     {
-                        if (n.InPorts.TryGetValue(Name, out var pin))
+                        if (n.InputPins.TryGetValue(Name, out var pin))
                         {
                             pin.Type = newType;
                         }
                     }
 
-                    if (n.Model.NodeType == NodeType.MemberAccess)
+                    if (n.NodeType == NodeType.MemberAccess)
                     {
-                        var model = n.ModelAs<MemberNodeModel>();
+                        var model =  (MemberNodeModel)n;
                         if (model.VariableAccess == VariableAccessType.Get)
                         {
-                            if (n.OutPorts.TryGetValue(Name, out var pin))
+                            if (n.OutputPins.TryGetValue(Name, out var pin))
                             {
                                 pin.Type = newType;
                             }
                         }
                         else
                         {
-                            if (n.InPorts.TryGetValue(Name, out var pin1))
+                            if (n.InputPins.TryGetValue(Name, out var pin1))
                             {
                                 pin1.Type = newType;
                             }
 
-                            if (n.OutPorts.TryGetValue(Name, out var pin2))
+                            if (n.OutputPins.TryGetValue(Name, out var pin2))
                             {
                                 pin2.Type = newType;
                             }
                         }
                     }
                 }
+            }
+        }
+
+        private void Updated(ChangeType changeType)
+        {
+            Changed?.Invoke(this, changeType);
+            if (Scope == VariableScopeType.Class)
+            {
+                _classGraphModel.OnVariableUpdated(this);
+            }
+            else
+            {
+                _methodGraph.OnVariableUpdated(this);
             }
         }
         
@@ -283,6 +298,84 @@ namespace Vapor.Blueprints
         {
             var constructors = type.GetConstructors(BindingFlags.Public | BindingFlags.Instance);
             return (from constructor in constructors let signature = FormatConstructorSignature(constructor) where signature.Equals(constructorSignature) select constructor).FirstOrDefault();
+        }
+
+        public void Delete()
+        {
+            Changed?.Invoke(this, ChangeType.Delete);
+            if (Scope == VariableScopeType.Class)
+            {
+                _classGraphModel.RemoveVariable(this);
+            }
+            else
+            {
+                _methodGraph.RemoveVariable(this);
+            }
+        }
+    }
+
+    public class BlueprintArgument
+    {
+        public enum ChangeType
+        {
+            Name,
+            Type,
+        }
+        
+        public int ParameterIndex { get; set; }
+        public bool IsRef { get; set; }
+        
+        public bool IsOut { get; set; }
+        public bool IsReturn { get; set; }
+        
+        public Type Type { get; private set; }
+        public string DisplayName { get; private set; }
+
+        private readonly BlueprintMethodGraph _method;
+        
+        public event Action<BlueprintArgument, ChangeType> Changed;
+
+        public BlueprintArgument(BlueprintMethodGraph method, Type type, string name, int parameterIndex, bool isRef, bool isOut, bool isReturn)
+        {
+            _method = method;
+            Type = type;
+            DisplayName = name;
+            ParameterIndex = parameterIndex;
+            IsRef = isRef;
+            IsOut = isOut;
+            IsReturn = isReturn;
+        }
+
+        public BlueprintArgument(BlueprintMethodGraph method, BlueprintArgumentDto dto) : this(method, dto.Type, dto.DisplayName, dto.ParameterIndex, dto.IsRef, dto.IsOut, dto.IsReturn)
+        {
+            
+        }
+
+        public void SetName(string newName)
+        {
+            DisplayName = newName;
+            Changed?.Invoke(this, ChangeType.Name);
+            _method.OnArgumentUpdated(this);
+        }
+        
+        public void SetType(Type newType)
+        {
+            Type = newType;
+            Changed?.Invoke(this, ChangeType.Type);
+            _method.OnArgumentUpdated(this);
+        }
+        
+        public BlueprintArgumentDto Serialize()
+        {
+            return new BlueprintArgumentDto
+            {
+                Type = Type,
+                DisplayName = DisplayName,
+                ParameterIndex = ParameterIndex,
+                IsRef = IsRef,
+                IsOut = IsOut,
+                IsReturn = IsReturn,
+            };
         }
     }
 }

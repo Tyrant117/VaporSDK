@@ -31,7 +31,7 @@ namespace VaporEditor.Blueprints
             }
         }
         
-        public BlueprintDesignGraph DesignGraph { get; private set; }
+        public BlueprintClassGraphModel ClassGraphModel { get; private set; }
         
         private BlueprintView _graphEditorView;
         public BlueprintView GraphEditorView
@@ -121,17 +121,19 @@ namespace VaporEditor.Blueprints
             EditorUtility.CopySerialized(asset, GraphObject);
             if (GraphObject.GraphJson.EmptyOrNull())
             {
-                DesignGraph = new BlueprintDesignGraph(GraphObject, new BlueprintDesignGraphDto());
-                DesignGraph.Validate();
+                ClassGraphModel = BlueprintClassGraphModel.New(GraphObject);
+                // ClassGraphModel = new BlueprintClassGraphModel(GraphObject, new BlueprintClassGraphDto());
+                ClassGraphModel.Validate();
             }
             else
             {
-                var dto = JsonConvert.DeserializeObject<BlueprintDesignGraphDto>(GraphObject.GraphJson, NewtonsoftUtility.SerializerSettings);
-                DesignGraph = new BlueprintDesignGraph(GraphObject, dto);
+                ClassGraphModel = BlueprintClassGraphModel.Load(GraphObject);
+                // var dto = JsonConvert.DeserializeObject<BlueprintClassGraphDto>(GraphObject.GraphJson, NewtonsoftUtility.SerializerSettings);
+                // ClassGraphModel = new BlueprintClassGraphModel(GraphObject, dto);
             }
             // GraphObject.OpenGraph();
 
-            GraphEditorView = new BlueprintView(this, DesignGraph)
+            GraphEditorView = new BlueprintView(this, ClassGraphModel)
             {
                 viewDataKey = SelectedGuid,
             };
@@ -212,7 +214,7 @@ namespace VaporEditor.Blueprints
 
             _graphEditorView = null;
             GraphObject = null;
-            DesignGraph = null;
+            ClassGraphModel = null;
 
             Resources.UnloadUnusedAssets();
         }
@@ -238,7 +240,7 @@ namespace VaporEditor.Blueprints
             {
                 _graphEditorView = null;
                 GraphObject = null;
-                DesignGraph = null;
+                ClassGraphModel = null;
                 Debug.LogException(e);
                 throw;
             }
@@ -257,8 +259,8 @@ namespace VaporEditor.Blueprints
             {
                 Debug.Log("Save Called");
                 var mainAsset = AssetDatabase.LoadAssetAtPath<BlueprintGraphSo>(AssetDatabase.GUIDToAssetPath(SelectedGuid));
-                DesignGraph.Validate();
-                var designGraphJson = DesignGraph?.Serialize();
+                ClassGraphModel.Validate();
+                var designGraphJson = ClassGraphModel?.Serialize();
                 GraphObject.GraphJson = designGraphJson;
                 mainAsset.GraphJson = GraphObject.GraphJson;
                 
@@ -291,7 +293,7 @@ namespace VaporEditor.Blueprints
         {
             if (SelectedGuid != null && GraphObject)
             {
-                if (!DesignGraph.Validate())
+                if (!ClassGraphModel.Validate())
                 {
                     Debug.LogError("Unable To Validate Graph");
                     return;
@@ -307,7 +309,7 @@ namespace VaporEditor.Blueprints
                 }
 
                 SaveAsset();
-                BlueprintScriptWriter.WriteScript(GraphObject, DesignGraph, path);
+                BlueprintScriptWriter.WriteScript(GraphObject, ClassGraphModel, path);
                 AssetDatabase.Refresh();
             }
         }
