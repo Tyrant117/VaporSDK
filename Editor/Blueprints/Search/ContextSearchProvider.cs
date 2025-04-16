@@ -2,12 +2,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using Unity.Properties;
 using UnityEditor;
 using UnityEngine;
 using Vapor;
 using Vapor.Blueprints;
-using VaporEditor.Inspector;
 
 namespace VaporEditor.Blueprints
 {
@@ -15,11 +13,13 @@ namespace VaporEditor.Blueprints
     {
         private readonly Type _contextType;
         private readonly bool _includeStatics;
+        private readonly Action<BlueprintSearchModel, Vector2> _onSelect;
         private BlueprintPortView _pin;
-        public ContextSearchProvider(Type contextType, bool includeStatics, Action<BlueprintSearchModel, Vector2> onSpawnNode) : base(onSpawnNode)
+        public ContextSearchProvider(Type contextType, bool includeStatics, Action<BlueprintSearchModel, Vector2> onSelect)
         {
             _contextType = contextType;
             _includeStatics = includeStatics;
+            _onSelect = onSelect;
         }
 
         public ContextSearchProvider WithPin(BlueprintPortView pin)
@@ -28,21 +28,75 @@ namespace VaporEditor.Blueprints
             return this;
         }
 
+        public override bool Select(BlueprintSearchModel model)
+        {
+            _onSelect?.Invoke(model, Position);
+            return true;
+        }
+
         public override IEnumerable<BlueprintSearchModel> GetDescriptors()
         {
+            // string category = _contextType.IsGenericType ? $"{_contextType.Name.Split('`')[0]}<{string.Join(",", _contextType.GetGenericArguments().Select(a => a.Name))}>" : _contextType.Name;
+            
+            foreach (var blueprintSearchModel in GetIncludedInstances())
+            {
+                yield return blueprintSearchModel;
+            }
+            
+            if (_includeStatics)
+            {
+                foreach (var blueprintSearchModel in GetIncludedStatics())
+                {
+                    yield return blueprintSearchModel;
+                }
+            }
+
+            foreach (var blueprintSearchModel in BlueprintSearchLibrary.GetInternalDescriptors())
+            {
+                yield return blueprintSearchModel.WithPinView(_pin);
+            }
+
+            yield return new BlueprintSearchModel("Utilities/Flow Control", "Reroute", NodeType.Redirect)
+                .WithUserData(_contextType)
+                .WithPinView(_pin);
+        }
+
+        private IEnumerable<BlueprintSearchModel> GetIncludedInstances()
+        {
             var fields = _contextType.GetFields(BindingFlags.Public | BindingFlags.Instance);
-            string category = _contextType.IsGenericType ? $"{_contextType.Name.Split('`')[0]}<{string.Join(",", _contextType.GetGenericArguments().Select(a => a.Name))}>" : _contextType.Name;
             foreach (var fieldInfo in fields)
             {
-                yield return new BlueprintSearchModel($"{category}/Fields", $"Get {ObjectNames.NicifyVariableName(fieldInfo.Name)}")
+                yield return new BlueprintSearchModel($"Fields", $"Get {ObjectNames.NicifyVariableName(fieldInfo.Name)}", NodeType.MemberAccess)
                     .WithSynonyms(fieldInfo.Name)
-                    .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.MemberAccess), (SearchModelParams.FIELD_INFO_PARAM, fieldInfo), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Get))
-                    .WithPin(_pin);
+                    .WithUserData(new MemberSearchData{ AccessType = VariableAccessType.Get, FieldInfo = fieldInfo})
+                    .WithPinView(_pin);
                     
-                yield return new BlueprintSearchModel($"{category}/Fields", $"Set {ObjectNames.NicifyVariableName(fieldInfo.Name)}")
+                yield return new BlueprintSearchModel($"Fields", $"Set {ObjectNames.NicifyVariableName(fieldInfo.Name)}", NodeType.MemberAccess)
                     .WithSynonyms(fieldInfo.Name)
-                    .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.MemberAccess), (SearchModelParams.FIELD_INFO_PARAM, fieldInfo), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Set))
-                    .WithPin(_pin);
+                    .WithUserData(new MemberSearchData{ AccessType = VariableAccessType.Set, FieldInfo = fieldInfo})
+                    .WithPinView(_pin);
+            }
+            
+            var properties = _contextType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+            foreach (var propertyInfo in properties)
+            {
+                if (propertyInfo.GetIndexParameters().Length != 0)
+                {
+                    continue;
+                }
+                
+                yield return new BlueprintSearchModel($"Properties", $"Get {ObjectNames.NicifyVariableName(propertyInfo.Name)}", NodeType.MemberAccess)
+                    .WithSynonyms(propertyInfo.Name)
+                    .WithUserData(new MemberSearchData{ AccessType = VariableAccessType.Get, PropertyInfo = propertyInfo})
+                    .WithPinView(_pin);
+                    
+                if(propertyInfo.SetMethod != null && propertyInfo.SetMethod.IsPublic)
+                {
+                    yield return new BlueprintSearchModel($"Properties", $"Set {ObjectNames.NicifyVariableName(propertyInfo.Name)}", NodeType.MemberAccess)
+                        .WithSynonyms(propertyInfo.Name)
+                        .WithUserData(new MemberSearchData { AccessType = VariableAccessType.Set, PropertyInfo = propertyInfo })
+                        .WithPinView(_pin);
+                }
             }
 
             var methods = _contextType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
@@ -52,55 +106,39 @@ namespace VaporEditor.Blueprints
                 {
                     continue;
                 }
-                
-                var name = methodInfo.IsGenericMethod ? $"{methodInfo.Name.Split('`')[0]}<{string.Join(",", methodInfo.GetGenericArguments().Select(a => a.Name))}>" : methodInfo.Name;
-                name = methodInfo.IsSpecialName ? name.ToTitleCase() : name;
-                var parameters = methodInfo.GetParameters();
-                string paramNames = parameters.Length > 0
-                    ? parameters.Select(pi => pi.ParameterType.IsGenericType
-                            ? $"{pi.ParameterType.Name.Split('`')[0]}<{string.Join(",", pi.ParameterType.GetGenericArguments().Select(a => a.Name))}>"
-                            : pi.ParameterType.Name)
-                        .Aggregate((a, b) => a + ", " + b)
-                    : string.Empty;
 
-                yield return new BlueprintSearchModel($"{category}/Methods", $"{name}({paramNames})")
-                    .WithSynonyms(name)
-                    .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Method), (SearchModelParams.METHOD_INFO_PARAM, methodInfo))
-                    .WithPin(_pin);
-            }
-
-            if (_includeStatics)
-            {
-                foreach (var blueprintSearchModel in GetIncludedStatics(category))
+                if (methodInfo.IsSpecialName && methodInfo.Name.StartsWith("get_") && methodInfo.GetParameters().Length == 0)
                 {
-                    yield return blueprintSearchModel;
+                    continue;
                 }
-            }
 
-            foreach (var blueprintSearchModel in BlueprintSearchLibrary.GetInternalDescriptors())
-            {
-                yield return blueprintSearchModel.WithPin(_pin);
-            }
+                if (methodInfo.IsSpecialName && methodInfo.Name.StartsWith("set_") && methodInfo.GetParameters().Length == 0)
+                {
+                    continue;
+                }
 
-            yield return new BlueprintSearchModel("Utilities/Flow Control", "Reroute")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Redirect), (SearchModelParams.DATA_TYPE_PARAM, _contextType))
-                .WithPin(_pin);
+                var name = BlueprintEditorUtility.FormatMethodName(methodInfo);
+                yield return new BlueprintSearchModel($"Methods", $"{name}", NodeType.Method)
+                    .WithSynonyms(name)
+                    .WithUserData(methodInfo)
+                    .WithPinView(_pin);
+            }
         }
-
-        private IEnumerable<BlueprintSearchModel> GetIncludedStatics(string category)
+        
+        private IEnumerable<BlueprintSearchModel> GetIncludedStatics()
         {
             var staticFields = _contextType.GetFields(BindingFlags.Public | BindingFlags.Static);
             foreach (var fieldInfo in staticFields)
             {
-                yield return new BlueprintSearchModel($"{category}/Static Fields", $"Get {ObjectNames.NicifyVariableName(fieldInfo.Name)}")
+                yield return new BlueprintSearchModel($"Static Fields", $"Get {ObjectNames.NicifyVariableName(fieldInfo.Name)}", NodeType.MemberAccess)
                     .WithSynonyms(fieldInfo.Name)
-                    .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.MemberAccess), (SearchModelParams.FIELD_INFO_PARAM, fieldInfo), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Get))
-                    .WithPin(_pin);
+                    .WithUserData(new MemberSearchData{ AccessType = VariableAccessType.Get, FieldInfo = fieldInfo})
+                    .WithPinView(_pin);
                     
-                yield return new BlueprintSearchModel($"{category}/Static Fields", $"Set {ObjectNames.NicifyVariableName(fieldInfo.Name)}")
+                yield return new BlueprintSearchModel($"Static Fields", $"Set {ObjectNames.NicifyVariableName(fieldInfo.Name)}", NodeType.MemberAccess)
                     .WithSynonyms(fieldInfo.Name)
-                    .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.MemberAccess), (SearchModelParams.FIELD_INFO_PARAM, fieldInfo), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Set))
-                    .WithPin(_pin);
+                    .WithUserData(new MemberSearchData{ AccessType = VariableAccessType.Set, FieldInfo = fieldInfo})
+                    .WithPinView(_pin);
             }
             
             var staticMethods = _contextType.GetMethods(BindingFlags.Public | BindingFlags.Static);
@@ -111,20 +149,11 @@ namespace VaporEditor.Blueprints
                     continue;
                 }
                 
-                var name = methodInfo.IsGenericMethod ? $"{methodInfo.Name.Split('`')[0]}<{string.Join(",", methodInfo.GetGenericArguments().Select(a => a.Name))}>" : methodInfo.Name;
-                name = methodInfo.IsSpecialName ? name.ToTitleCase() : name;
-                var parameters = methodInfo.GetParameters();
-                string paramNames = parameters.Length > 0
-                    ? parameters.Select(pi => pi.ParameterType.IsGenericType
-                            ? $"{pi.ParameterType.Name.Split('`')[0]}<{string.Join(",", pi.ParameterType.GetGenericArguments().Select(a => a.Name))}>"
-                            : pi.ParameterType.Name)
-                        .Aggregate((a, b) => a + ", " + b)
-                    : string.Empty;
-
-                yield return new BlueprintSearchModel($"{category}/Static Methods", $"{name}({paramNames})")
+                var name = BlueprintEditorUtility.FormatMethodName(methodInfo);
+                yield return new BlueprintSearchModel($"Static Methods", $"{name}", NodeType.Method)
                     .WithSynonyms(name)
-                    .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Method), (SearchModelParams.METHOD_INFO_PARAM, methodInfo))
-                    .WithPin(_pin);
+                    .WithUserData(methodInfo)
+                    .WithPinView(_pin);
             }
         }
     }
@@ -132,9 +161,27 @@ namespace VaporEditor.Blueprints
     internal class DefaultSearchProvider : SearchProviderBase
     {
         private BlueprintClassGraphModel _graphModel;
+        private readonly IEnumerable<BlueprintSearchModel> _filteredDescriptors;
+        private readonly Action<BlueprintSearchModel, Vector2> _onSelect;
 
-        public DefaultSearchProvider(Action<BlueprintSearchModel, Vector2> onSpawnNode) : base(onSpawnNode)
+        public DefaultSearchProvider(Action<BlueprintSearchModel, Vector2> onSelect, List<BlueprintSearchModel> searchModels, Func<BlueprintSearchModel, bool> filter = null)
         {
+            _onSelect = onSelect;
+            _filteredDescriptors = filter != null ? searchModels.Where(filter) : searchModels;
+        }
+
+        public override bool Select(BlueprintSearchModel model)
+        {
+            if (model.IsStaticAccessor)
+            {
+                SearchWindow.UpdateProvider(new TypeOnlySearchProvider((Type)model.UserData, true, false, _onSelect).WithGraph(_graphModel), false, false);
+                return false;
+            }
+            else
+            {
+                _onSelect?.Invoke(model, Position);
+                return true;
+            }
         }
 
         public DefaultSearchProvider WithGraph(BlueprintClassGraphModel graphModel)
@@ -150,11 +197,6 @@ namespace VaporEditor.Blueprints
                 yield return model.WithGraph(_graphModel);
             }
             
-            foreach (var model in BlueprintSearchLibrary.GetUnityLibraries())
-            {
-                yield return model.WithGraph(_graphModel);
-            }
-            
             foreach (var model in BlueprintSearchLibrary.GetBlueprintLibraries())
             {
                 yield return model.WithGraph(_graphModel);
@@ -165,191 +207,238 @@ namespace VaporEditor.Blueprints
                 yield return model.WithGraph(_graphModel);
             }
             
-            yield return new BlueprintSearchModel("Utilities/Flow Control", "Return")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Return))
+            yield return new BlueprintSearchModel("Utilities/Flow Control", "Return", NodeType.Return)
                 .WithGraph(_graphModel);
+
+            foreach (var model in _filteredDescriptors)
+            {
+                yield return model.WithGraph(_graphModel);
+            }
             
         }
         
         private IEnumerable<BlueprintSearchModel> ConstructGetterSetterNodes()
         {
-            foreach (var classVar in _graphModel.Variables)
+            foreach (var classVar in _graphModel.Variables.Values)
             {
-                yield return new BlueprintSearchModel("Variables/Global", $"Get {classVar.Name}")
-                    .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.MemberAccess), (SearchModelParams.VARIABLE_NAME_PARAM, classVar.Name), (SearchModelParams.VARIABLE_SCOPE_PARAM, VariableScopeType.Class), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Get))
+                
+                yield return new BlueprintSearchModel("Variables/Global", $"Get {classVar.DisplayName}", NodeType.MemberAccess)
+                    .WithUserData(new MemberSearchData{ AccessType = VariableAccessType.Get, ScopeType = VariableScopeType.Class, Id = classVar.Id})
                     .WithGraph(_graphModel);
                 
-                yield return new BlueprintSearchModel("Variables/Global", $"Set {classVar.Name}")
-                    .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.MemberAccess), (SearchModelParams.VARIABLE_NAME_PARAM, classVar.Name), (SearchModelParams.VARIABLE_SCOPE_PARAM, VariableScopeType.Class), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Set))
+                yield return new BlueprintSearchModel("Variables/Global", $"Set {classVar.DisplayName}", NodeType.MemberAccess)
+                    .WithUserData(new MemberSearchData{ AccessType = VariableAccessType.Set, ScopeType = VariableScopeType.Class, Id = classVar.Id})
                     .WithGraph(_graphModel);
             }
 
-            foreach (var methodVar in _graphModel.Current.Variables)
+            foreach (var methodVar in _graphModel.Current.Variables.Values)
             {
-                yield return new BlueprintSearchModel("Variables/Local", $"Get {methodVar.Name}")
-                    .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.MemberAccess), (SearchModelParams.VARIABLE_NAME_PARAM, methodVar.Name), (SearchModelParams.VARIABLE_SCOPE_PARAM, VariableScopeType.Method), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Get))
+                yield return new BlueprintSearchModel("Variables/Local", $"Get {methodVar.DisplayName}", NodeType.MemberAccess)
+                    .WithUserData(new MemberSearchData{ AccessType = VariableAccessType.Get, ScopeType = VariableScopeType.Method, Id = methodVar.Id})
                     .WithGraph(_graphModel);
                 
-                yield return new BlueprintSearchModel("Variables/Local", $"Set {methodVar.Name}")
-                    .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.MemberAccess), (SearchModelParams.VARIABLE_NAME_PARAM, methodVar.Name), (SearchModelParams.VARIABLE_SCOPE_PARAM, VariableScopeType.Method), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Set))
+                yield return new BlueprintSearchModel("Variables/Local", $"Set {methodVar.DisplayName}", NodeType.MemberAccess)
+                    .WithUserData(new MemberSearchData{ AccessType = VariableAccessType.Set, ScopeType = VariableScopeType.Method, Id = methodVar.Id})
                     .WithGraph(_graphModel);
             }
         }
     }
 
-    internal class TypeSearchProvider : SearchProviderBase
+    internal class TypeOnlySearchProvider : SearchProviderBase
     {
-        public const string PARAM_TYPE_DATA = "TypeData";
-        private static List<BlueprintSearchModel> s_CachedDescriptors;
-        public TypeSearchProvider(Action<BlueprintSearchModel, Vector2> onSpawnNode) : base(onSpawnNode)
-        {
-            if (s_CachedDescriptors != null)
-            {
-                return;
-            }
-
-            var typeIterator = RuntimeSubclassUtility.GetCachedTypes().ToArray();
-            s_CachedDescriptors = new List<BlueprintSearchModel>(typeIterator.Length);
-            foreach (var t in typeIterator)
-            {
-                var typeName = t.IsGenericType ? $"{t.Name.Split('`')[0]}<{string.Join(",", t.GetGenericArguments().Select(a => a.Name))}>" : t.Name;
-                s_CachedDescriptors.Add(new BlueprintSearchModel(t.Namespace?.Replace('.', '/'), typeName).WithParameters((PARAM_TYPE_DATA, t)).WithSynonyms($"{t.Namespace}.{typeName}"));
-            }
-        }
-
-        public override IEnumerable<BlueprintSearchModel> GetDescriptors()
-        {
-            return s_CachedDescriptors;
-        }
-    }
-    
-    internal class TypeSearchProvider<T> : SearchProviderBase
-    {
-        // ReSharper disable once StaticMemberInGenericType
-        private static List<BlueprintSearchModel> s_CachedDescriptors;
-        public TypeSearchProvider(Action<BlueprintSearchModel, Vector2> onSpawnNode) : base(onSpawnNode)
-        {
-            if (s_CachedDescriptors != null)
-            {
-                return;
-            }
-
-            var typeIterator = RuntimeSubclassUtility.GetFilteredTypes<T>().ToArray();
-            s_CachedDescriptors = new List<BlueprintSearchModel>(typeIterator.Length);
-            foreach (var t in typeIterator)
-            {
-                var typeName = t.IsGenericType ? $"{t.Name.Split('`')[0]}<{string.Join(",", t.GetGenericArguments().Select(a => a.Name))}>" : t.Name;
-                s_CachedDescriptors.Add(new BlueprintSearchModel(t.Namespace?.Replace('.','/'), typeName).WithParameters((TypeSearchProvider.PARAM_TYPE_DATA, t)).WithSynonyms($"{t.Namespace}.{typeName}"));
-            }
-        }
-
-        public override IEnumerable<BlueprintSearchModel> GetDescriptors()
-        {
-            return s_CachedDescriptors;
-        }
-    }
-    
-    internal class TypeSearchProvider<T1 ,T2> : SearchProviderBase
-    {
-        // ReSharper disable once StaticMemberInGenericType
-        private static List<BlueprintSearchModel> s_CachedDescriptors;
-        public TypeSearchProvider(Action<BlueprintSearchModel, Vector2> onSpawnNode) : base(onSpawnNode)
-        {
-            if (s_CachedDescriptors != null)
-            {
-                return;
-            }
-
-            var validTypes = new HashSet<Type>();
-            var typeIteratorT1 = TypeCache.GetTypesDerivedFrom<T1>();
-            var typeIteratorT2 = TypeCache.GetTypesDerivedFrom<T2>();
-            s_CachedDescriptors = new List<BlueprintSearchModel>(typeIteratorT1.Count + typeIteratorT2.Count);
-            foreach (var t in typeIteratorT1.Where(t => t is { IsNested: false, IsPublic: true }))
-            {
-                var typeName = t.IsGenericType ? $"{t.Name.Split('`')[0]}<{string.Join(",", t.GetGenericArguments().Select(a => a.Name))}>" : t.Name;
-                s_CachedDescriptors.Add(new BlueprintSearchModel(t.Namespace?.Replace('.','/'), typeName).WithParameters((TypeSearchProvider.PARAM_TYPE_DATA, t)).WithSynonyms($"{t.Namespace}.{typeName}"));
-                validTypes.Add(t);
-            }
-            foreach (var t in typeIteratorT2.Where(t => t is { IsNested: false, IsPublic: true } && !validTypes.Contains(t)))
-            {
-                var typeName = t.IsGenericType ? $"{t.Name.Split('`')[0]}<{string.Join(",", t.GetGenericArguments().Select(a => a.Name))}>" : t.Name;
-                s_CachedDescriptors.Add(new BlueprintSearchModel(t.Namespace?.Replace('.','/'), typeName).WithParameters((TypeSearchProvider.PARAM_TYPE_DATA, t)).WithSynonyms($"{t.Namespace}.{typeName}"));
-            }
-        }
-
-        public override IEnumerable<BlueprintSearchModel> GetDescriptors()
-        {
-            return s_CachedDescriptors;
-        }
-    }
-    
-    internal class TypeSearchProvider<T1, T2, T3> : SearchProviderBase
-    {
-        // ReSharper disable once StaticMemberInGenericType
-        private static List<BlueprintSearchModel> s_CachedDescriptors;
-        public TypeSearchProvider(Action<BlueprintSearchModel, Vector2> onSpawnNode) : base(onSpawnNode)
-        {
-            if (s_CachedDescriptors != null)
-            {
-                return;
-            }
-
-            var validTypes = new HashSet<Type>();
-            var typeIteratorT1 = TypeCache.GetTypesDerivedFrom<T1>();
-            var typeIteratorT2 = TypeCache.GetTypesDerivedFrom<T2>();
-            var typeIteratorT3 = TypeCache.GetTypesDerivedFrom<T3>();
-            s_CachedDescriptors = new List<BlueprintSearchModel>(typeIteratorT1.Count + typeIteratorT2.Count + typeIteratorT3.Count);
-            foreach (var t in typeIteratorT1.Where(t => t is { IsNested: false, IsPublic: true }))
-            {
-                var typeName = t.IsGenericType ? $"{t.Name.Split('`')[0]}<{string.Join(",", t.GetGenericArguments().Select(a => a.Name))}>" : t.Name;
-                s_CachedDescriptors.Add(new BlueprintSearchModel(t.Namespace?.Replace('.','/'), typeName).WithParameters((TypeSearchProvider.PARAM_TYPE_DATA, t)).WithSynonyms($"{t.Namespace}.{typeName}"));
-                validTypes.Add(t);
-            }
-            foreach (var t in typeIteratorT2.Where(t => t is { IsNested: false, IsPublic: true } && !validTypes.Contains(t)))
-            {
-                var typeName = t.IsGenericType ? $"{t.Name.Split('`')[0]}<{string.Join(",", t.GetGenericArguments().Select(a => a.Name))}>" : t.Name;
-                s_CachedDescriptors.Add(new BlueprintSearchModel(t.Namespace?.Replace('.','/'), typeName).WithParameters((TypeSearchProvider.PARAM_TYPE_DATA, t)).WithSynonyms($"{t.Namespace}.{typeName}"));
-                validTypes.Add(t);
-            }
-            foreach (var t in typeIteratorT2.Where(t => t is { IsNested: false, IsPublic: true } && !validTypes.Contains(t)))
-            {
-                var typeName = t.IsGenericType ? $"{t.Name.Split('`')[0]}<{string.Join(",", t.GetGenericArguments().Select(a => a.Name))}>" : t.Name;
-                s_CachedDescriptors.Add(new BlueprintSearchModel(t.Namespace?.Replace('.','/'), typeName).WithParameters((TypeSearchProvider.PARAM_TYPE_DATA, t)).WithSynonyms($"{t.Namespace}.{typeName}"));
-            }
-        }
-
-        public override IEnumerable<BlueprintSearchModel> GetDescriptors()
-        {
-            return s_CachedDescriptors;
-        }
-    }
-
-    public struct GenericDescriptor
-    {
-        public string Category;
-        public string Name;
-        public object UserData;
-    }
-    
-    public class GenericSearchProvider : SearchProviderBase
-    {
-        public const string PARAM_USER_DATA = "Index";
+        private readonly Type _contextType;
+        private readonly bool _includeStatics;
+        private readonly bool _includeInstance;
+        private BlueprintClassGraphModel _graphModel;
+        private readonly Action<BlueprintSearchModel, Vector2> _onSelect;
         
-        private readonly List<BlueprintSearchModel> _cachedDescriptors;
-
-        public GenericSearchProvider(Action<BlueprintSearchModel, Vector2> onSpawnNode, List<GenericDescriptor> descriptors) : base(onSpawnNode)
+        public TypeOnlySearchProvider(Type contextType, bool includeStatics, bool includeInstance, Action<BlueprintSearchModel, Vector2> onSelect)
         {
-            _cachedDescriptors = new List<BlueprintSearchModel>(descriptors.Count);
-            foreach (var desc in descriptors)
-            {
-                _cachedDescriptors.Add(new BlueprintSearchModel(desc.Category, desc.Name)
-                    .WithParameters((PARAM_USER_DATA, desc.UserData)));
-            }
+            _contextType = contextType;
+            _includeStatics = includeStatics;
+            _includeInstance = includeInstance;
+            _onSelect = onSelect;
+        }
+        
+        public TypeOnlySearchProvider WithGraph(BlueprintClassGraphModel graphModel)
+        {
+            _graphModel = graphModel;
+            return this;
+        }
+        
+        public override bool Select(BlueprintSearchModel model)
+        {
+            _onSelect?.Invoke(model, Position);
+            return true;
         }
 
         public override IEnumerable<BlueprintSearchModel> GetDescriptors()
         {
-            return _cachedDescriptors;
+            string conSignature = null;
+            var constructors = _contextType.GetConstructors(BindingFlags.Public | BindingFlags.Instance);
+            if (_contextType == typeof(string) || _contextType.IsPrimitive || constructors.Length == 0)
+            {
+                conSignature = "Default(T)";
+            }
+            else
+            {
+                conSignature = BlueprintEditorUtility.FormatConstructorSignature(constructors[0]);
+            }
+
+            ConstructorSearchData sd = new ConstructorSearchData
+            {
+                TypeToConstruct = _contextType,
+                ConstructorSignature = conSignature,
+                IsArray = false,
+            };
+            
+            yield return new BlueprintSearchModel( string.Empty, $"Construct {BlueprintEditorUtility.FormatTypeName(_contextType)}", NodeType.Constructor)
+                .WithSynonyms("New", "Make")
+                .WithUserData(sd)
+                .WithGraph(_graphModel);
+            
+            if (_includeInstance)
+            {
+                foreach (var blueprintSearchModel in GetIncludedInstances())
+                {
+                    yield return blueprintSearchModel;
+                }
+            }
+
+            if (_includeStatics)
+            {
+                foreach (var blueprintSearchModel in GetIncludedStatics())
+                {
+                    yield return blueprintSearchModel;
+                }
+            }
+        }
+
+        private IEnumerable<BlueprintSearchModel> GetIncludedInstances()
+        {
+            var fields = _contextType.GetFields(BindingFlags.Public | BindingFlags.Instance);
+            foreach (var fieldInfo in fields)
+            {
+                yield return new BlueprintSearchModel($"Fields", $"Get {ObjectNames.NicifyVariableName(fieldInfo.Name)}", NodeType.MemberAccess)
+                    .WithSynonyms(fieldInfo.Name)
+                    .WithUserData(new MemberSearchData { AccessType = VariableAccessType.Get, FieldInfo = fieldInfo })
+                    .WithGraph(_graphModel);
+
+                yield return new BlueprintSearchModel($"Fields", $"Set {ObjectNames.NicifyVariableName(fieldInfo.Name)}", NodeType.MemberAccess)
+                    .WithSynonyms(fieldInfo.Name)
+                    .WithUserData(new MemberSearchData { AccessType = VariableAccessType.Set, FieldInfo = fieldInfo })
+                    .WithGraph(_graphModel);
+            }
+            
+            var properties = _contextType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+            foreach (var propertyInfo in properties)
+            {
+                if (propertyInfo.GetIndexParameters().Length != 0)
+                {
+                    continue;
+                }
+                yield return new BlueprintSearchModel($"Properties", $"Get {ObjectNames.NicifyVariableName(propertyInfo.Name)}", NodeType.MemberAccess)
+                    .WithSynonyms(propertyInfo.Name)
+                    .WithUserData(new MemberSearchData{ AccessType = VariableAccessType.Get, PropertyInfo = propertyInfo})
+                    .WithGraph(_graphModel);
+                    
+                if(propertyInfo.SetMethod != null && propertyInfo.SetMethod.IsPublic)
+                {
+                    yield return new BlueprintSearchModel($"Properties", $"Set {ObjectNames.NicifyVariableName(propertyInfo.Name)}", NodeType.MemberAccess)
+                        .WithSynonyms(propertyInfo.Name)
+                        .WithUserData(new MemberSearchData { AccessType = VariableAccessType.Set, PropertyInfo = propertyInfo })
+                        .WithGraph(_graphModel);
+                }
+            }
+
+            var methods = _contextType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
+            foreach (var methodInfo in methods)
+            {
+                if (methodInfo.IsDefined(typeof(ObsoleteAttribute), false))
+                {
+                    continue;
+                }
+                
+                if (methodInfo.IsSpecialName && methodInfo.Name.StartsWith("get_") && methodInfo.GetParameters().Length == 0)
+                {
+                    continue;
+                }
+
+                if (methodInfo.IsSpecialName && methodInfo.Name.StartsWith("set_") && methodInfo.GetParameters().Length == 0)
+                {
+                    continue;
+                }
+
+                var name = BlueprintEditorUtility.FormatMethodName(methodInfo);
+                yield return new BlueprintSearchModel($"Methods", $"{name}", NodeType.Method)
+                    .WithSynonyms(name)
+                    .WithUserData(methodInfo)
+                    .WithGraph(_graphModel);
+            }
+        }
+
+        private IEnumerable<BlueprintSearchModel> GetIncludedStatics()
+        {
+            var staticFields = _contextType.GetFields(BindingFlags.Public | BindingFlags.Static);
+            foreach (var fieldInfo in staticFields)
+            {
+                yield return new BlueprintSearchModel($"Static Fields", $"Get {ObjectNames.NicifyVariableName(fieldInfo.Name)}", NodeType.MemberAccess)
+                    .WithSynonyms(fieldInfo.Name)
+                    .WithUserData(new MemberSearchData { AccessType = VariableAccessType.Get, FieldInfo = fieldInfo })
+                    .WithGraph(_graphModel);
+
+                yield return new BlueprintSearchModel($"Static Fields", $"Set {ObjectNames.NicifyVariableName(fieldInfo.Name)}", NodeType.MemberAccess)
+                    .WithSynonyms(fieldInfo.Name)
+                    .WithUserData(new MemberSearchData { AccessType = VariableAccessType.Set, FieldInfo = fieldInfo })
+                    .WithGraph(_graphModel);
+            }
+            
+            var staticMethods = _contextType.GetMethods(BindingFlags.Public | BindingFlags.Static);
+            foreach (var methodInfo in staticMethods)
+            {
+                if (methodInfo.IsDefined(typeof(ObsoleteAttribute), false))
+                {
+                    continue;
+                }
+                
+
+                var name = BlueprintEditorUtility.FormatMethodName(methodInfo);
+                yield return new BlueprintSearchModel($"Static Methods", $"{name}", NodeType.Method)
+                    .WithSynonyms(name)
+                    .WithUserData(methodInfo)
+                    .WithGraph(_graphModel);
+            }
+        }
+    }
+
+    internal class MemberOnlySearchProvider : SearchProviderBase
+    {
+        private readonly BlueprintVariable _variable;
+        private readonly Action<BlueprintSearchModel, Vector2> _onSelect;
+        private readonly BlueprintClassGraphModel _graphModel;
+
+        public MemberOnlySearchProvider(BlueprintVariable variable, Action<BlueprintSearchModel, Vector2> onSelect, BlueprintClassGraphModel graphModel)
+        {
+            _variable = variable;
+            _onSelect = onSelect;
+            _graphModel = graphModel;
+        }
+        
+        public override bool Select(BlueprintSearchModel model)
+        {
+            _onSelect?.Invoke(model, Position);
+            return true;
+        }
+
+        public override IEnumerable<BlueprintSearchModel> GetDescriptors()
+        {
+            yield return new BlueprintSearchModel(string.Empty, $"Set {_variable.DisplayName}", NodeType.MemberAccess)
+                .WithUserData(new MemberSearchData { AccessType = VariableAccessType.Set, ScopeType = _variable.Scope, Id = _variable.Id })
+                .WithGraph(_graphModel);
+            
+            yield return new BlueprintSearchModel(string.Empty, $"Get {_variable.DisplayName}", NodeType.MemberAccess)
+                .WithUserData(new MemberSearchData { AccessType = VariableAccessType.Get, ScopeType = _variable.Scope, Id = _variable.Id })
+                .WithGraph(_graphModel);
         }
     }
 }

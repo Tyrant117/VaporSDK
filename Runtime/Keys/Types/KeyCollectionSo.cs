@@ -65,10 +65,10 @@ namespace Vapor.Keys
 
             if (kvps.Count > 0)
             {
-                string namespaceName = KeyGenerator.FindNearestAssemblyDefinition(this);
+                string namespaceName = FileUtility.FindNearestNamespace(this);
                 namespaceName = namespaceName == null ? KeyGenerator.NamespaceName : $"{namespaceName}.{KeyGenerator.NamespaceName}";
 
-                var path = KeyGenerator.ConvertFullPathToRelative(KeyGenerator.FindNearestDirectory(this));
+                var path = FileUtility.ConvertFullPathToRelative(KeyGenerator.FindNearestDirectory(this));
                 KeyGenerator.FormatKeyFiles(path, namespaceName, name, Category, kvps);
 
                 RuntimeEditorUtility.SaveAndRefresh();

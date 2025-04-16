@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using UnityEditor;
 using UnityEngine;
 
 namespace Vapor.Keys
@@ -19,7 +18,7 @@ namespace Vapor.Keys
             if (Application.isEditor)
             {
 #if UNITY_EDITOR
-                var types = TypeCache.GetTypesWithAttribute(typeof(DatabaseKeyValuePairAttribute));
+                var types = UnityEditor.TypeCache.GetTypesWithAttribute(typeof(DatabaseKeyValuePairAttribute));
                 foreach (var type in types)
                 {
                     var assets = RuntimeAssetDatabaseUtility.FindAssetsByType(type);
@@ -41,27 +40,29 @@ namespace Vapor.Keys
                 foreach (Assembly assembly in assemblies)
                 {
                     // Get all types in the assembly
-                    Type[] types = assembly.GetTypes();
+                    var types = assembly.GetTypes();
                     List<Type> validTypes = new(types.Length);
 
                     // Iterate through each type
                     foreach (Type type in types)
                     {
                         // Check if the type has the DatabaseKeyValuePair attribute
-                        if (type.IsDefined(typeof(DatabaseKeyValuePairAttribute), false))
+                        if (!type.IsDefined(typeof(DatabaseKeyValuePairAttribute), false))
                         {
-                            validTypes.Add(type);
-                            var atr = type.GetCustomAttribute<DatabaseKeyValuePairAttribute>();
-                            if (atr.UseAddressables)
-                            {
-                                var assets = AddressableAssetUtility.LoadAll<UnityEngine.Object>(x => Debug.Log(x), atr.AddressableLabel);
-                                RuntimeDatabaseUtility.InitializeRuntimeDatabase(type, assets.ToList());
-                            }
-                            else
-                            {
-                                var assets = Resources.LoadAll("", type);
-                                RuntimeDatabaseUtility.InitializeRuntimeDatabase(type, assets.ToList());
-                            }
+                            continue;
+                        }
+
+                        validTypes.Add(type);
+                        var atr = type.GetCustomAttribute<DatabaseKeyValuePairAttribute>();
+                        if (atr.UseAddressables)
+                        {
+                            var assets = AddressableAssetUtility.LoadAll<UnityEngine.Object>(x => Debug.Log(x), atr.AddressableLabel);
+                            RuntimeDatabaseUtility.InitializeRuntimeDatabase(type, assets.ToList());
+                        }
+                        else
+                        {
+                            var assets = Resources.LoadAll(string.Empty, type);
+                            RuntimeDatabaseUtility.InitializeRuntimeDatabase(type, assets.ToList());
                         }
                     }
 

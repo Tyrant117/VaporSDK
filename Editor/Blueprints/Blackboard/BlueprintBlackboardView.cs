@@ -11,12 +11,14 @@ using Vapor.Blueprints;
 using Vapor.Inspector;
 using VaporEditor.Inspector;
 using Button = UnityEngine.UIElements.Button;
+using Cursor = UnityEngine.UIElements.Cursor;
 
 namespace VaporEditor.Blueprints
 {
     public class BlueprintBlackboardView : VisualElement
     {
         public BlueprintEditorWindow Window { get; }
+        public DragElementManipulator DragElementManipulator { get; private set; }
         public override VisualElement contentContainer => _scrollView.contentContainer;
 
         private readonly ScrollView _scrollView;
@@ -29,11 +31,58 @@ namespace VaporEditor.Blueprints
         private SubclassOf _subclassInstance;
         private BlueprintBlackboardVariable _currentVariable;
         private int _counter;
+        private VisualElement _dragElement;
 
         public BlueprintBlackboardView(BlueprintEditorWindow window)
         {
             Window = window;
             style.flexGrow = 1f;
+            DragElementManipulator = new DragElementManipulator(Window.rootVisualElement).WithKeyListeners(KeyCode.G, KeyCode.S);
+            _dragElement = new VisualElement()
+            {
+                pickingMode = PickingMode.Ignore,
+                style =
+                {
+                    backgroundColor = new Color(0.16f, 0.16f, 0.16f),
+                    borderBottomColor = new Color(0.12f, 0.12f, 0.12f),
+                    borderTopColor = new Color(0.12f, 0.12f, 0.12f),
+                    borderLeftColor = new Color(0.12f, 0.12f, 0.12f),
+                    borderRightColor = new Color(0.12f, 0.12f, 0.12f),
+                    borderTopWidth = 2f,
+                    borderLeftWidth = 2f,
+                    borderRightWidth = 2f,
+                    borderBottomWidth = 2f,
+                    borderBottomLeftRadius = 6f,
+                    borderBottomRightRadius = 6f,
+                    borderTopLeftRadius = 6f,
+                    borderTopRightRadius = 6f,
+                    maxWidth = 120,
+                    height = 22,
+                    maxHeight = 22,
+                    flexGrow = 1f,
+                }
+            }.WithName("DragElement").WithManipulator(DragElementManipulator);
+            var label = new Label()
+            {
+                style =
+                {
+                    overflow = Overflow.Hidden,
+                    textOverflow = TextOverflow.Ellipsis,
+                    flexGrow = 1f,
+                    marginBottom = 0f,
+                    marginLeft = 8f,
+                    marginRight = 8f,
+                    marginTop = 0f,
+                    paddingLeft = 0f,
+                    paddingRight = 0f,
+                    paddingTop = 0f,
+                    paddingBottom = 0f,
+                    unityTextAlign = TextAnchor.MiddleCenter,
+                }
+            };
+            _dragElement.Add(label);
+            DragElementManipulator.BeginDrag += OnBeginVariableDragDrop;
+            Window.rootVisualElement.Add(_dragElement);
 
             _scrollView = new ScrollView()
             {
@@ -95,6 +144,18 @@ namespace VaporEditor.Blueprints
             Window.ClassGraphModel.MethodClosed += OnMethodClosed;
         }
 
+        private void OnBeginVariableDragDrop(EventBase evt, VisualElement source)
+        {
+            if (source is BlueprintBlackboardVariable v)
+            {
+                var label = (evt.target as VisualElement)?.Q<Label>();
+                if (label != null)
+                {
+                    label.text = v.Name;
+                }
+            }
+        }
+
         private void OnMethodOpened(BlueprintClassGraphModel classGraph, BlueprintMethodGraph methodGraph)
         {
             _methodVariables.Show();
@@ -108,6 +169,14 @@ namespace VaporEditor.Blueprints
 
     public class BlueprintBlackboardMethodCategory : VisualElement
     {
+        public struct MethodOverrideDescriptor
+        {
+            public string Category;
+            public string Name;
+            public MethodInfo MethodInfo;
+            public (Type, string)[] UnityMessageParameters;
+        }
+        
         public override VisualElement contentContainer => _foldout.contentContainer;
 
         private readonly BlueprintBlackboardView _view;
@@ -115,34 +184,39 @@ namespace VaporEditor.Blueprints
         private readonly Button _overrideSelector;
 
         private readonly List<MethodInfo> _overridableMethods;
-        private readonly List<GenericDescriptor> _descriptors;
-        private readonly List<GenericDescriptor> _filteredDescriptors;
+        private readonly List<MethodOverrideDescriptor> _descriptors;
+        private readonly List<GenericSearchModel> _filteredDescriptors;
 
         public BlueprintBlackboardMethodCategory(BlueprintBlackboardView view, string header)
         {
             _view = view;
             Func<MethodInfo, bool> filter = mi => mi.IsVirtual && !mi.IsAbstract && !mi.IsSpecialName;
-            _overridableMethods = ReflectionUtility.GetAllMethodsThatMatch(_view.Window.ClassGraphModel.ParentType, filter, false).ToList();
-            foreach (var interfaceAqn in _view.Window.ClassGraphModel.ImplementedInterfaceTypes)
+            _overridableMethods = ReflectionUtility.GetAllMethodsThatMatch(_view.Window.ClassGraphModel.ParentType, filter, false).Distinct().ToList();
+            _descriptors = new List<MethodOverrideDescriptor>(_overridableMethods.Count);
+            foreach (var mi in _overridableMethods.Where(mi => mi.Name != "Finalize" && mi.GetBaseDefinition() == mi))
             {
-                if (interfaceAqn == null)
+                _descriptors.Add(new MethodOverrideDescriptor
                 {
-                    continue;
-                }
-                
-                _overridableMethods.AddRange(ReflectionUtility.GetAllMethodsThatMatch(interfaceAqn, filter, false));
-            }
-            _descriptors = new List<GenericDescriptor>(_overridableMethods.Count);
-            foreach (var mi in _overridableMethods.Where(mi => mi.Name != "Finalize"))
-            {
-                _descriptors.Add(new GenericDescriptor
-                {
-                    Category = string.Empty,
-                    Name = mi.Name,
-                    UserData = mi
+                    Category = "Virtual",
+                    Name = BlueprintEditorUtility.FormatMethodName(mi),
+                    MethodInfo = mi
                 });
             }
-            _filteredDescriptors = new List<GenericDescriptor>(_descriptors.Count);
+
+            if (_view.Window.ClassGraphModel.Graph.GraphType == BlueprintGraphSo.BlueprintGraphType.BehaviourGraph)
+            {
+                foreach (var message in BlueprintEditorUtility.UnityMessageMethods)
+                {
+                    _descriptors.Add(new MethodOverrideDescriptor
+                    {
+                        Category = "Unity",
+                        Name = message.Key,
+                        UnityMessageParameters = message.Value
+                    });
+                }
+            }
+
+            _filteredDescriptors = new List<GenericSearchModel>(_descriptors.Count);
 
             style.flexGrow = 1f;
             _foldout = new Foldout()
@@ -162,7 +236,7 @@ namespace VaporEditor.Blueprints
             _foldout.hierarchy[0].style.paddingLeft = 3f;
             _foldout.hierarchy[0].style.paddingRight = 3f;
             _foldout.hierarchy[0].style.paddingBottom = 3f;
-            _overrideSelector = new Button(OnSelectType)
+            _overrideSelector = new Button(OnSelectMethodOverride)
             {
                 text = "Overrides",
                 style =
@@ -199,7 +273,7 @@ namespace VaporEditor.Blueprints
             hierarchy.Add(_foldout);
 
             _view.Window.ClassGraphModel.InterfaceTypeChanged += (_, _, _) => RefreshMethods();
-            _view.Window.ClassGraphModel.MethodChanged += (_, _, ct) => 
+            _view.Window.ClassGraphModel.MethodChanged += (_, _, ct, _) => 
             { 
                 if(ct != ChangeType.Added)
                 {
@@ -210,33 +284,51 @@ namespace VaporEditor.Blueprints
             
         }
         
-        private void OnSelectType()
+        private void OnSelectMethodOverride()
         {
             var screenPosition = GUIUtility.GUIToScreenPoint(_overrideSelector.worldBound.position) + new Vector2(0, _overrideSelector.worldBound.height + 16);
             
             _filteredDescriptors.Clear();
-            foreach (var descriptor in _descriptors.Where(descriptor => !_view.Window.ClassGraphModel.Methods.Exists(m => m.MethodName == descriptor.Name)))
+            foreach (var descriptor in _descriptors.Where(descriptor => !_view.Window.ClassGraphModel.Methods.Exists(m => m.MethodInfo != null && m.MethodInfo == descriptor.MethodInfo)))
             {
-                _filteredDescriptors.Add(descriptor);
+                var gsm = new GenericSearchModel(descriptor.Category, descriptor.Name)
+                    .WithUserData(descriptor.Category == "Unity" ? descriptor.UnityMessageParameters :  descriptor.MethodInfo) as GenericSearchModel;
+                _filteredDescriptors.Add(gsm);
             }
-            BlueprintSearchWindow.Show(screenPosition, screenPosition, new GenericSearchProvider(OnTypeSelected, _filteredDescriptors), false, true);
+            GenericSearchWindow.Show(screenPosition, screenPosition, new GenericSearchProvider(OnMethodOverrideSelected, _filteredDescriptors), false, true);
         }
 
-        private void OnTypeSelected(BlueprintSearchModel model, Vector2 position)
+        private void OnMethodOverrideSelected(GenericSearchModel[] model)
         {
-            var mi = (MethodInfo)model.Parameters.FirstOrDefault(t => t.Item1 == GenericSearchProvider.PARAM_USER_DATA).Item2;
-            if (!_overridableMethods.Contains(mi))
+            if (model[0].UserData is MethodInfo mi)
             {
-                return;
+                if (!_overridableMethods.Contains(mi))
+                {
+                    return;
+                }
+            
+                if (_view.Window.ClassGraphModel.Methods.Exists(m => m.MethodInfo == mi))
+                {
+                    return;
+                }
+
+                var methodGraph = _view.Window.ClassGraphModel.AddMethod(mi);
+                Add(new BlueprintBlackboardMethod(_view, methodGraph));
+            }
+            else
+            {
+                var breakIdx = model[0].Name.IndexOf('(');
+                var methodName = model[0].Name[..breakIdx];
+                var unityMessageParameters = model[0].UserData as (Type, string)[];
+                if (_view.Window.ClassGraphModel.Methods.Exists(m => m.MethodName == methodName))
+                {
+                    return;
+                }
+                
+                var methodGraph = _view.Window.ClassGraphModel.AddUnityMethod(methodName, unityMessageParameters);
+                Add(new BlueprintBlackboardMethod(_view, methodGraph));
             }
             
-            if (_view.Window.ClassGraphModel.Methods.Exists(m => m.MethodInfo == mi))
-            {
-                return;
-            }
-
-            var methodGraph = _view.Window.ClassGraphModel.AddMethod(mi);
-            Add(new BlueprintBlackboardMethod(_view, methodGraph));
         }
 
         private void SetState(bool open) => _foldout.value = open;
@@ -263,7 +355,6 @@ namespace VaporEditor.Blueprints
     public class BlueprintBlackboardMethod : VisualElement
     {
         public override bool focusable => true;
-        private bool IsOverride { get; }
 
         private readonly BlueprintBlackboardView _view;
         private readonly BlueprintMethodGraph _methodGraph;
@@ -275,7 +366,6 @@ namespace VaporEditor.Blueprints
         {
             _view = view;
             _methodGraph = methodGraph;
-            IsOverride = _methodGraph.MethodInfo != null;
             style.flexGrow = 1f;
             style.flexDirection = FlexDirection.Row;
             style.backgroundColor = new Color(0.16f, 0.16f, 0.16f);
@@ -289,7 +379,7 @@ namespace VaporEditor.Blueprints
                     flexGrow = 1f,
                 }
             };
-            _label = new Label(IsOverride ? FormatMethodName(_methodGraph.MethodInfo) : _methodGraph.MethodName)
+            _label = new Label(_methodGraph.IsOverride ? BlueprintEditorUtility.FormatMethodName(_methodGraph.MethodInfo) : _methodGraph.MethodName)
             {
                 style =
                 {
@@ -327,7 +417,7 @@ namespace VaporEditor.Blueprints
                 _label.style.display = DisplayStyle.Flex;
             });
             ve.Add(_label);
-            if(!IsOverride)
+            if(!_methodGraph.IsOverride && !_methodGraph.IsUnityOverride)
             {
                 ve.Add(_renameTextField);
             }
@@ -357,7 +447,7 @@ namespace VaporEditor.Blueprints
             {
                 switch (evt.keyCode)
                 {
-                    case KeyCode.F2 when !IsOverride:
+                    case KeyCode.F2 when !_methodGraph.IsOverride && !_methodGraph.IsUnityOverride:
                         StartRename();
                         break;
                     case KeyCode.Delete:
@@ -366,9 +456,26 @@ namespace VaporEditor.Blueprints
                 }
             });
             
-            if(IsOverride)
+            if(_methodGraph.IsOverride)
             {
                 var label = new Label(_methodGraph.MethodDeclaringType.Name)
+                {
+                    style =
+                    {
+                        flexGrow = 1f,
+                        color = Color.grey,
+                        fontSize = 10f,
+                        unityTextAlign = TextAnchor.MiddleRight,
+                        overflow = Overflow.Hidden,
+                        textOverflow = TextOverflow.Ellipsis,
+                    }
+                };
+                Insert(1, label);
+            }
+
+            if (_methodGraph.IsUnityOverride)
+            {
+                var label = new Label("Unity Event")
                 {
                     style =
                     {
@@ -410,7 +517,7 @@ namespace VaporEditor.Blueprints
                 return;
             }
 
-            evt.menu.AppendAction("Rename", CTX_Rename, _ => IsOverride ? DropdownMenuAction.Status.Disabled : DropdownMenuAction.Status.Normal);
+            evt.menu.AppendAction("Rename", CTX_Rename, _ => _methodGraph.IsOverride || _methodGraph.IsUnityOverride ? DropdownMenuAction.Status.Disabled : DropdownMenuAction.Status.Normal);
             evt.menu.AppendSeparator();
             evt.menu.AppendAction("Delete", CTX_Delete);
         }
@@ -443,20 +550,6 @@ namespace VaporEditor.Blueprints
             _renameTextField.SetValueWithoutNotify(_label.text);
             _renameTextField.Focus();
             _renameTextField.SelectAll();
-        }
-
-        private static string FormatMethodName(MethodInfo method)
-        {
-            var displayName = method.IsGenericMethod ? $"{method.Name.Split('`')[0]}<{string.Join(",", method.GetGenericArguments().Select(a => a.Name))}>" : method.Name;
-            displayName = method.IsSpecialName ? displayName.ToTitleCase() : displayName;
-            var parameters = method.GetParameters();
-            string paramNames = parameters.Length > 0
-                ? parameters.Select(pi => pi.ParameterType.IsGenericType
-                        ? $"{pi.ParameterType.Name.Split('`')[0]}<{string.Join(",", pi.ParameterType.GetGenericArguments().Select(a => a.Name))}>"
-                        : pi.ParameterType.Name)
-                    .Aggregate((a, b) => a + ", " + b)
-                : string.Empty;
-            return $"{displayName}({paramNames})";
         }
     }
     
@@ -518,7 +611,7 @@ namespace VaporEditor.Blueprints
             }
             else
             {
-                _view.Window.ClassGraphModel.VariableChanged += (_, v, ct) =>
+                _view.Window.ClassGraphModel.VariableChanged += (_, v, ct, ignoreUndo) =>
                 {
                     if (ct != ChangeType.Added)
                     {
@@ -562,7 +655,7 @@ namespace VaporEditor.Blueprints
                     return;
                 }
                 
-                foreach (var v in _view.Window.ClassGraphModel.Current.Variables)
+                foreach (var v in _view.Window.ClassGraphModel.Current.Variables.Values)
                 {
                     Add(new BlueprintBlackboardVariable(_view, v));
                 }
@@ -570,7 +663,7 @@ namespace VaporEditor.Blueprints
             }
             else
             {
-                foreach (var v in _view.Window.ClassGraphModel.Variables)
+                foreach (var v in _view.Window.ClassGraphModel.Variables.Values)
                 {
                     Add(new BlueprintBlackboardVariable(_view, v));
                 }
@@ -589,9 +682,9 @@ namespace VaporEditor.Blueprints
             methodGraph.VariableChanged -= OnMethodVariableChanged;
         }
 
-        private void OnMethodVariableChanged(BlueprintMethodGraph methodGraph, BlueprintVariable variable, BlueprintMethodGraph.ChangeType changeType)
+        private void OnMethodVariableChanged(BlueprintMethodGraph methodGraph, BlueprintVariable variable, ChangeType changeType, bool ignoreUndo)
         {
-            if (changeType != BlueprintMethodGraph.ChangeType.Added)
+            if (changeType != ChangeType.Added)
             {
                 RefreshVariables();
             }
@@ -613,10 +706,11 @@ namespace VaporEditor.Blueprints
 
         private readonly BlueprintVariable _model;
         public override bool focusable => true;
+        public string Name => _model.DisplayName;
+        public BlueprintVariable Model => _model;
 
         public BlueprintBlackboardVariable(BlueprintBlackboardView view, BlueprintVariable model)
         {
-            var view1 = view;
             _model = model;
             
             style.flexGrow = 1f;
@@ -630,9 +724,10 @@ namespace VaporEditor.Blueprints
                 style =
                 {
                     flexGrow = 1f,
+                    flexBasis = Length.Percent(50),
                 }
             };
-            _label = new Label(_model.Name)
+            _label = new Label(_model.DisplayName)
             {
                 style =
                 {
@@ -657,12 +752,7 @@ namespace VaporEditor.Blueprints
             {
                 if (!evt.newValue.EmptyOrNull())
                 {
-                    var trimmed = evt.newValue.Replace(" ", "");
-                    // _label.text = trimmed;
-                    // _renameTextField.SetValueWithoutNotify(trimmed);
-                    _model.Name = trimmed;
-                    // var window = GetFirstAncestorOfType<BlueprintBlackboardView>().Window;
-                    // window.GraphEditorView.Invalidate(GraphInvalidationType.RenamedNode);
+                    _model.DisplayName = evt.newValue;
                 }
 
                 _renameTextField.style.display = DisplayStyle.None;
@@ -677,14 +767,20 @@ namespace VaporEditor.Blueprints
             ve.Add(_renameTextField);
             Add(ve);
 
-            _typeSelector = new TypeSelectorField(string.Empty, _model.Type, t => (t.IsPublic || t.IsNestedPublic) && !(t.IsAbstract && t.IsSealed));
+            _typeSelector = new TypeSelectorField(string.Empty, _model.Type, t => (t.IsPublic || t.IsNestedPublic) && !(t.IsAbstract && t.IsSealed))
+            {
+                style =
+                {
+                    flexBasis = Length.Percent(50f)
+                }
+            };
             _typeSelector.TypeChanged += SetType;
             Add(_typeSelector);
             
             RegisterCallback<FocusInEvent>(_ =>
             {
                 style.backgroundColor = new Color(0.16f, 0.16f, 0.2f);
-                view1.Window.InspectorView.SetInspectorTarget(new BlueprintInspectorVariableView(_model));
+                view.Window.InspectorView.SetInspectorTarget(new BlueprintInspectorVariableView(_model));
             });
             RegisterCallback<FocusOutEvent>(_ =>
             {
@@ -705,6 +801,12 @@ namespace VaporEditor.Blueprints
             RegisterCallbackOnce<AttachToPanelEvent>(_ => _model.Changed += OnModelOnChanged);
             RegisterCallbackOnce<DetachFromPanelEvent>(_ => _model.Changed -= OnModelOnChanged);
             
+            var drag = new DragDropManipulator("slot--action-drag", view.DragElementManipulator)
+                .WithDragLocationMatch(DragElementManipulator.DragLocationMatch.Center)
+                .WithActivator<DragDropManipulator>(EventModifiers.None, MouseButton.LeftMouse);
+            
+            this.AddManipulator(drag);
+            
             this.AddManipulator(new ContextualMenuManipulator(BuildContextualMenu));
         }
 
@@ -713,8 +815,8 @@ namespace VaporEditor.Blueprints
             switch (type)
             {
                 case BlueprintVariable.ChangeType.Name:
-                    _label.text = variable.Name;
-                    _renameTextField.SetValueWithoutNotify(variable.Name);
+                    _label.text = variable.DisplayName;
+                    _renameTextField.SetValueWithoutNotify(variable.DisplayName);
                     break;
                 case BlueprintVariable.ChangeType.Type:
                     break;
@@ -746,7 +848,7 @@ namespace VaporEditor.Blueprints
             _model.Delete();
         }
 
-        private void SetType(VisualElement sender, Type newType, Type oldType)
+        private void SetType(VisualElement sender, Type oldType, Type newType)
         {
             _model.Type = newType;
         }

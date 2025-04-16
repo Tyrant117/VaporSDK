@@ -4,21 +4,12 @@ using UnityEngine;
 
 namespace VaporEditor.Blueprints
 {
-    public abstract class SearchProviderBase : ISearchProvider
+    public abstract class SearchProviderBase
     {
         public Vector2 Position { get; set; }
-            
-        private readonly Action<BlueprintSearchModel, Vector2> _spawnNode;
+        public BlueprintSearchWindow SearchWindow { get; set; }
 
-        public SearchProviderBase(Action<BlueprintSearchModel, Vector2> onSpawnNode)
-        {
-            _spawnNode = onSpawnNode;
-        }
-
-        public void AddNode(BlueprintSearchWindow.Descriptor descriptor)
-        {
-            _spawnNode.Invoke(descriptor.SearchModel, Position);
-        }
+        public abstract bool Select(BlueprintSearchModel model);
             
         public abstract IEnumerable<BlueprintSearchModel> GetDescriptors();
     }

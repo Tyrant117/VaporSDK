@@ -11,6 +11,7 @@ namespace VaporEditor.Blueprints
     public class BlueprintInspectorView : VisualElement
     {
         public BlueprintEditorWindow Window { get; private set; }
+        public IBlueprintInspectable Inspectable { get; private set; }
         public object CurrentDrawTarget { get; private set; }
         
         private readonly VisualElement _drawContainer;
@@ -167,6 +168,43 @@ namespace VaporEditor.Blueprints
             namespaceField.styleSheets.Add(labelStyle);
             namespaceField.Q<Label>().AddToClassList("flex-label");
             _settingsElement.Add(namespaceField);
+
+            var usingList = new ListView(Window.ClassGraphModel.Usings, makeItem: () => new VisualElement(), bindItem: (element, i) =>
+            {
+                element.Clear();
+                int idx = i;
+                var usingName = Window.ClassGraphModel.Usings[i];
+                var usingField = new TextField("Namespace");
+                usingField.SetValueWithoutNotify(usingName ?? string.Empty);
+                usingField.RegisterValueChangedCallback(evt => 
+                {
+                    Window.ClassGraphModel.Usings[idx] = evt.newValue;
+                    Window.UpdateSearchModels();
+                });
+                usingField.styleSheets.Add(labelStyle);
+                usingField.Q<Label>().AddToClassList("flex-label");
+                element.Add(usingField);
+            })
+            {
+                showFoldoutHeader = true,
+                headerTitle = "Additional Namespaces",
+                showAddRemoveFooter = true,
+                showBorder = true,
+                showBoundCollectionSize = false,
+                showAlternatingRowBackgrounds = AlternatingRowBackground.All,
+                onRemove = lv =>
+                {
+                    Window.ClassGraphModel.Usings.RemoveAt(Window.ClassGraphModel.Usings.Count - 1);
+                    Window.UpdateSearchModels();
+                    lv.Rebuild();
+                },
+                style =
+                {
+                    marginLeft = 3f,
+                    marginRight = 3f,
+                }
+            };
+            _settingsElement.Add(usingList);
             
             
             var interfacesList = new ListView(Window.ClassGraphModel.ImplementedInterfaceTypes, makeItem: () => new VisualElement(), bindItem: (element, i) =>
@@ -175,7 +213,7 @@ namespace VaporEditor.Blueprints
                 int idx = i;
                 var interfaceType = Window.ClassGraphModel.ImplementedInterfaceTypes[idx];
                 var typeSelector = new TypeSelectorField(string.Empty, interfaceType, t => (t.IsPublic || t.IsNestedPublic) && t.IsInterface);
-                typeSelector.TypeChanged += (_, cur, old) => Window.ClassGraphModel.OnInterfaceUpdated(old, cur);
+                typeSelector.TypeChanged += (_, old, cur) => Window.ClassGraphModel.OnInterfaceUpdated(old, cur);
                 element.Add(typeSelector);
             })
             {

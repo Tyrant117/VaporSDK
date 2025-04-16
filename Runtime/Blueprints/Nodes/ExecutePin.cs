@@ -13,4 +13,9 @@
     {
         
     }
+
+    public struct EnumPin
+    {
+        
+    }
 }

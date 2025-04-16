@@ -12,18 +12,27 @@ using VaporEditor.Inspector;
 
 namespace VaporEditor.Blueprints
 {
-    public abstract class NodeModelBase
+    public abstract class NodeModelBase : IBlueprintGraphModel
     {
         private static readonly Color s_DefaultTextColor = new(0.7568628f, 0.7568628f, 0.7568628f);
         private static readonly Color s_ErrorTextColor = new(0.7568628f, 0f, 0f);
         
+        public enum ChangeType
+        {
+            Deleted,
+            Renamed,
+            ReTyped,
+            InputPins,
+            OutputPins,
+        }
+        
         public BlueprintMethodGraph Method { get; }
-        public string Guid { get; }
-        public uint Uuid { get; }
+        public string Guid { get; private set; }
+        public uint Uuid { get; private set; }
         public NodeType NodeType { get; }
         public Rect Position { get; set; }
-        public List<BlueprintWireReference> InputWires { get; }
-        public List<BlueprintWireReference> OutputWires { get; }
+        // public List<BlueprintWireReference> InputWires { get; }
+        // public List<BlueprintWireReference> OutputWires { get; }
         
         // Non-Serialized
         public string Name { get; protected set; }
@@ -35,17 +44,15 @@ namespace VaporEditor.Blueprints
         public string ErrorText { get; protected set; }
         
         // Events
-        public event Action<NodeModelBase> NameChanged;
+        public event Action<NodeModelBase, ChangeType> Changed;
 
         protected NodeModelBase(BlueprintMethodGraph method, BlueprintDesignNodeDto dto)
         {
             Method = method;
             Guid = dto.Guid;
-            Uuid = dto.Uuid;
+            Uuid = Guid.GetStableHashU32();
             NodeType = dto.NodeEnumType;
             Position = dto.Position;
-            InputWires = new List<BlueprintWireReference>(dto.InputWires);
-            OutputWires = new List<BlueprintWireReference>(dto.OutputWires);
         }
 
 
@@ -55,6 +62,8 @@ namespace VaporEditor.Blueprints
         {
             Validate();
         }
+        
+        public virtual void PostConnectWires(){}
 
         #region - Settings -
 
@@ -64,9 +73,14 @@ namespace VaporEditor.Blueprints
         public void SetName(string name)
         {
             Name = name;
-            NameChanged?.Invoke(this);
+            Edited(ChangeType.Renamed);
         }
 
+        public void ResetGuid()
+        {
+            Guid = System.Guid.NewGuid().ToString();
+            Uuid = Guid.GetStableHashU32();
+        }
         #endregion
 
         #region - Validation  -
@@ -86,28 +100,40 @@ namespace VaporEditor.Blueprints
         public string FormatWithUuid(string prefix) => $"{prefix}_{Uuid}";
         #endregion
 
+        
+        
         public bool OnEnumChanged()
         {
-            var wire = InputWires.FirstOrDefault(w => w.RightSidePin.PinName == PinNames.VALUE_IN);
-            if (!wire.IsValid())
+            if (!InputPins[PinNames.VALUE_IN].TryGetWire(out var wire))
+            {
+                return false;
+            }
+                
+            // var wire = InputWires.FirstOrDefault(w => w.RightSidePin.PinName == PinNames.VALUE_IN);
+            if (!wire.IsConnected())
+            {
+                return false;
+            }
+
+            if (!Method.Nodes.TryGetValue(wire.LeftGuid, out var node))
             {
                 return false;
             }
             
-            var node = Method.Nodes.FirstOrDefault(n => n.Value.Guid == wire.LeftSidePin.NodeGuid).Value;
+            // var node = Method.Nodes.FirstOrDefault(n => n.Value.Guid == wire.LeftGuid).Value;
             if (node == null)
             {
                 return false;
             }
         
-            var pin = node.OutputPins[wire.LeftSidePin.PinName];
+            var pin = node.OutputPins[wire.LeftName];
             if (!pin.Type.IsEnum)
             {
                 return false;
             }
         
             OutputPins.Clear();
-            OutputWires.Clear();
+            // OutputWires.Clear();
                         
             var defaultSlot = new BlueprintPin(this, PinNames.DEFAULT_OUT, PinDirection.Out, typeof(ExecutePin), false)
                 .WithDisplayName(PinNames.DEFAULT_OUT);
@@ -127,18 +153,16 @@ namespace VaporEditor.Blueprints
         {
             var dto = BeginSerialize();
             
-            foreach (var port in InputPins.Where(port => !port.Value.IsExecutePin)
-                         .Where(port => port.Value.HasInlineValue))
+            foreach (var port in InputPins.Where(port => !port.Value.IsExecutePin))
             {
                 dto.InputPins.Add(new BlueprintPinDto
                 {
                     PinName = port.Key,
-                    PinType = port.Value.InlineValue.GetResolvedType(),
-                    Content = port.Value.InlineValue.Get(),
-                    WireGuids = new List<string>(port.Value.WireGuids),
+                    PinType = port.Value.HasInlineValue ? port.Value.InlineValue.GetResolvedType() : port.Value.Type,
+                    Content = port.Value.HasInlineValue ? port.Value.InlineValue.Get() : null,
                 });
             }
-            
+
             foreach (var port in OutputPins.Where(port => !port.Value.IsExecutePin))
             {
                 dto.OutputPins.Add(new BlueprintPinDto
@@ -146,7 +170,6 @@ namespace VaporEditor.Blueprints
                     PinName = port.Key,
                     PinType = port.Value.Type,
                     Content = null,
-                    WireGuids = new List<string>(port.Value.WireGuids),
                 });
             }
             return dto;
@@ -159,13 +182,36 @@ namespace VaporEditor.Blueprints
                 Guid = Guid,
                 NodeEnumType = NodeType,
                 Position = Position,
-                InputWires = InputWires,
-                OutputWires = OutputWires,
                 InputPins = new List<BlueprintPinDto>(),
                 OutputPins = new List<BlueprintPinDto>(),
                 Properties = new Dictionary<string, (Type, object)>(),
             };
             return dto;
+        }
+
+        protected void Edited(ChangeType changeType)
+        {
+            Changed?.Invoke(this, changeType);
+            Method.OnUpdateNode(this);
+        }
+
+        public void Delete()
+        {
+            Changed?.Invoke(this, ChangeType.Deleted);
+            Method.RemoveNode(this);
+        }
+
+        public void OnWireRemoved(BlueprintWire wire)
+        {
+            foreach (var pin in InputPins.Values)
+            {
+                pin.Wires.RemoveAll(m => m == wire);
+            }
+
+            foreach (var pin in OutputPins.Values)
+            {
+                pin.Wires.RemoveAll(m => m == wire);
+            }
         }
     }
 
@@ -189,7 +235,8 @@ namespace VaporEditor.Blueprints
                     continue;
                 }
                         
-                var slot = new BlueprintPin(this, argument.DisplayName, PinDirection.Out, argument.Type, false)
+                var slot = new BlueprintPin(this, argument.ArgumentName, PinDirection.Out, argument.Type, false)
+                    .WithDisplayName(argument.DisplayName)
                     .WithAllowMultipleWires();
                 OutputPins.Add(argument.DisplayName, slot);
             }
@@ -222,15 +269,15 @@ namespace VaporEditor.Blueprints
         
         public MethodNodeModel(BlueprintMethodGraph method, BlueprintDesignNodeDto dto) : base(method, dto)
         {
-            if(dto.Properties.TryGetValue(NodePropertyNames.K_METHOD_DECLARING_TYPE, out var val))
+            if(dto.Properties.TryGetValue(NodePropertyNames.METHOD_DECLARING_TYPE, out var val))
             {
                 MethodType = (Type)TypeUtility.CastToType(val.Item2, val.Item1);
             }
-            if(dto.Properties.TryGetValue(NodePropertyNames.K_METHOD_NAME, out val))
+            if(dto.Properties.TryGetValue(NodePropertyNames.METHOD_NAME, out val))
             {
                 MethodName = (string)TypeUtility.CastToType(val.Item2, val.Item1);
             }
-            if(dto.Properties.TryGetValue(NodePropertyNames.K_METHOD_PARAMETER_TYPES, out val))
+            if(dto.Properties.TryGetValue(NodePropertyNames.METHOD_PARAMETER_TYPES, out val))
             {
                 MethodParameters = (string[])TypeUtility.CastToType(val.Item2, val.Item1);
             }
@@ -272,7 +319,13 @@ namespace VaporEditor.Blueprints
                 if (retParam is { IsRetval: true })
                 {
                     // Out Ports
-                    var slot = new BlueprintPin(this, PinNames.RETURN, PinDirection.Out, retParam.ParameterType, false)
+                    var retType = retParam.ParameterType;
+                    if (retParam.ParameterType.IsGenericType)
+                    {
+                        retType = retType.GetGenericTypeDefinition();
+                    }
+                    
+                    var slot = new BlueprintPin(this, PinNames.RETURN, PinDirection.Out, retType, false)
                         .WithAllowMultipleWires();
                     OutputPins.Add(PinNames.RETURN, slot);
 
@@ -310,6 +363,11 @@ namespace VaporEditor.Blueprints
                         type = type.GetElementType();
                     }
 
+                    if (type.IsGenericType)
+                    {
+                        type = type.GetGenericTypeDefinition();
+                    }
+                    
                     var slot = new BlueprintPin(this, portName, PinDirection.Out, type, false)
                         .WithDisplayName(displayName)
                         .WithAllowMultipleWires();
@@ -342,7 +400,13 @@ namespace VaporEditor.Blueprints
                         }
                     }
 
-                    var slot = new BlueprintPin(this, portName, PinDirection.In, pi.ParameterType, false)
+                    var piType = pi.ParameterType;
+                    if (pi.ParameterType.IsGenericType)
+                    {
+                        piType = piType.GetGenericTypeDefinition();
+                    }
+                    
+                    var slot = new BlueprintPin(this, portName, PinDirection.In, piType, false)
                         .WithDisplayName(displayName)
                         .WithIsOptional();
                     if (isWildcard)
@@ -369,9 +433,9 @@ namespace VaporEditor.Blueprints
         public override BlueprintDesignNodeDto BeginSerialize()
         {
             var dto = base.BeginSerialize();
-            dto.Properties.TryAdd(NodePropertyNames.K_METHOD_DECLARING_TYPE, (typeof(Type), MethodType));
-            dto.Properties.TryAdd(NodePropertyNames.K_METHOD_NAME, (typeof(string), MethodName));
-            dto.Properties.TryAdd(NodePropertyNames.K_METHOD_PARAMETER_TYPES, (typeof(string[]), MethodParameters));
+            dto.Properties.TryAdd(NodePropertyNames.METHOD_DECLARING_TYPE, (typeof(Type), MethodType));
+            dto.Properties.TryAdd(NodePropertyNames.METHOD_NAME, (typeof(string), MethodName));
+            dto.Properties.TryAdd(NodePropertyNames.METHOD_PARAMETER_TYPES, (typeof(string[]), MethodParameters));
             return dto;
         }
         
@@ -399,42 +463,111 @@ namespace VaporEditor.Blueprints
     public class MemberNodeModel : NodeModelBase
     {
         // Serialized
-        public Type FieldDeclaringType { get; }
+        public Type MemberDeclaringType { get; }
         public string FieldName { get; }
-        public string VariableName { get; set; }
+        public string PropertyName { get; }
+        public string VariableId { get; set; }
         public VariableAccessType VariableAccess { get; }
         public VariableScopeType VariableScope { get; }
         
         // Non-Serialized
         public FieldInfo FieldInfo { get; }
-        
+        public PropertyInfo PropertyInfo { get; }
+        public BlueprintVariable Variable { get; }
+
         public MemberNodeModel(BlueprintMethodGraph method, BlueprintDesignNodeDto dto) : base(method, dto)
         {
-            if(dto.Properties.TryGetValue(NodePropertyNames.VARIABLE_NAME, out var val))
+            if (dto.Properties.TryGetValue(NodePropertyNames.VARIABLE_ID, out var val))
             {
-                VariableName = (string)TypeUtility.CastToType(val.Item2, val.Item1);
+                VariableId = (string)TypeUtility.CastToType(val.Item2, val.Item1);
             }
-            if(dto.Properties.TryGetValue(NodePropertyNames.VARIABLE_ACCESS, out val))
+
+            if (dto.Properties.TryGetValue(NodePropertyNames.VARIABLE_ACCESS, out val))
             {
                 VariableAccess = (VariableAccessType)TypeUtility.CastToType(val.Item2, val.Item1);
             }
-            if(dto.Properties.TryGetValue(NodePropertyNames.VARIABLE_SCOPE, out val))
+
+            if (dto.Properties.TryGetValue(NodePropertyNames.VARIABLE_SCOPE, out val))
             {
                 VariableScope = (VariableScopeType)TypeUtility.CastToType(val.Item2, val.Item1);
             }
-            
-            if(dto.Properties.TryGetValue(NodePropertyNames.FIELD_TYPE, out val))
+
+            if (dto.Properties.TryGetValue(NodePropertyNames.MEMBER_DECLARING_TYPE, out val))
             {
-                FieldDeclaringType = (Type)TypeUtility.CastToType(val.Item2, val.Item1);
+                MemberDeclaringType = (Type)TypeUtility.CastToType(val.Item2, val.Item1);
             }
-            if(dto.Properties.TryGetValue(NodePropertyNames.FIELD_NAME, out val))
+
+            if (dto.Properties.TryGetValue(NodePropertyNames.FIELD_NAME, out val))
             {
                 FieldName = (string)TypeUtility.CastToType(val.Item2, val.Item1);
             }
-
-            if (FieldDeclaringType != null && !FieldName.EmptyOrNull())
+            
+            if (dto.Properties.TryGetValue(NodePropertyNames.PROPERTY_NAME, out val))
             {
-                FieldInfo = RuntimeReflectionUtility.GetFieldInfo(FieldDeclaringType, FieldName);
+                PropertyName = (string)TypeUtility.CastToType(val.Item2, val.Item1);
+            }
+
+            if (MemberDeclaringType != null && !FieldName.EmptyOrNull())
+            {
+                FieldInfo = RuntimeReflectionUtility.GetFieldInfo(MemberDeclaringType, FieldName);
+            }
+            
+            if (MemberDeclaringType != null && !PropertyName.EmptyOrNull())
+            {
+                PropertyInfo = RuntimeReflectionUtility.GetPropertyInfo(MemberDeclaringType, PropertyName);
+            }
+
+            if (!VariableId.EmptyOrNull())
+            {
+                if (VariableScope == VariableScopeType.Method)
+                {
+                    if(method.Variables.TryGetValue(VariableId!, out var linked))
+                    {
+                        Variable = linked;
+                        Variable.Changed += OnLinkedVariableChanged;
+                    }
+                }
+                else
+                {
+                    if(method.ClassGraphModel.Variables.TryGetValue(VariableId!, out var linked))
+                    {
+                        Variable = linked;
+                        Variable.Changed += OnLinkedVariableChanged;
+                    }
+                }
+            }
+        }
+
+        private void OnLinkedVariableChanged(BlueprintVariable variable, BlueprintVariable.ChangeType changeType)
+        {
+            switch (changeType)
+            {
+                case BlueprintVariable.ChangeType.Name:
+                {
+                    string newName = VariableAccess == VariableAccessType.Get ? $"Get <b><i>{variable.DisplayName}</i></b>" : $"Set <b><i>{variable.DisplayName}</i></b>";
+                    SetName(newName);
+                    break;
+                }
+                case BlueprintVariable.ChangeType.Type:
+                {
+                    if (VariableAccess == VariableAccessType.Get)
+                    {
+                        OutputPins[PinNames.GET_OUT].Type = variable.Type;
+                    }
+                    else
+                    {
+                        InputPins[PinNames.GET_OUT].Type = variable.Type;
+                        OutputPins[PinNames.GET_OUT].Type = variable.Type;
+                    }
+
+                    Edited(ChangeType.ReTyped);
+                    break;
+                }
+                case BlueprintVariable.ChangeType.Delete:
+                {
+                    Delete();
+                    break;
+                }
             }
         }
 
@@ -487,19 +620,63 @@ namespace VaporEditor.Blueprints
                     OutputPins.Add(PinNames.GET_OUT, returnPin);
                 }
             }
+            else if (PropertyInfo != null)
+            {
+
+                if (VariableAccess == VariableAccessType.Get)
+                {
+                    Name = ObjectNames.NicifyVariableName(PropertyInfo.Name);
+
+                    // In Pin
+                    Debug.Log(PropertyInfo.DeclaringType);
+                    var ownerPin = new BlueprintPin(this, PinNames.OWNER, PinDirection.In, PropertyInfo.DeclaringType, true);
+                    InputPins.Add(PinNames.OWNER, ownerPin);
+
+                    // Out Pin
+                    var returnPin = new BlueprintPin(this, PinNames.GET_OUT, PinDirection.Out, PropertyInfo.PropertyType, false)
+                        .WithAllowMultipleWires();
+                    OutputPins.Add(PinNames.GET_OUT, returnPin);
+                }
+                else
+                {
+                    Name = ObjectNames.NicifyVariableName(PropertyInfo.Name);
+
+                    var inSlot = new BlueprintPin(this, PinNames.EXECUTE_IN, PinDirection.In, typeof(ExecutePin), false)
+                        .WithDisplayName(string.Empty)
+                        .WithAllowMultipleWires();
+                    InputPins.Add(PinNames.EXECUTE_IN, inSlot);
+                    var outSlot = new BlueprintPin(this, PinNames.EXECUTE_OUT, PinDirection.Out, typeof(ExecutePin), false)
+                        .WithDisplayName(string.Empty);
+                    OutputPins.Add(PinNames.EXECUTE_OUT, outSlot);
+
+                    // In Pin
+                    var ownerPin = new BlueprintPin(this, PinNames.OWNER, PinDirection.In, FieldInfo.DeclaringType, true);
+                    InputPins.Add(PinNames.OWNER, ownerPin);
+
+                    // Set Pin
+                    var setterPin = new BlueprintPin(this, PinNames.SET_IN, PinDirection.In, FieldInfo.FieldType, false);
+                    InputPins.Add(PinNames.SET_IN, setterPin);
+
+                    // Out Pin
+                    var returnPin = new BlueprintPin(this, PinNames.GET_OUT, PinDirection.Out, FieldInfo.FieldType, false)
+                        .WithAllowMultipleWires();
+                    OutputPins.Add(PinNames.GET_OUT, returnPin);
+                }
+
+            }
             else
             {
                 if (VariableAccess == VariableAccessType.Get)
                 {
-                    if (!Method.TryGetVariable(VariableScope, VariableName, out var tempData))
+                    if (!Method.TryGetVariable(VariableScope, VariableId, out var tempData))
                     {
-                        Debug.LogError($"{VariableName} not found in graph, was the variable deleted?");
-                        SetError($"{VariableName} not found in graph, was the variable deleted?");
-                        Name = $"Get <b><i>{VariableName}</i></b>";
+                        Debug.LogError($"{VariableId} not found in graph, was the variable deleted?");
+                        SetError($"{VariableId} not found in graph, was the variable deleted?");
+                        Name = $"Get <b><i>{VariableId}</i></b>";
                         return;
                     }
 
-                    Name = $"Get <b><i>{tempData.Name}</i></b>";
+                    Name = $"Get <b><i>{tempData.DisplayName}</i></b>";
 
                     var slot = new BlueprintPin(this, PinNames.GET_OUT, PinDirection.Out, tempData.Type, false)
                         .WithDisplayName(string.Empty)
@@ -508,15 +685,15 @@ namespace VaporEditor.Blueprints
                 }
                 else
                 {
-                    if (!Method.TryGetVariable(VariableScope, VariableName, out var tempData))
+                    if (!Method.TryGetVariable(VariableScope, VariableId, out var tempData))
                     {
-                        Debug.LogError($"{VariableName} not found in graph, was the variable deleted?");
-                        SetError($"{VariableName} not found in graph, was the variable deleted?");
-                        Name = $"Set <b><i>{VariableName}</i></b>";
+                        Debug.LogError($"{VariableId} not found in graph, was the variable deleted?");
+                        SetError($"{VariableId} not found in graph, was the variable deleted?");
+                        Name = $"Set <b><i>{VariableId}</i></b>";
                         return;
                     }
 
-                    Name = $"Set <b><i>{tempData.Name}</i></b>";
+                    Name = $"Set <b><i>{tempData.DisplayName}</i></b>";
 
                     var inSlot = new BlueprintPin(this, PinNames.EXECUTE_IN, PinDirection.In, typeof(ExecutePin), false)
                         .WithDisplayName(string.Empty)
@@ -542,14 +719,20 @@ namespace VaporEditor.Blueprints
         public override BlueprintDesignNodeDto BeginSerialize()
         {
             var dto = base.BeginSerialize();
-            dto.Properties.TryAdd(NodePropertyNames.VARIABLE_NAME, (typeof(string), VariableName));
+            dto.Properties.TryAdd(NodePropertyNames.VARIABLE_ID, (typeof(string), VariableId));
             dto.Properties.TryAdd(NodePropertyNames.VARIABLE_ACCESS, (typeof(VariableAccessType), VariableAccess));
             dto.Properties.TryAdd(NodePropertyNames.VARIABLE_SCOPE, (typeof(VariableScopeType), VariableScope));
 
             if (FieldInfo != null)
             {
-                dto.Properties.TryAdd(NodePropertyNames.FIELD_TYPE, (typeof(Type), FieldDeclaringType));
+                dto.Properties.TryAdd(NodePropertyNames.MEMBER_DECLARING_TYPE, (typeof(Type), MemberDeclaringType));
                 dto.Properties.TryAdd(NodePropertyNames.FIELD_NAME, (typeof(string), FieldName));
+            }
+
+            if (PropertyInfo != null)
+            {
+                dto.Properties.TryAdd(NodePropertyNames.MEMBER_DECLARING_TYPE, (typeof(Type), MemberDeclaringType));
+                dto.Properties.TryAdd(NodePropertyNames.PROPERTY_NAME, (typeof(string), PropertyName));
             }
             return dto;
         }
@@ -576,7 +759,8 @@ namespace VaporEditor.Blueprints
                     continue;
                 }
 
-                var slot = new BlueprintPin(this, argument.DisplayName, PinDirection.In, argument.Type, false);
+                var slot = new BlueprintPin(this, argument.ArgumentName, PinDirection.In, argument.Type, false)
+                    .WithDisplayName(argument.DisplayName);
                 InputPins.Add(argument.DisplayName, slot);
             }
         }
@@ -611,9 +795,15 @@ namespace VaporEditor.Blueprints
 
     public class SwitchNode : NodeModelBase
     {
+        public Type CurrentEnumType { get; set; }
+        public List<string> Cases { get; set; } = new();
+        
         public SwitchNode(BlueprintMethodGraph method, BlueprintDesignNodeDto dto) : base(method, dto)
         {
             Name = "Switch";
+            var tuple = dto.GetProperty<(Type, List<string>)>(NodePropertyNames.DATA_VALUE);
+            CurrentEnumType = tuple.Item1;
+            Cases = new List<string>(tuple.Item2);
         }
 
         public override void BuildPins()
@@ -623,46 +813,132 @@ namespace VaporEditor.Blueprints
                 .WithAllowMultipleWires();
             InputPins.Add(PinNames.EXECUTE_IN, inSlot);
 
-            var slot = new BlueprintPin(this, PinNames.VALUE_IN, PinDirection.In, typeof(Enum), false).WithWildcardTypes(new[] { typeof(Enum), typeof(int), typeof(string) });
+            var slot = new BlueprintPin(this, PinNames.VALUE_IN, PinDirection.In, typeof(EnumPin), true)
+                .WithWildcardTypes(new[] { typeof(EnumPin), typeof(int), typeof(string) });
             InputPins.Add(PinNames.VALUE_IN, slot);
-                    
+
             var defaultSlot = new BlueprintPin(this, PinNames.DEFAULT_OUT, PinDirection.Out, typeof(ExecutePin), false)
                 .WithDisplayName(PinNames.DEFAULT_OUT);
             OutputPins.Add(PinNames.DEFAULT_OUT, defaultSlot);
+
+            foreach (var @case in Cases)
+            {
+                var casePin = new BlueprintPin(this, @case, PinDirection.Out, typeof(ExecutePin), false)
+                    .WithDisplayName(ObjectNames.NicifyVariableName(@case));
+                OutputPins.Add(@case, casePin);
+            }
         }
 
-        public override void PostBuildData()
+        public void UpdateCases()
         {
-            var wire = InputWires.FirstOrDefault(w => w.RightSidePin.PinName == PinNames.VALUE_IN);
-            if (!wire.IsValid())
+            if (!InputPins[PinNames.VALUE_IN].TryGetWire(out var wire) || !wire.IsConnected())
             {
-                Validate();
-                return;
-            }
-            
-            var node = Method.Nodes.FirstOrDefault(n => n.Value.Guid == wire.LeftSidePin.NodeGuid).Value;
-            if (node == null)
-            {
-                Validate();
                 return;
             }
 
-            var pin = node.OutputPins[wire.LeftSidePin.PinName];
-            if (!pin.Type.IsEnum)
+            if (!Method.Nodes.TryGetValue(wire.LeftGuid, out var node))
             {
-                Validate();
                 return;
             }
-                        
-            var enumNames = pin.Type.GetEnumNames();
-            foreach (var name in enumNames)
+
+            var pin = node.OutputPins[wire.LeftName];
+            if (CurrentEnumType == pin.Type)
             {
-                var enumSlot = new BlueprintPin(this, name, PinDirection.Out, typeof(ExecutePin), false)
-                    .WithDisplayName(name);
-                OutputPins.Add(name, enumSlot);
+                return;
             }
             
-            Validate();
+            InputPins[PinNames.VALUE_IN].Type = pin.Type;
+            foreach (var c in Cases)
+            {
+                if (!OutputPins.Remove(c, out var pinRemoved))
+                {
+                    continue;
+                }
+
+                var copy = pinRemoved.Wires.ToArray();
+                foreach (var w in copy)
+                {
+                    w.Delete();
+                }
+            }
+
+            Cases.Clear();
+            Edited(ChangeType.ReTyped);
+            Edited(ChangeType.OutputPins);
+        }
+
+        public override BlueprintDesignNodeDto BeginSerialize()
+        {
+            var dto = base.BeginSerialize();
+            dto.Properties.TryAdd(NodePropertyNames.DATA_VALUE, (typeof((Type, List<string>)), (CurrentEnumType, Cases)));
+            return dto;
+        }
+
+        public void AddCase(string enumName)
+        {
+            if (OutputPins.ContainsKey(enumName))
+            {
+                return;
+            }
+
+            var enumSlot = new BlueprintPin(this, enumName, PinDirection.Out, typeof(ExecutePin), false)
+                .WithDisplayName(ObjectNames.NicifyVariableName(enumName));
+            OutputPins.Add(enumName, enumSlot);
+            Cases.Add(enumName);
+            Edited(ChangeType.OutputPins);
+        }
+
+        public void RemoveCase(string enumName)
+        {
+            if (!OutputPins.Remove(enumName, out var pinRemoved))
+            {
+                return;
+            }
+
+            var copy = pinRemoved.Wires.ToArray();
+            foreach (var w in copy)
+            {
+                w.Delete();
+            }
+            Cases.Remove(enumName);
+            Edited(ChangeType.OutputPins);
+        }
+
+        public void UpdateCase(string oldCase, string newCase)
+        {
+            if (!OutputPins.Remove(oldCase, out var pin))
+            {
+                return;
+            }
+
+            pin.RenamePort(newCase);
+            pin.WithDisplayName(ObjectNames.NicifyVariableName(newCase));
+            var idx = Cases.IndexOf(oldCase);
+            Cases[idx] = newCase;
+            OutputPins[newCase] = pin;
+            Edited(ChangeType.OutputPins);
+        }
+
+        public void ClearCases()
+        {
+            foreach (var c in Cases)
+            {
+                if (!OutputPins.Remove(c, out var pinRemoved))
+                {
+                    continue;
+                }
+
+                var copy = pinRemoved.Wires.ToArray();
+                foreach (var w in copy)
+                {
+                    w.Delete();
+                }
+            }
+
+            Cases.Clear();
+            InputPins[PinNames.VALUE_IN].Type = CurrentEnumType;
+            Edited(ChangeType.ReTyped);
+            Edited(ChangeType.OutputPins);
         }
     }
 
@@ -699,6 +975,13 @@ namespace VaporEditor.Blueprints
             SequenceCount = count;
             SequenceCountChanged?.Invoke(this);
         }
+        
+        public override BlueprintDesignNodeDto BeginSerialize()
+        {
+            var dto = base.BeginSerialize();
+            dto.Properties.TryAdd(NodePropertyNames.DATA_VALUE, (typeof(int), SequenceCount));
+            return dto;
+        }
     }
 
     public class ForNode : NodeModelBase
@@ -720,12 +1003,12 @@ namespace VaporEditor.Blueprints
             InputPins.Add(PinNames.ARRAY_IN, arraySlot);
 
             var startIndexPin = new BlueprintPin(this, PinNames.START_INDEX_IN, PinDirection.In, typeof(int), false)
-                .WithDisplayName("Start");
+                .WithDisplayName("First");
             InputPins.Add(PinNames.START_INDEX_IN, startIndexPin);
 
-            var endIndexPin = new BlueprintPin(this, PinNames.LENGTH_IN, PinDirection.In, typeof(int), false)
-                .WithDisplayName("Length");
-            InputPins.Add(PinNames.LENGTH_IN, endIndexPin);
+            var endIndexPin = new BlueprintPin(this, PinNames.LAST_INDEX_IN, PinDirection.In, typeof(int), false)
+                .WithDisplayName("Last");
+            InputPins.Add(PinNames.LAST_INDEX_IN, endIndexPin);
 
             var loopSlot = new BlueprintPin(this, PinNames.LOOP_OUT, PinDirection.Out, typeof(ExecutePin), false)
                 .WithDisplayName("Loop");
@@ -865,6 +1148,13 @@ namespace VaporEditor.Blueprints
                 .WithAllowMultipleWires();
             OutputPins.Add(PinNames.GET_OUT, outSlot);
         }
+
+        public override BlueprintDesignNodeDto BeginSerialize()
+        {
+            var dto = base.BeginSerialize();
+            dto.Properties.TryAdd(NodePropertyNames.DATA_VALUE, (typeof((Type, Type)), (TypeIn, TypeOut)));
+            return dto;
+        }
     }
 
     public class CastNode : NodeModelBase
@@ -900,10 +1190,18 @@ namespace VaporEditor.Blueprints
 
         public override void PostBuildData()
         {
-            var castName = OutputPins[PinNames.AS_OUT].Type != typeof(UndefinedPin) ? TypeSelectorField.GetReadableTypeName(OutputPins[PinNames.AS_OUT].Type) : "T";
+            var castName = OutputPins[PinNames.AS_OUT].Type != typeof(GenericPin) ? TypeSelectorField.GetReadableTypeName(OutputPins[PinNames.AS_OUT].Type) : "T";
             Name = $"Cast<{castName}>";
             
             Validate();
+        }
+        
+        public override BlueprintDesignNodeDto BeginSerialize()
+        {
+            var outType = OutputPins[PinNames.AS_OUT].Type;
+            var dto = base.BeginSerialize();
+            dto.Properties.TryAdd(NodePropertyNames.DATA_VALUE, (typeof(Type), outType));
+            return dto;
         }
     }
 
@@ -941,123 +1239,302 @@ namespace VaporEditor.Blueprints
                 OutputPins.Add(PinNames.EXECUTE_OUT, outSlot);
             }
         }
+
+        public override BlueprintDesignNodeDto BeginSerialize()
+        {
+            var dto = base.BeginSerialize();
+            dto.Properties.TryAdd(NodePropertyNames.DATA_VALUE, (typeof(Type), RedirectType));
+            return dto;
+        }
     }
 
-    public class InlineNode : NodeModelBase
+    public class ConstructorNode : NodeModelBase
     {
-        public Type InlineType { get; protected set; }
+        public Type TypeToConstruct { get; protected set; }
+        public ConstructorInfo ConstructorInfo { get; protected set; }
+        public string CurrentConstructorSignature { get; protected set; }
+        public bool IsArray { get; protected set; }
+        public Type FinalizedType { get; set; }
+        public Dictionary<Type, BlueprintPin> GenericArgumentPortMap { get; } = new();
         
-        public InlineNode(BlueprintMethodGraph method, BlueprintDesignNodeDto dto) : base(method, dto)
+        public ConstructorNode(BlueprintMethodGraph method, BlueprintDesignNodeDto dto) : base(method, dto)
         {
-            InlineType = dto.GetProperty<Type>(NodePropertyNames.DATA_VALUE);
-            Name = $"Make <b><i>{InlineType.Name}</i></b>";
+            var tuple = dto.GetProperty<ConstructorSearchData>(NodePropertyNames.DATA_VALUE);
+            TypeToConstruct = tuple.TypeToConstruct;
+            CurrentConstructorSignature = tuple.ConstructorSignature;
+            IsArray = tuple.IsArray;
+            ConstructorInfo = BlueprintEditorUtility.GetConstructor(TypeToConstruct, CurrentConstructorSignature);
         }
 
         public override void BuildPins()
         {
-            var inData = new BlueprintPin(this, PinNames.IGNORE, PinDirection.In, InlineType, false)
-                .WithDisplayName(string.Empty);
-            InputPins.Add(PinNames.IGNORE, inData);
+            CreateConstructorPins();
 
-            var os = new BlueprintPin(this, PinNames.RETURN, PinDirection.Out, InlineType, false)
-                .WithDisplayName(string.Empty)
-                .WithAllowMultipleWires();
-            OutputPins.Add(PinNames.RETURN, os);
+            if (TypeToConstruct.IsGenericType)
+            {
+                var os = new BlueprintPin(this, PinNames.RETURN, PinDirection.Out, typeof(UndefinedPin), false)
+                    .WithDisplayName("New")
+                    .WithAllowMultipleWires();
+                OutputPins.Add(PinNames.RETURN, os);
+            }
+            else
+            {
+                var os = new BlueprintPin(this, PinNames.RETURN, PinDirection.Out, TypeToConstruct, false)
+                    .WithDisplayName("New")
+                    .WithAllowMultipleWires();
+                OutputPins.Add(PinNames.RETURN, os);
+            }
+        }
+
+        public override void PostBuildData()
+        {
+            FinalizedType = IsArray ? OutputPins[PinNames.RETURN].Type.GetElementType() : OutputPins[PinNames.RETURN].Type;
+            string arrayBrackets = IsArray ? "[]" : string.Empty;
+            string nm = FinalizedType == typeof(UndefinedPin) ? BlueprintEditorUtility.FormatTypeName(TypeToConstruct) : BlueprintEditorUtility.FormatTypeName(FinalizedType);
+            Name = $"Construct <b><i>{nm}{arrayBrackets}</i></b>";
+            base.PostBuildData();
+        }
+
+        private void CreateConstructorPins()
+        {
+            InputPins.Clear();
+            if (ConstructorInfo != null)
+            {
+                foreach(var pi in ConstructorInfo.GetParameters())
+                {
+                    string portName = pi.Name;
+                    var displayName = ObjectNames.NicifyVariableName(pi.Name);
+
+                    var piType = pi.ParameterType;
+                    if (pi.ParameterType.IsGenericType)
+                    {
+                        piType = piType.GetGenericTypeDefinition();
+                    }
+
+                    var slot = new BlueprintPin(this, portName, PinDirection.In, piType, false)
+                        .WithDisplayName(displayName)
+                        .WithIsOptional();
+
+                    if (pi.HasDefaultValue && slot.HasInlineValue)
+                    {
+                        slot.SetDefaultValue(pi.DefaultValue);
+                    }
+
+                    InputPins.Add(portName, slot);
+                    if (slot.IsGenericPin)
+                    {
+                        slot.GenericPinType = pi.ParameterType;
+                        GenericArgumentPortMap.Add(pi.ParameterType, slot);
+                    }
+                }
+            }
+            else
+            {
+                string portName = TypeToConstruct.Name;
+                var displayName = ObjectNames.NicifyVariableName(BlueprintEditorUtility.FormatTypeName(TypeToConstruct));
+
+                var piType = TypeToConstruct;
+                if (TypeToConstruct.IsGenericType)
+                {
+                    piType = TypeToConstruct.GetGenericTypeDefinition();
+                }
+                
+                var slot = new BlueprintPin(this, PinNames.VALUE_IN, PinDirection.In, piType, false)
+                    .WithDisplayName(displayName)
+                    .WithIsOptional();
+
+                InputPins.Add(portName, slot);
+                if (slot.IsGenericPin)
+                {
+                    slot.GenericPinType = TypeToConstruct;
+                    GenericArgumentPortMap.Add(TypeToConstruct, slot);
+                }
+            }
+        }
+
+        public override BlueprintDesignNodeDto BeginSerialize()
+        {
+            var dto = base.BeginSerialize();
+            var sd = new ConstructorSearchData
+            {
+                TypeToConstruct = TypeToConstruct,
+                ConstructorSignature = CurrentConstructorSignature,
+                IsArray = IsArray,
+            };
+            dto.Properties.TryAdd(NodePropertyNames.DATA_VALUE, (typeof(ConstructorSearchData), sd));
+            return dto;
+        }
+
+        public void UpdateConstructor(string constructorSignature, ConstructorInfo constructor)
+        {
+            if (CurrentConstructorSignature == constructorSignature)
+            {
+                return;
+            }
+            
+            CurrentConstructorSignature = constructorSignature;
+            if (CurrentConstructorSignature == "Default(T)")
+            {
+                ConstructorInfo = null;
+            }
+            else
+            {
+                ConstructorInfo = constructor;
+            }
+            CreateConstructorPins();
+        }
+
+        public void SetIsArray(bool isArray)
+        {
+            IsArray = isArray;
+        }
+
+        public Type GetConstructedType()
+        {
+            if (IsArray)
+            {
+                return FinalizedType.MakeArrayType();
+            }
+            else
+            {
+                return FinalizedType;
+            }
         }
     }
-
-    // public class DataNodeModel<T> : NodeModelBase
-    // {
-    //     // Serialized
-    //     public T Data { get; set; }
-    //     
-    //     public DataNodeModel(BlueprintMethodGraph method, BlueprintDesignNodeDto dto) : base(method, dto)
-    //     {
-    //         if(dto.Properties.TryGetValue(NodePropertyNames.DATA_VALUE, out var val))
-    //         {
-    //             Data = (T)TypeUtility.CastToType(val.Item2, val.Item1);
-    //         }
-    //     }
-    //
-    //     public override BlueprintDesignNodeDto Serialize()
-    //     {
-    //         var dto = base.Serialize();
-    //         dto.Properties.TryAdd(NodePropertyNames.DATA_VALUE, (typeof(T), Data));
-    //         return dto;
-    //     }
-    // }
     
     public static class NodeFactory
     {
-        public static NodeModelBase Build(NodeType nodeType, Vector2 position, BlueprintMethodGraph graph, params ValueTuple<string, object>[] parameters)
+        public static NodeModelBase Build(NodeType nodeType, Vector2 position, BlueprintMethodGraph graph, object userData)
         {
+            NodeModelBase returnNode = null;
             switch (nodeType)
             {
                 case NodeType.Entry:
-                    return new EntryNode(graph, BlueprintDesignNodeDto.New(nodeType, position));
+                {
+                    returnNode = new EntryNode(graph, BlueprintDesignNodeDto.New(nodeType, position));
+                    break;
+                }
                 case NodeType.Method:
-                    var mi = FindParam<MethodInfo>(parameters, SearchModelParams.METHOD_INFO_PARAM);
-                    return new MethodNodeModel(graph, BlueprintDesignNodeDto.New(nodeType, position)
-                        .WithProperty(NodePropertyNames.K_METHOD_DECLARING_TYPE, mi.DeclaringType)
-                        .WithProperty(NodePropertyNames.K_METHOD_NAME, mi.Name)
-                        .WithProperty(NodePropertyNames.K_METHOD_PARAMETER_TYPES, mi.GetParameters().Select(p => p.ParameterType.AssemblyQualifiedName ?? p.ParameterType.Name).ToArray()));
+                {
+                    var mi = (MethodInfo)userData;
+                    returnNode = new MethodNodeModel(graph, BlueprintDesignNodeDto.New(nodeType, position)
+                        .WithProperty(NodePropertyNames.METHOD_DECLARING_TYPE, mi.DeclaringType)
+                        .WithProperty(NodePropertyNames.METHOD_NAME, mi.Name)
+                        .WithProperty(NodePropertyNames.METHOD_PARAMETER_TYPES, mi.GetParameters().Select(p => p.ParameterType.AssemblyQualifiedName ?? p.ParameterType.Name).ToArray()));
+                    break;
+                }
                 case NodeType.MemberAccess:
-                    var access = FindParam<VariableAccessType>(parameters, SearchModelParams.VARIABLE_ACCESS_PARAM);
-                    if (HasParam(parameters, SearchModelParams.FIELD_INFO_PARAM))
+                {
+                    var data = (MemberSearchData)userData;
+                    if (data.FieldInfo != null)
                     {
-                        var fi = FindParam<FieldInfo>(parameters, SearchModelParams.FIELD_INFO_PARAM);
-                        return new MemberNodeModel(graph, BlueprintDesignNodeDto.New(nodeType, position)
-                            .WithProperty(NodePropertyNames.FIELD_TYPE, fi.DeclaringType)
+                        var fi = data.FieldInfo;
+                        returnNode = new MemberNodeModel(graph, BlueprintDesignNodeDto.New(nodeType, position)
+                            .WithProperty(NodePropertyNames.MEMBER_DECLARING_TYPE, fi.DeclaringType)
                             .WithProperty(NodePropertyNames.FIELD_NAME, fi.Name)
-                            .WithProperty(NodePropertyNames.VARIABLE_ACCESS, access));
+                            .WithProperty(NodePropertyNames.VARIABLE_ACCESS, data.AccessType));
+                    }
+                    else if (data.PropertyInfo != null)
+                    {
+                        var pi = data.PropertyInfo;
+                        returnNode = new MemberNodeModel(graph, BlueprintDesignNodeDto.New(nodeType, position)
+                            .WithProperty(NodePropertyNames.MEMBER_DECLARING_TYPE, pi.DeclaringType)
+                            .WithProperty(NodePropertyNames.PROPERTY_NAME, pi.Name)
+                            .WithProperty(NodePropertyNames.VARIABLE_ACCESS, data.AccessType));
+                    }
+                    else
+                    {
+
+                        var varName = data.Id;
+                        var scope = data.ScopeType;
+                        returnNode = new MemberNodeModel(graph, BlueprintDesignNodeDto.New(nodeType, position)
+                            .WithProperty(NodePropertyNames.VARIABLE_ID, varName)
+                            .WithProperty(NodePropertyNames.VARIABLE_ACCESS, data.AccessType)
+                            .WithProperty(NodePropertyNames.VARIABLE_SCOPE, scope));
                     }
 
-                    var varName = FindParam<string>(parameters, SearchModelParams.VARIABLE_NAME_PARAM);
-                    var scope = FindParam<VariableScopeType>(parameters, SearchModelParams.VARIABLE_SCOPE_PARAM);
-                    return new MemberNodeModel(graph, BlueprintDesignNodeDto.New(nodeType, position)
-                        .WithProperty(NodePropertyNames.VARIABLE_NAME, varName)
-                        .WithProperty(NodePropertyNames.VARIABLE_ACCESS, access)
-                        .WithProperty(NodePropertyNames.VARIABLE_SCOPE, scope));
+                    break;
+                }
                 case NodeType.Return:
-                    return new ReturnNode(graph, BlueprintDesignNodeDto.New(nodeType, position));
+                {
+                    returnNode = new ReturnNode(graph, BlueprintDesignNodeDto.New(nodeType, position));
+                    break;
+                }
                 case NodeType.Branch:
-                    return new BranchNode(graph, BlueprintDesignNodeDto.New(nodeType, position));
+                {
+                    returnNode = new BranchNode(graph, BlueprintDesignNodeDto.New(nodeType, position));
+                    break;
+                }
                 case NodeType.Switch:
-                    return new SwitchNode(graph, BlueprintDesignNodeDto.New(nodeType, position));
+                {
+                    returnNode = new SwitchNode(graph, BlueprintDesignNodeDto.New(nodeType, position)
+                        .WithProperty(NodePropertyNames.DATA_VALUE, (typeof(EnumPin), new List<string>())));
+                    break;
+                }
                 case NodeType.Sequence:
-                    return new SequenceNode(graph, BlueprintDesignNodeDto.New(nodeType, position)
+                {
+                    returnNode = new SequenceNode(graph, BlueprintDesignNodeDto.New(nodeType, position)
                         .WithProperty(NodePropertyNames.DATA_VALUE, 1));
+                    break;
+                }
                 case NodeType.For:
-                    return new ForNode(graph, BlueprintDesignNodeDto.New(nodeType, position));
+                {
+                    returnNode = new ForNode(graph, BlueprintDesignNodeDto.New(nodeType, position));
+                    break;
+                }
                 case NodeType.ForEach:
-                    return new ForEachNode(graph, BlueprintDesignNodeDto.New(nodeType, position));
+                {
+                    returnNode = new ForEachNode(graph, BlueprintDesignNodeDto.New(nodeType, position));
+                    break;
+                }
                 case NodeType.While:
-                    return new WhileNode(graph, BlueprintDesignNodeDto.New(nodeType, position));
+                {
+                    returnNode = new WhileNode(graph, BlueprintDesignNodeDto.New(nodeType, position));
+                    break;
+                }
                 case NodeType.Break:
-                    return new BreakNode(graph, BlueprintDesignNodeDto.New(nodeType, position));
+                {
+                    returnNode = new BreakNode(graph, BlueprintDesignNodeDto.New(nodeType, position));
+                    break;
+                }
                 case NodeType.Continue:
-                    return new ContinueNode(graph, BlueprintDesignNodeDto.New(nodeType, position));
+                {
+                    returnNode = new ContinueNode(graph, BlueprintDesignNodeDto.New(nodeType, position));
+                    break;
+                }
                 case NodeType.Conversion:
-                    var tuple = FindParam<(Type, Type)>(parameters, SearchModelParams.DATA_TYPE_PARAM);
-                    return new ConversionNode(graph, BlueprintDesignNodeDto.New(nodeType, position)
+                {
+                    var tuple = (ValueTuple<Type, Type>)userData;
+                    Debug.Log(tuple);
+                    returnNode = new ConversionNode(graph, BlueprintDesignNodeDto.New(nodeType, position)
                         .WithProperty(NodePropertyNames.DATA_VALUE, tuple));
+                    break;
+                }
                 case NodeType.Cast:
-                    return new CastNode(graph, BlueprintDesignNodeDto.New(nodeType, position));
+                {
+                    returnNode = new CastNode(graph, BlueprintDesignNodeDto.New(nodeType, position));
+                    break;
+                }
                 case NodeType.Redirect:
                 {
-                    var t = FindParam<Type>(parameters, SearchModelParams.DATA_TYPE_PARAM);
-                    return new RedirectNode(graph, BlueprintDesignNodeDto.New(nodeType, position)
+                    var t = (Type)userData;
+                    returnNode = new RedirectNode(graph, BlueprintDesignNodeDto.New(nodeType, position)
                         .WithProperty(NodePropertyNames.DATA_VALUE, t));
+                    break;
                 }
-                case NodeType.Inline:
+                case NodeType.Constructor:
                 {
-                    var t = FindParam<Type>(parameters, SearchModelParams.DATA_TYPE_PARAM);
-                    return new InlineNode(graph, BlueprintDesignNodeDto.New(nodeType, position)
+                    var t = (ConstructorSearchData)userData;
+                    returnNode = new ConstructorNode(graph, BlueprintDesignNodeDto.New(nodeType, position)
                         .WithProperty(NodePropertyNames.DATA_VALUE, t));
+                    break;
                 }
                 default:
                     throw new ArgumentOutOfRangeException(nameof(nodeType), nodeType, null);
             }
+            
+            returnNode.BuildPins();
+            return returnNode;
         }
 
         public static NodeModelBase Build(BlueprintDesignNodeDto dataTransferObject, BlueprintMethodGraph graph)
@@ -1079,7 +1556,7 @@ namespace VaporEditor.Blueprints
                 NodeType.Conversion => new ConversionNode(graph, dataTransferObject),
                 NodeType.Cast => new CastNode(graph, dataTransferObject),
                 NodeType.Redirect => new RedirectNode(graph, dataTransferObject),
-                NodeType.Inline => new InlineNode(graph, dataTransferObject),
+                NodeType.Constructor => new ConstructorNode(graph, dataTransferObject),
                 _ => throw new ArgumentOutOfRangeException()
             };
             
@@ -1087,28 +1564,31 @@ namespace VaporEditor.Blueprints
             
             foreach (var pinDto in dataTransferObject.InputPins)
             {
-                var content = TypeUtility.CastToType(pinDto.Content, pinDto.PinType);
-                Debug.Log($"Pin: {pinDto.PinName} Content: {content}");
-                if (!node.InputPins.TryGetValue(pinDto.PinName, out var inPort) || !inPort.HasInlineValue)
+                if (!node.InputPins.TryGetValue(pinDto.PinName, out var inPort))
                 {
                     continue;
                 }
-
+                
                 inPort.Type = pinDto.PinType;
-                inPort.SetDefaultValue(content);
-                inPort.WireGuids.AddRange(pinDto.WireGuids);
+                if (inPort.HasInlineValue)
+                {
+                    var content = TypeUtility.CastToType(pinDto.Content, pinDto.PinType);
+                    Debug.Log($"Pin: {pinDto.PinName} Type: {pinDto.PinType} Content: {content}");
+                    inPort.SetDefaultValue(content);
+                }
+                else
+                {
+                    Debug.Log($"Pin: {pinDto.PinName} Type: {pinDto.PinType}");
+                }
             }
 
             foreach (var pinDto in dataTransferObject.OutputPins)
             {
-                // var content = TypeUtility.CastToType(pinDto.Content, pinDto.PinType);
-                // Debug.Log($"Pin: {pinDto.PinName} Content: {content}");
                 if (!node.OutputPins.TryGetValue(pinDto.PinName, out var outPort))
                 {
                     continue;
                 }
                 outPort.Type = pinDto.PinType;
-                outPort.WireGuids.AddRange(pinDto.WireGuids);
             }
 
             return node;

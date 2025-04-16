@@ -32,7 +32,7 @@
         // Array
         public const string ARRAY_IN = "Array";
         public const string START_INDEX_IN = "StartIndex";
-        public const string LENGTH_IN = "Length";
+        public const string LAST_INDEX_IN = "LastIndex";
         
         public const string LOOP_OUT = "Loop";
         public const string INDEX_OUT = "Index";

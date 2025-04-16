@@ -46,7 +46,7 @@ namespace Vapor.Blueprints
         
         // Utility
         Redirect,
-        Inline,
+        Constructor,
     }
     
     public enum PinDirection

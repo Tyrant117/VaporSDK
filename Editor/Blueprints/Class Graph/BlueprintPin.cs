@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Assertions;
+using VaporEditor;
 using VaporEditor.Blueprints;
 
 namespace Vapor.Blueprints
@@ -59,7 +60,6 @@ namespace Vapor.Blueprints
         public Type[] WildcardTypes { get; private set; }
         public bool IsGenericPin { get; private set; }
         public Type GenericPinType { get; set; }
-        public List<string> WireGuids { get; private set; } = new();
         
         // Type
         private Type _type;
@@ -77,6 +77,15 @@ namespace Vapor.Blueprints
                 UpdateInlineValue(_type);
             }
         }
+
+        private bool _isArray;
+        public bool IsArray
+        {
+            get => _isArray;
+            set => _isArray = value;
+        }
+        
+        public List<BlueprintWire> Wires { get; private set; } = new();
 
         // Inline Drawers
         public bool HasInlineValue { get; private set; }
@@ -100,7 +109,7 @@ namespace Vapor.Blueprints
                 _type = type;
             }
 
-            if (_type.IsGenericParameter || type == typeof(GenericPin))
+            if (_type.IsGenericTypeDefinition || _type.IsGenericParameter || type == typeof(GenericPin))
             {
                 IsGenericPin = true;
                 _type = typeof(GenericPin);
@@ -283,7 +292,11 @@ namespace Vapor.Blueprints
                 return "Execute";
             }
 
-            return Type.IsGenericType ? $"{Type.Name.Split('`')[0]}<{string.Join(",", Type.GetGenericArguments().Select(a => a.Name))}>" : Type.Name;
+            return IsGenericPin 
+                ? Type == typeof(GenericPin) 
+                    ? BlueprintEditorUtility.FormatTypeName(GenericPinType) 
+                    : BlueprintEditorUtility.FormatTypeName(Type) 
+                : BlueprintEditorUtility.FormatTypeName(Type);
         }
 
         public void RenamePort(string newName)
@@ -295,15 +308,20 @@ namespace Vapor.Blueprints
             }
         }
 
-        public IEnumerable<BlueprintWire> GetWires()
+        public bool TryGetWire(out BlueprintWire wire)
         {
-            foreach (var wireGuid in WireGuids)
+            if (Wires.IsValidIndex(0))
             {
-                if (Node.Method.Wires.TryGetValue(wireGuid, out var wire))
-                {
-                    yield return wire;
-                }
+                wire = Wires[0];
+                return true;
             }
+            wire = null;
+            return false;
+        }
+
+        public void Connect(BlueprintWire blueprintWire)
+        {
+            Wires.Add(blueprintWire);
         }
     }
 }

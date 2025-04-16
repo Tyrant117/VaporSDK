@@ -4,87 +4,44 @@ using System.Linq;
 using System.Reflection;
 using Newtonsoft.Json;
 using UnityEditor;
+using Vapor;
+using Vapor.Blueprints;
 using Vapor.NewtonsoftConverters;
 using VaporEditor.Inspector;
 
-namespace Vapor.Blueprints
+namespace VaporEditor.Blueprints
 {
-    [Serializable]
-    public struct BlueprintClassGraphDto
-    {
-        public bool IsObsolete;
-        public string Namespace;
-        public Type ParentType;
-        public BlueprintGraphSo ParentObject;
-        public List<Type> ImplementedInterfaceTypes;
-        public List<BlueprintVariableDto> Variables;
-        public List<BlueprintMethodGraphDto> Methods;
-
-        public static BlueprintClassGraphDto New(Type parentType)
-        {
-            return new BlueprintClassGraphDto()
-            {
-                IsObsolete = false,
-                Namespace = parentType.Namespace,
-                ParentType = parentType,
-                ParentObject = null,
-                ImplementedInterfaceTypes = null,
-                Variables = new List<BlueprintVariableDto>(),
-                Methods = new List<BlueprintMethodGraphDto>(),
-            };
-        }
-        
-        public static BlueprintClassGraphDto New(BlueprintGraphSo parentObject)
-        {
-            var parentGraph = BlueprintClassGraphModel.Load(parentObject);
-            return new BlueprintClassGraphDto()
-            {
-                IsObsolete = false,
-                Namespace = parentGraph.Namespace,
-                ParentType = null,
-                ParentObject = parentObject,
-                ImplementedInterfaceTypes = null,
-                Variables = new List<BlueprintVariableDto>(),
-                Methods = new List<BlueprintMethodGraphDto>(),
-            };
-        }
-
-        public static BlueprintClassGraphDto Load(string graphJson)
-        {
-            return JsonConvert.DeserializeObject<BlueprintClassGraphDto>(graphJson, NewtonsoftUtility.SerializerSettings);
-        }
-    }
-
     public enum ChangeType
     {
         Added,
         Removed,
-        Updated,
+        Modified,
     }
     
-    public class BlueprintClassGraphModel
+    public class BlueprintClassGraphModel : IBlueprintGraphModel
     {
         public BlueprintGraphSo Graph { get; }
         public BlueprintMethodGraph Current { get; set; }
         
 
-        public bool IsParentBlueprint { get; private set; }
+        public bool ParentIsBlueprint { get; private set; }
         public Type ParentType { get; }
         
         public BlueprintGraphSo ParentObject { get; private set; }
         
         public bool IsObsolete { get; set; }
         public string Namespace { get; set; }
+        public List<string> Usings { get; } = new();
         
         public List<Type> ImplementedInterfaceTypes { get; }
-        public List<BlueprintVariable> Variables { get; }
+        public Dictionary<string, BlueprintVariable> Variables { get; }
         public List<BlueprintMethodGraph> Methods { get; }
 
         #region Events
         public event Action<BlueprintClassGraphModel> ParentChanged;
         public event Action<BlueprintClassGraphModel, Type, ChangeType> InterfaceTypeChanged;
-        public event Action<BlueprintClassGraphModel, BlueprintVariable, ChangeType> VariableChanged;
-        public event Action<BlueprintClassGraphModel, BlueprintMethodGraph, ChangeType> MethodChanged;
+        public event Action<BlueprintClassGraphModel, BlueprintVariable, ChangeType, bool> VariableChanged;
+        public event Action<BlueprintClassGraphModel, BlueprintMethodGraph, ChangeType, bool> MethodChanged;
         public event Action<BlueprintClassGraphModel, BlueprintMethodGraph> MethodOpened;
         public event Action<BlueprintClassGraphModel, BlueprintMethodGraph> MethodClosed;
         #endregion
@@ -93,13 +50,34 @@ namespace Vapor.Blueprints
         {
             if (graph.ParentObject)
             {
-                var dto = BlueprintClassGraphDto.New(graph.ParentObject);
+                var parentGraph = Load(graph.ParentObject);
+                var dto = new BlueprintClassGraphDto()
+                {
+                    IsObsolete = false,
+                    Namespace = parentGraph.Namespace,
+                    Usings = new List<string>(),
+                    ParentType = null,
+                    ParentObject = graph.ParentObject,
+                    ImplementedInterfaceTypes = null,
+                    Variables = new List<BlueprintVariableDto>(),
+                    Methods = new List<BlueprintMethodGraphDto>(),
+                };
                 return new BlueprintClassGraphModel(graph, dto);
             }
             else
             {
                 var parentType = Type.GetType(graph.ParentType);
-                var dto = BlueprintClassGraphDto.New(parentType);
+                var dto =  new BlueprintClassGraphDto
+                {
+                    IsObsolete = false,
+                    Namespace = parentType?.Namespace,
+                    Usings = new List<string>(),
+                    ParentType = parentType,
+                    ParentObject = null,
+                    ImplementedInterfaceTypes = null,
+                    Variables = new List<BlueprintVariableDto>(),
+                    Methods = new List<BlueprintMethodGraphDto>(),
+                };
                 return new BlueprintClassGraphModel(graph, dto);
             }
         }
@@ -115,13 +93,14 @@ namespace Vapor.Blueprints
         {
             Graph = graph;
             ParentObject = dto.ParentObject;
-            IsParentBlueprint = dto.ParentObject;
-            if (!IsParentBlueprint)
+            ParentIsBlueprint = dto.ParentObject;
+            if (!ParentIsBlueprint)
             {
                 ParentType = dto.ParentType;
             }
             IsObsolete = dto.IsObsolete;
             Namespace = dto.Namespace;
+            Usings.AddRange(dto.Usings ?? new List<string>());
             
             if(dto.ImplementedInterfaceTypes != null)
             {
@@ -131,13 +110,25 @@ namespace Vapor.Blueprints
             
             if(dto.Variables != null)
             {
-                Variables = new List<BlueprintVariable>(dto.Variables.Count);
+                Variables = new Dictionary<string, BlueprintVariable>(dto.Variables.Count);
                 foreach (var v in dto.Variables)
                 {
-                    Variables.Add(new BlueprintVariable(v).WithClassGraph(this));
+                    Variables.Add(v.Id, new BlueprintVariable(v).WithClassGraph(this));
                 }
             }
-            Variables ??= new List<BlueprintVariable>();
+            else
+            {
+                Variables = new Dictionary<string, BlueprintVariable>();
+                if (!ParentIsBlueprint)
+                {
+                    var abstractProperties = ReflectionUtility.GetAllPropertiesThatMatch(ParentType, pi => pi.DeclaringType.IsInterface || pi.GetMethod?.IsAbstract == true || pi.SetMethod?.IsAbstract == true, false, true);
+                    foreach (var pi in abstractProperties)
+                    {
+                        var bpv = new BlueprintVariable(pi.Name, pi.PropertyType, VariableScopeType.Class, true);
+                        Variables.Add(bpv.Id, bpv);
+                    }
+                }
+            }
 
             if (dto.Methods != null)
             {
@@ -150,7 +141,7 @@ namespace Vapor.Blueprints
             else
             {
                 Methods = new List<BlueprintMethodGraph>();
-                if (IsParentBlueprint)
+                if (ParentIsBlueprint)
                 {
                     var parentGraph = Load(ParentObject);
                     foreach (var parentMethod in parentGraph.Methods)
@@ -169,7 +160,8 @@ namespace Vapor.Blueprints
                             MethodParameters = null,
                             Arguments = new List<BlueprintArgumentDto>(parentMethod.Arguments.Select(arg => arg.Serialize())),
                             Variables = new List<BlueprintVariableDto>(),
-                            Nodes = new List<BlueprintDesignNodeDto>()
+                            Nodes = new List<BlueprintDesignNodeDto>(),
+                            Wires = new List<BlueprintWireDto>(),
                         };
                         var methodGraph = new BlueprintMethodGraph(this, methodDto);
                         methodGraph.Validate();
@@ -195,13 +187,14 @@ namespace Vapor.Blueprints
             {
                 IsObsolete = IsObsolete,
                 Namespace = Namespace,
+                Usings = new List<string>(Usings),
                 ParentType = ParentType,
                 ParentObject = ParentObject,
                 ImplementedInterfaceTypes = new List<Type>(ImplementedInterfaceTypes),
                 Variables = new List<BlueprintVariableDto>(Variables.Count),
                 Methods = new List<BlueprintMethodGraphDto>(Methods.Count),
             };
-            foreach (var v in Variables)
+            foreach (var v in Variables.Values)
             {
                 graphDto.Variables.Add(v.Serialize());
             }
@@ -235,7 +228,7 @@ namespace Vapor.Blueprints
         public void SetParent(BlueprintGraphSo newParent)
         {
             ParentObject = newParent;
-            IsParentBlueprint = ParentObject;
+            ParentIsBlueprint = ParentObject;
             ParentChanged?.Invoke(this);
         }
 
@@ -323,14 +316,14 @@ namespace Vapor.Blueprints
             RemoveInterfaceMethods(oldInterface);
             ImplementedInterfaceTypes[idx] = newInterfaceType;
             AddInterfaceMethods(newInterfaceType);
-            InterfaceTypeChanged?.Invoke(this, newInterfaceType, ChangeType.Updated);
+            InterfaceTypeChanged?.Invoke(this, newInterfaceType, ChangeType.Modified);
         }
         #endregion
 
         #region - Variables -
-        public BlueprintVariable AddVariable(Type type)
+        public BlueprintVariable AddVariable(Type type, bool ignoreUndo = false)
         {
-            var selection = Variables.FindAll(v => v.Name.StartsWith("Var_")).Select(v => v.Name.Split('_')[1]);
+            var selection = Variables.Values.ToList().FindAll(v => v.DisplayName.StartsWith("Var_")).Select(v => v.DisplayName.Split('_')[1]);
             int idx = 0;
             foreach (var s in selection)
             {
@@ -346,27 +339,34 @@ namespace Vapor.Blueprints
             }
 
             var addedVariable = new BlueprintVariable($"Var_{idx}", type, VariableScopeType.Class).WithClassGraph(this);
-            Variables.Add(addedVariable);
-            VariableChanged?.Invoke(this, addedVariable, ChangeType.Added);
+            Variables.Add(addedVariable.Id, addedVariable);
+            VariableChanged?.Invoke(this, addedVariable, ChangeType.Added, ignoreUndo);
             return addedVariable;
         }
-
-        public void RemoveVariable(BlueprintVariable variable)
+        
+        public BlueprintVariable AddVariable(BlueprintVariable variable, bool ignoreUndo)
         {
-            if (Variables.Remove(variable))
+            Variables.Add(variable.Id, variable);
+            VariableChanged?.Invoke(this, variable, ChangeType.Added, ignoreUndo);
+            return variable;
+        }
+
+        public void RemoveVariable(BlueprintVariable variable, bool ignoreUndo = false)
+        {
+            if (Variables.Remove(variable.Id))
             {
-                VariableChanged?.Invoke(this, variable, ChangeType.Removed);
+                VariableChanged?.Invoke(this, variable, ChangeType.Removed, ignoreUndo);
             }
         }
         
-        public void OnVariableUpdated(BlueprintVariable variable)
+        public void OnVariableUpdated(BlueprintVariable variable, bool ignoreUndo = false)
         {
-            VariableChanged?.Invoke(this, variable, ChangeType.Updated);
+            VariableChanged?.Invoke(this, variable, ChangeType.Modified, ignoreUndo);
         }
         #endregion
 
         #region - Methods -
-        public BlueprintMethodGraph AddMethod(MethodInfo methodInfo)
+        public BlueprintMethodGraph AddMethod(MethodInfo methodInfo, bool ignoreUndo = false)
         {
             if (methodInfo == null)
             {
@@ -393,12 +393,13 @@ namespace Vapor.Blueprints
                     MethodParameters = null,
                     Arguments = new List<BlueprintArgumentDto>(),
                     Variables = new List<BlueprintVariableDto>(),
-                    Nodes = new List<BlueprintDesignNodeDto>()
+                    Nodes = new List<BlueprintDesignNodeDto>(),
+                    Wires = new List<BlueprintWireDto>(),
                 };
                 var graph = new BlueprintMethodGraph(this, dto);
                 graph.Validate();
                 Methods.Add(graph);
-                MethodChanged?.Invoke(this, graph, ChangeType.Added);
+                MethodChanged?.Invoke(this, graph, ChangeType.Added, ignoreUndo);
                 return graph;
             }
             else
@@ -406,9 +407,45 @@ namespace Vapor.Blueprints
                 var graph = CreateMethodGraphFromMethodInfo(methodInfo);
                 graph.Validate();
                 Methods.Add(graph);
-                MethodChanged?.Invoke(this, graph, ChangeType.Added);
+                MethodChanged?.Invoke(this, graph, ChangeType.Added, ignoreUndo);
                 return graph;
             }
+        }
+        
+        public BlueprintMethodGraph AddMethod(BlueprintMethodGraph methodGraph, bool ignoreUndo)
+        {
+            Methods.Add(methodGraph);
+            MethodChanged?.Invoke(this, methodGraph, ChangeType.Added, ignoreUndo);
+            return methodGraph;
+        }
+
+        public BlueprintMethodGraph AddUnityMethod(string methodName, (Type, string)[] messageParameters, bool ignoreUndo = false)
+        {
+            var dto = new BlueprintMethodGraphDto
+            {
+                IsUnityOverride = true,
+                MethodDeclaringType = ParentType,
+                MethodName = methodName,
+                MethodParameters = messageParameters?.Select(mp => $"{mp.Item1.AssemblyQualifiedName}|{mp.Item2}").ToArray(),
+                Arguments = messageParameters?.Select((mp, i) => new BlueprintArgumentDto
+                {
+                    Type = mp.Item1,
+                    ParameterName = mp.Item2,
+                    DisplayName = ObjectNames.NicifyVariableName(mp.Item2),
+                    IsOut = false,
+                    IsRef = false,
+                    IsReturn = false,
+                    ParameterIndex = i
+                }).ToList() ?? new List<BlueprintArgumentDto>(),
+                Variables = new List<BlueprintVariableDto>(),
+                Nodes = new List<BlueprintDesignNodeDto>(),
+                Wires = new List<BlueprintWireDto>(),
+            };
+            var graph = new BlueprintMethodGraph(this, dto);
+            graph.Validate();
+            Methods.Add(graph);
+            MethodChanged?.Invoke(this, graph, ChangeType.Added, ignoreUndo);
+            return graph;
         }
 
         private BlueprintMethodGraph CreateMethodGraphFromMethodInfo(MethodInfo methodInfo)
@@ -423,23 +460,24 @@ namespace Vapor.Blueprints
                 MethodParameters = methodInfo.GetParameters().Select(p => p.ParameterType.AssemblyQualifiedName).ToArray(),
                 Arguments = arguments,
                 Variables = new List<BlueprintVariableDto>(),
-                Nodes = new List<BlueprintDesignNodeDto>()
+                Nodes = new List<BlueprintDesignNodeDto>(),
+                Wires = new List<BlueprintWireDto>(),
             };
             var graph = new BlueprintMethodGraph(this, dto);
             return graph;
         }
 
-        public void RemoveMethod(BlueprintMethodGraph methodGraph)
+        public void RemoveMethod(BlueprintMethodGraph methodGraph, bool ignoreUndo = false)
         {
             if (Methods.Remove(methodGraph))
             {
-                MethodChanged?.Invoke(this, methodGraph, ChangeType.Removed);
+                MethodChanged?.Invoke(this, methodGraph, ChangeType.Removed, ignoreUndo);
             }
         }
 
-        public void OnMethodUpdated(BlueprintMethodGraph methodGraph)
+        public void OnMethodUpdated(BlueprintMethodGraph methodGraph, bool ignoreUndo = false)
         {
-            MethodChanged?.Invoke(this, methodGraph, ChangeType.Updated);
+            MethodChanged?.Invoke(this, methodGraph, ChangeType.Modified, ignoreUndo);
         }
 
         public void OpenMethodForEdit(BlueprintMethodGraph methodGraph)
@@ -483,9 +521,10 @@ namespace Vapor.Blueprints
                 {
                     paramType = paramType.GetElementType();
                 }
-                arguments.Add(new BlueprintArgumentDto()
+                arguments.Add(new BlueprintArgumentDto
                 {
                     Type = paramType,
+                    ParameterName = paramInfo.Name,
                     DisplayName = ObjectNames.NicifyVariableName(paramInfo.Name),
                     ParameterIndex = idx,
                     IsReturn = paramInfo.IsRetval,
@@ -553,7 +592,7 @@ namespace Vapor.Blueprints
         {
             var allTypes = new List<Type>(300) { ParentType };
 
-            foreach (var v in Variables)
+            foreach (var v in Variables.Values)
             {
                 allTypes.Add(v.Type);
             }
@@ -564,7 +603,7 @@ namespace Vapor.Blueprints
                 {
                     allTypes.Add(a.Type);
                 }
-                foreach (var a in mg.Variables)
+                foreach (var a in mg.Variables.Values)
                 {
                     allTypes.Add(a.Type);
                 }

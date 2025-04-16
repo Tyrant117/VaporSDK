@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using UnityEditor;
 using UnityEditor.Experimental.GraphView;
@@ -61,6 +62,7 @@ namespace VaporEditor.Blueprints
 
         public event Action<BlueprintPortView> Connected;
         public event Action<BlueprintPortView> Disconnected;
+        public event Action<BlueprintPortView> PinTypeChanged;
         
         public static VisualElement Create(IBlueprintNodeView nodeView, BlueprintPin pin, out BlueprintPortView port)
         {
@@ -128,20 +130,39 @@ namespace VaporEditor.Blueprints
             }
             else if (_pin.IsGenericPin)
             {
-                if (_pin.GenericPinType != null && TypeSelectorField.HasGenericTypeConstraints(_pin.GenericPinType))
+                if (_pin.GenericPinType == null)
                 {
-                    var validTypes = TypeSelectorField.FindValidTypesForGenericParameters(_pin.GenericPinType);
-                    var ve = new TypeSelectorField(string.Empty, null, validTypes.ToArray());
+                    var ve = new TypeSelectorField(string.Empty, null);
                     ve.Q<Label>()?.Hide();
                     ve.SetTypeLabelVisibility(false);
                     DrawnField.Add(ve);
                 }
                 else
                 {
-                    var ve = new TypeSelectorField(string.Empty, null);
-                    ve.Q<Label>()?.Hide();
-                    ve.SetTypeLabelVisibility(false);
-                    DrawnField.Add(ve);
+                    if (_pin.GenericPinType.IsGenericType)
+                    {
+                        var ve = new TypeSelectorField(string.Empty, null, typeLabelVisible: false)
+                            .WithGenericDefinition(_pin.GenericPinType);
+                        DrawnField.Add(ve);
+                    }
+                    else if (_pin.GenericPinType.IsGenericParameter)
+                    {
+                        if (TypeSelectorField.HasGenericTypeConstraints(_pin.GenericPinType))
+                        {
+                            var validTypes = TypeSelectorField.FindValidTypesForGenericParameters(_pin.GenericPinType);
+                            var ve = new TypeSelectorField(string.Empty, null).WithValidTypes(validTypes.ToArray());
+                            ve.Q<Label>()?.Hide();
+                            ve.SetTypeLabelVisibility(false);
+                            DrawnField.Add(ve);
+                        }
+                        else
+                        {
+                            var ve = new TypeSelectorField(string.Empty, null);
+                            ve.Q<Label>()?.Hide();
+                            ve.SetTypeLabelVisibility(false);
+                            DrawnField.Add(ve);
+                        }
+                    }
                 }
 
                 DrawnField.Show();
@@ -238,7 +259,11 @@ namespace VaporEditor.Blueprints
         #region - Context Menu -
         private void CTX_DisconnectAll(DropdownMenuAction obj)
         {
-            NodeView.View.DeleteElements(connections);
+            var copy = connections.OfType<BlueprintWireView>().ToList();
+            foreach (var c in copy)
+            {
+                c.Delete();
+            }
         }
         
         private DropdownMenuAction.Status CTX_DisconnectAllStatus(DropdownMenuAction arg)
@@ -253,24 +278,40 @@ namespace VaporEditor.Blueprints
             if (direction == Direction.Output)
             {
                 var position = parent.LocalToWorld(layout.position) + new Vector2(106, 16);
-                NodeView.View.OnSpawnNodeDirect(NodeType.MemberAccess, position, (SearchModelParams.VARIABLE_NAME_PARAM, variable.Name), (SearchModelParams.VARIABLE_SCOPE_PARAM, VariableScopeType.Method), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Set));
-
-                var last = NodeView.View.EditorNodes[^1];
-                if (last.InPorts.TryGetValue(PinNames.SET_IN, out var inPort))
+                var ud= new MemberSearchData
                 {
-                    NodeView.View.CreateEdge(this, inPort, true);
-                }
+                    Id = variable.Id,
+                    ScopeType = VariableScopeType.Method,
+                    AccessType = VariableAccessType.Set
+                };
+                var n = NodeView.View.Method.AddNode(NodeType.MemberAccess, position, ud);
+                NodeView.View.Method.AddWire(Pin, n.InputPins[PinNames.SET_IN]);
+                
+                // NodeView.View.OnSpawnNodeDirect(NodeType.MemberAccess, position, (SearchModelParams.VARIABLE_NAME_PARAM, variable.Name), (SearchModelParams.VARIABLE_SCOPE_PARAM, VariableScopeType.Method), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Set));
+                // var last = NodeView.View.EditorNodes[^1];
+                // if (last.InPorts.TryGetValue(PinNames.SET_IN, out var inPort))
+                // {
+                    // NodeView.View.CreateEdge(this, inPort, true);
+                // }
             }
             else
             {
                 var position = parent.LocalToWorld(layout.position) + new Vector2(-176, 16);
-                NodeView.View.OnSpawnNodeDirect(NodeType.MemberAccess, position, (SearchModelParams.VARIABLE_NAME_PARAM, variable.Name), (SearchModelParams.VARIABLE_SCOPE_PARAM, VariableScopeType.Method), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Get));
-
-                var last = NodeView.View.EditorNodes[^1];
-                if (last.OutPorts.TryGetValue(PinNames.GET_OUT, out var outPort))
+                var ud = new MemberSearchData
                 {
-                    NodeView.View.CreateEdge(outPort, this, true);
-                }
+                    Id = variable.Id,
+                    ScopeType = VariableScopeType.Method,
+                    AccessType = VariableAccessType.Get
+                };
+                var n = NodeView.View.Method.AddNode(NodeType.MemberAccess, position, ud);
+                NodeView.View.Method.AddWire(n.OutputPins[PinNames.GET_OUT], Pin);
+                
+                // NodeView.View.OnSpawnNodeDirect(NodeType.MemberAccess, position, (SearchModelParams.VARIABLE_NAME_PARAM, variable.Name), (SearchModelParams.VARIABLE_SCOPE_PARAM, VariableScopeType.Method), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Get));
+                // var last = NodeView.View.EditorNodes[^1];
+                // if (last.OutPorts.TryGetValue(PinNames.GET_OUT, out var outPort))
+                // {
+                    // NodeView.View.CreateEdge(outPort, this, true);
+                // }
             }
 
         }
@@ -299,6 +340,7 @@ namespace VaporEditor.Blueprints
             tooltip = Pin.CreateTooltipForPin();
             portName = Pin.DisplayName;
             RedrawField();
+            PinTypeChanged?.Invoke(this);
         }
 
         #endregion
@@ -314,14 +356,14 @@ namespace VaporEditor.Blueprints
 
         void IEdgeConnectorListener.OnDrop(GraphView graphView, Edge edge)
         {
-            var edgesToDelete = new List<Edge>();
+            var edgesToDelete = new List<BlueprintWireView>();
             if (edge.input.capacity == Capacity.Single)
             {
                 foreach (Edge connection in edge.input.connections)
                 {
                     if (connection != edge)
                     {
-                        edgesToDelete.Add(connection);
+                        edgesToDelete.Add((BlueprintWireView)connection);
                     }
                 }
             }
@@ -332,17 +374,21 @@ namespace VaporEditor.Blueprints
                 {
                     if (connection2 != edge)
                     {
-                        edgesToDelete.Add(connection2);
+                        edgesToDelete.Add((BlueprintWireView)connection2);
                     }
                 }
             }
 
             if (edgesToDelete.Count > 0)
             {
-                graphView.DeleteElements(edgesToDelete);
+                foreach (BlueprintWireView connection in edgesToDelete)
+                {
+                    connection.Delete();
+                }
+                // graphView.DeleteElements(edgesToDelete);
             }
 
-            if (NodeView.View.IsCompatiblePort(edge.output, edge.input))
+            if (BlueprintView.IsCompatiblePort(edge.output, edge.input))
             {
                 if (BlueprintView.CanConvert(edge.output.portType, edge.input.portType))
                 {
@@ -351,7 +397,10 @@ namespace VaporEditor.Blueprints
                 }
                 else
                 {
-                    NodeView.View.CreateEdge((BlueprintPortView)edge.output, (BlueprintPortView)edge.input, true);
+                    var left = ((BlueprintPortView)edge.output).GetPin();
+                    var right = ((BlueprintPortView)edge.input).GetPin();
+                    NodeView.View.Method.AddWire(left, right);
+                    // NodeView.View.CreateEdge((BlueprintPortView)edge.output, (BlueprintPortView)edge.input, true);
                 }
             }
         }
@@ -557,6 +606,11 @@ namespace VaporEditor.Blueprints
         private static bool IsDictionary(Type type)
         {
             return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Dictionary<,>);
+        }
+
+        public void Reconnect()
+        {
+            NodeView.View.Reconnect(this);
         }
     }
 }

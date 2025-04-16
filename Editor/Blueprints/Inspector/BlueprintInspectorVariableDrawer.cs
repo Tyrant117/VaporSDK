@@ -13,128 +13,6 @@ using VaporEditor.Inspector;
 
 namespace VaporEditor
 {
-    // [CustomPropertyDrawer(typeof(BlueprintInspectorVariable))]
-    // public class BlueprintInspectorVariableDrawer : VaporPropertyDrawer
-    // {
-    //     public override VisualElement CreatePropertyGUI(SerializedProperty property)
-    //     {
-    //         var ve = new VisualElement()
-    //         {
-    //             style =
-    //             {
-    //                 flexGrow = 1f,
-    //             }
-    //         };
-    //         ve.Add(new TextField("This Worked Too!"));
-    //         var prop = SerializedDrawerUtility.DrawFieldFromObject(property.objectReferenceValue, property.objectReferenceValue.GetType());
-    //         ve.Add(prop);
-    //         return ve;
-    //     }
-    //
-    //     public override VisualElement CreateVaporPropertyGUI(TreePropertyField field)
-    //     {
-    //         var ve = new VisualElement()
-    //         {
-    //             style =
-    //             {
-    //                 flexGrow = 1f,
-    //             }
-    //         };
-    //         ve.Add(new TextField("This Worked Too!"));
-    //         var prop = SerializedDrawerUtility.DrawFieldFromObject(field.Property.GetValue() , field.Property.GetValue().GetType());
-    //         ve.Add(prop);
-    //         return ve;
-    //     }
-    // }
-    
-    // [System.Serializable]
-    // public class BlueprintInspectorVariable
-    // {
-    //     [ReadOnly]
-    //     public string VariableName;
-    //
-    //     [ValueDropdown("@GetConstructors"), OnValueChanged("ConstructorChanged", true)]
-    //     public string Constructor;
-    //     
-    //     private Type _type;
-    //     
-    //     public BlueprintInspectorVariable(string variableName, Type type)
-    //     {
-    //         VariableName = variableName;
-    //         _type = type;
-    //     }
-    //
-    //     private void ConstructorChanged(string newValue)
-    //     {
-    //         Debug.Log($"{VariableName}: {newValue}");
-    //         var constructor = GetConstructor(_type, newValue);
-    //         // Fields.Clear();
-    //         // if (constructor != null)
-    //         // {
-    //         //     foreach (var param in constructor.GetParameters())
-    //         //     {
-    //         //         var genType = typeof(FieldWrapper<>).MakeGenericType(param.ParameterType);
-    //         //         Fields.Add((FieldWrapper)Activator.CreateInstance(genType));
-    //         //     }
-    //         // }
-    //         // else
-    //         // {
-    //         //     var genType = typeof(FieldWrapper<>).MakeGenericType(_type);
-    //         //     Fields.Add((FieldWrapper)Activator.CreateInstance(genType));
-    //         // }
-    //     }
-    //     
-    //     public IEnumerable<(string, string)> GetConstructors()
-    //     {
-    //         var constructors = _type.GetConstructors(BindingFlags.Public | BindingFlags.Instance);
-    //         if (constructors.Length == 0)
-    //         {
-    //             yield return ("Default Constructor", string.Empty);
-    //         }
-    //         foreach (var c in constructors)
-    //         {
-    //             var constructorSignature = FormatConstructorSignature(c);
-    //             yield return (constructorSignature, constructorSignature);
-    //         }
-    //     }
-    //
-    //     public static string FormatConstructorSignature(ConstructorInfo c)
-    //     {
-    //         // Get the parameter list as "Type paramName"
-    //         string parameters = string.Join(", ", c.GetParameters()
-    //             .Select(p => $"{TypeSelectorField.GetReadableTypeName(p.ParameterType)} {p.Name}"));
-    //
-    //         // Format the constructor signature nicely
-    //         string constructorSignature = $"{c.DeclaringType!.Name}({parameters})";
-    //         return constructorSignature;
-    //     }
-    //
-    //     public static ConstructorInfo GetConstructor(Type type, string constructorSignature)
-    //     {
-    //         var constructors = type.GetConstructors(BindingFlags.Public | BindingFlags.Instance);
-    //         return (from constructor in constructors let signature = FormatConstructorSignature(constructor) where signature.Equals(constructorSignature) select constructor).FirstOrDefault();
-    //     }
-    //     
-    //     public static object InstantiateTypeByConstructor(Type type, string constructorSignature, params object[] args)
-    //     {
-    //         if (type == null) throw new ArgumentNullException(nameof(type));
-    //
-    //         var constructors = type.GetConstructors(BindingFlags.Public | BindingFlags.Instance);
-    //
-    //         foreach (var constructor in constructors)
-    //         {
-    //             // Get a formatted signature for comparison
-    //             string signature = FormatConstructorSignature(constructor);
-    //             if (signature.Equals(constructorSignature))
-    //             {
-    //                 return constructor.Invoke(args); // Instantiate the object
-    //             }
-    //         }
-    //
-    //         throw new ArgumentException($"No constructor found for {type.Name} with signature: {constructorSignature}");
-    //     }
-    // }
-
     public class BlueprintInspectorVariableView : VisualElement
     {
         private readonly BlueprintVariable _model;
@@ -147,7 +25,7 @@ namespace VaporEditor
             var constructors = _model.Type.GetConstructors(BindingFlags.Public | BindingFlags.Instance).Where(c => !c.GetParameters().Any(p => p.ParameterType.IsInterface)).ToArray();
             List<string> choices = new(constructors.Length);
             List<object> values = new(constructors.Length);
-            if (constructors.Length == 0)
+            if (constructors.Length == 0 || model.Type == typeof(string) || model.Type.IsPrimitive)
             {
                 choices.Add("Default(T)");
                 values.Add(null);
@@ -291,311 +169,219 @@ namespace VaporEditor
         }
     }
 
-    public class BlueprintInspectorMethodView : VisualElement
+    public class BlueprintInspectorSwitchView : VisualElement
     {
-        private readonly BlueprintMethodGraph _model;
-        private readonly List<BlueprintArgument> _inputArguments = new List<BlueprintArgument>();
-        private readonly List<BlueprintArgument> _outputArguments = new List<BlueprintArgument>();
+        private readonly BlueprintSwitchNodeView _model;
+        private readonly SwitchNode _switchNode;
+        private readonly List<int> _intCases = new();
+        private readonly List<string> _stringCases = new();
 
-        public BlueprintInspectorMethodView(BlueprintMethodGraph model)
+        public BlueprintInspectorSwitchView(BlueprintSwitchNodeView model)
         {
             _model = model;
-            var labelStyle = Resources.Load<StyleSheet>("LabelStyle");
-            if (_model.IsOverride)
+            _switchNode = (SwitchNode)model.Controller;
+            
+            if(!_switchNode.InputPins[PinNames.VALUE_IN].TryGetWire(out var wire) || !wire.IsConnected())
             {
-                var lbl = new Label("Method is Override")
-                {
-                    style =
-                    {
-                        marginTop = 6f,
-                        marginLeft = 6f,
-                        fontSize = 16,
-                        color = Color.grey
-                    }
-                };
-                lbl.AddToClassList("flex-label");
-                Add(lbl);
+                return;
+            }
+            
+            if (!_switchNode.Method.Nodes.TryGetValue(wire.LeftGuid, out var node))
+            {
                 return;
             }
 
-            var abstractField = new Toggle("Abstract")
+            var pin = node.OutputPins[wire.LeftName];
+            var labelStyle = Resources.Load<StyleSheet>("LabelStyle");
+            if (pin.Type.IsEnum)
             {
-                toggleOnLabelClick = false
-            };
-            abstractField.SetValueWithoutNotify(_model.IsAbstract);
-            abstractField.RegisterValueChangedCallback(evt => _model.IsAbstract = evt.newValue);
-            abstractField.styleSheets.Add(labelStyle);
-            abstractField.AddToClassList("toggle-fix");
-            abstractField.Q<Label>().AddToClassList("flex-label");
-            
-            var virtualField = new Toggle("Virtual")
-            {
-                toggleOnLabelClick = false
-            };
-            virtualField.SetValueWithoutNotify(_model.IsVirtual);
-            virtualField.RegisterValueChangedCallback(evt => _model.IsVirtual = evt.newValue);
-            virtualField.styleSheets.Add(labelStyle);
-            virtualField.AddToClassList("toggle-fix");
-            virtualField.Q<Label>().AddToClassList("flex-label");
-            
-            var pureField = new Toggle("Pure")
-            {
-                toggleOnLabelClick = false
-            };
-            pureField.SetValueWithoutNotify(_model.IsPure);
-            pureField.RegisterValueChangedCallback(evt => _model.IsPure = evt.newValue);
-            pureField.styleSheets.Add(labelStyle);
-            pureField.AddToClassList("toggle-fix");
-            pureField.Q<Label>().AddToClassList("flex-label");
-
-            List<VariableAccessModifier> accessChoices = new() { VariableAccessModifier.Public, VariableAccessModifier.Protected, VariableAccessModifier.Private };
-            var popup = new PopupField<VariableAccessModifier>("Access", accessChoices, _model.AccessModifier,
-                v => v.ToString(), v => v.ToString());
-            popup.RegisterValueChangedCallback(evt => _model.AccessModifier = evt.newValue);
-            popup.styleSheets.Add(labelStyle);
-            popup.Q<Label>().AddToClassList("flex-label");
-
-            Add(abstractField);
-            Add(virtualField);
-            Add(pureField);
-            Add(popup);
-
-            _inputArguments.AddRange(_model.Arguments.Where(arg => !arg.IsOut && !arg.IsReturn));
-            var inputArgView = new ListView(_inputArguments, makeItem: () => new VisualElement(), bindItem: (element, i) =>
-            {
-                element.Clear();
-                var argument = _inputArguments[i];
-                var ve = new VisualElement()
+                var enumNames = pin.Type.GetEnumNames();
+                foreach (var enumName in enumNames)
                 {
-                    style =
+                    var togEnum = new Toggle(ObjectNames.NicifyVariableName(enumName))
                     {
-                        flexDirection = FlexDirection.Row,
-                        flexGrow = 1f,
-                        flexShrink = 1f,
-                    }
-                };
-
-                var nameField = new TextField
-                {
-                    style =
+                        toggleOnLabelClick = false,
+                    };
+                    togEnum.SetValueWithoutNotify(_switchNode.Cases.Contains(enumName));
+                    togEnum.RegisterValueChangedCallback(evt =>
                     {
-                        flexBasis = Length.Percent(50f)
-                    }
-                };
-                nameField.SetValueWithoutNotify(argument.DisplayName);
-                nameField.RegisterValueChangedCallback(evt => argument.SetName(evt.newValue));
-                ve.Add(nameField);
-
-                var typeSelector = new TypeSelectorField(string.Empty, argument.Type)
+                        if (evt.newValue)
+                        {
+                            _switchNode.AddCase(enumName);
+                        }
+                        else
+                        {
+                            _switchNode.RemoveCase(enumName);
+                        }
+                    });
+                    togEnum.styleSheets.Add(labelStyle);
+                    togEnum.AddToClassList("toggle-fix");
+                    togEnum.Q<Label>().AddToClassList("flex-label");
+                    Add(togEnum);
+                }
+            }
+            else if (pin.Type == typeof(int))
+            {
+                _intCases.AddRange(_switchNode.Cases.Select(c => int.TryParse(c, out var result) ? result : 0));
+                var intList = new ListView(_intCases, makeItem: () => new VisualElement(), bindItem: (element, i) =>
                 {
-                    style =
+                    element.Clear();
+                    int idx = i;
+                    var intField = new TextField("Case")
                     {
-                        flexBasis = Length.Percent(50f),
-                    }
-                };
-                typeSelector.TypeChanged += (_, cur, _) => argument.SetType(cur);
-                ve.Add(typeSelector);
-                element.Add(ve);
+                        isDelayed = true,
+                    };
+                    intField.SetValueWithoutNotify(_intCases[i].ToString());
+                    intField.RegisterValueChangedCallback(evt => 
+                    {
+                        if (int.TryParse(evt.newValue, out var caseInt))
+                        {
+                            var prev = int.Parse(evt.previousValue);
+                            _switchNode.UpdateCase(prev.ToString(), caseInt.ToString());
+                            _intCases[idx] = caseInt;
+                        }
+                        else
+                        {
+                            var prev = int.Parse(evt.previousValue);
+                            intField.SetValueWithoutNotify(evt.previousValue);
+                            _intCases[idx] = prev;
+                        }
+                    });
+                    intField.styleSheets.Add(labelStyle);
+                    intField.Q<Label>().AddToClassList("flex-label");
+                    element.Add(intField);
+                })
+                {
+                    showFoldoutHeader = true,
+                    headerTitle = "Cases",
+                    showAddRemoveFooter = true,
+                    showBorder = true,
+                    showBoundCollectionSize = false,
+                    showAlternatingRowBackgrounds = AlternatingRowBackground.All,
+                    onRemove = lv =>
+                    {
+                        if (_intCases.Count <= 0)
+                        {
+                            lv.Rebuild();
+                        }
+                        var last = _intCases[^1];
+                        _intCases.RemoveAt(_intCases.Count - 1);
+                        _switchNode.RemoveCase(last.ToString());
+                        lv.Rebuild();
+                    },
+                    onAdd = lv =>
+                    {
+                        int next = int.MinValue;
+                        foreach (var t in _intCases)
+                        {
+                            if (t >= next)
+                            {
+                                next = t + 1;
+                            }
+                        }
 
-                var passByRef = new Toggle("Pass By Ref")
-                {
-                    toggleOnLabelClick = false
-                };
-                passByRef.SetValueWithoutNotify(argument.IsRef);
-                passByRef.RegisterValueChangedCallback(evt => argument.IsRef = evt.newValue);
-                element.Add(passByRef);
-            })
-            {
-                showFoldoutHeader = true,
-                headerTitle = "Input Arguments",
-                showAddRemoveFooter = true,
-                showBorder = true,
-                showBoundCollectionSize = false,
-                showAlternatingRowBackgrounds = AlternatingRowBackground.All,
-                onAdd = OnAddInputArg,
-                onRemove = OnRemoveInputArg,
-                fixedItemHeight = 44,
-                reorderable = true,
-                reorderMode = ListViewReorderMode.Animated,
-                style =
-                {
-                    marginLeft = 3f,
-                    marginRight = 3f,
-                    flexGrow = 1f,
-                    flexShrink = 1f,
-                },
-            };
-            inputArgView.itemIndexChanged += OnReorderArguments;
-            Add(inputArgView);
+                        if (next == int.MinValue)
+                        {
+                            next = 0;
+                        }
 
-            _outputArguments.AddRange(_model.Arguments.Where(arg => arg.IsOut || arg.IsReturn));
-            var outArgView = new ListView(_outputArguments, makeItem: () => new VisualElement(), bindItem: (element, i) =>
-            {
-                element.Clear();
-                var argument = _outputArguments[i];
-                var ve = new VisualElement()
-                {
+                        _intCases.Add(next);
+                        _switchNode.AddCase(_intCases[^1].ToString());
+                    },
                     style =
                     {
                         marginLeft = 3f,
-                        flexDirection = FlexDirection.Row,
+                        marginRight = 3f,
                     }
                 };
-
-                var nameField = new TextField
+                Add(intList);
+            }
+            else if (pin.Type == typeof(string))
+            {
+                _stringCases.AddRange(_switchNode.Cases);
+                var stringList = new ListView(_stringCases, makeItem: () => new VisualElement(), bindItem: (element, i) =>
                 {
+                    element.Clear();
+                    int idx = i;
+                    var intField = new TextField("Case")
+                    {
+                        isDelayed = true,
+                    };
+                    intField.SetValueWithoutNotify(_stringCases[i]);
+                    intField.RegisterValueChangedCallback(evt =>
+                    {
+                        _stringCases[idx] = evt.newValue;
+                        _switchNode.UpdateCase(evt.previousValue, evt.newValue);
+                    });
+                    intField.styleSheets.Add(labelStyle);
+                    intField.Q<Label>().AddToClassList("flex-label");
+                    element.Add(intField);
+                })
+                {
+                    showFoldoutHeader = true,
+                    headerTitle = "Cases",
+                    showAddRemoveFooter = true,
+                    showBorder = true,
+                    showBoundCollectionSize = false,
+                    showAlternatingRowBackgrounds = AlternatingRowBackground.All,
+                    onRemove = lv =>
+                    {
+                        if (_stringCases.Count <= 0)
+                        {
+                            lv.Rebuild();
+                        }
+                        var last = _stringCases[^1];
+                        _stringCases.RemoveAt(_stringCases.Count - 1);
+                        _switchNode.RemoveCase(last);
+                        lv.Rebuild();
+                    },
+                    onAdd = lv =>
+                    {
+                        _stringCases.Add(string.Empty);
+                        _switchNode.AddCase(string.Empty);
+                    },
                     style =
                     {
-                        flexBasis = Length.Percent(50f),
+                        marginLeft = 3f,
+                        marginRight = 3f,
                     }
                 };
-                nameField.SetValueWithoutNotify(argument.DisplayName);
-                nameField.RegisterValueChangedCallback(evt => argument.SetName(evt.newValue));
-                ve.Add(nameField);
-
-                var typeSelector = new TypeSelectorField(string.Empty, argument.Type)
-                {
-                    style =
-                    {
-                        flexBasis = Length.Percent(50f),
-                    }
-                };
-                typeSelector.TypeChanged += (_, cur, _) => argument.SetType(cur);
-                ve.Add(typeSelector);
-
-                element.Add(ve);
-            })
-            {
-                showFoldoutHeader = true,
-                headerTitle = "Output Arguments",
-                showAddRemoveFooter = true,
-                showBorder = true,
-                showBoundCollectionSize = false,
-                showAlternatingRowBackgrounds = AlternatingRowBackground.All,
-                onAdd = OnAddOutputArg,
-                onRemove = OnRemoveOutputArg,
-                reorderable = true,
-                reorderMode = ListViewReorderMode.Animated,
-                style =
-                {
-                    marginLeft = 3f,
-                    marginRight = 3f,
-                }
-            };
-            outArgView.itemIndexChanged += (o, n) =>
-            {
-                if (n == 0)
-                {
-                    _outputArguments[n].IsReturn = true;
-                    _outputArguments[n].IsOut = false;
-                    if (_outputArguments.IsValidIndex(1))
-                    {
-                        _outputArguments[1].IsReturn = false;
-                        _outputArguments[1].IsOut = true;
-                    }
-                }
-
-                OnReorderArguments(o, n);
-            };
-            Add(outArgView);
-        }
-
-        private void OnAddInputArg(BaseListView obj)
-        {
-            Debug.Log("Add Input Argument");
-            var arg = _model.AddInputArgument(typeof(bool));
-            _inputArguments.Add(arg);
-            OnReorderArguments(-1, -1);
-        }
-
-        private void OnRemoveInputArg(BaseListView obj)
-        {
-            if (_inputArguments.Count == 0)
-            {
-                return;
+                Add(stringList);
             }
-
-            var argument = _inputArguments[^1];
-            _inputArguments.RemoveAt(_inputArguments.Count - 1);
-            _model.RemoveArgument(argument);
-            OnReorderArguments(-1, -1);
-            obj.Rebuild();
-        }
-        
-        private void OnAddOutputArg(BaseListView obj)
-        {
-            Debug.Log("Add Output Argument");
-            var arg = _model.AddOutputArgument(typeof(bool));
-            _outputArguments.Add(arg);
-            OnReorderArguments(-1, -1);
-        }
-
-        private void OnRemoveOutputArg(BaseListView obj)
-        {
-            if (_outputArguments.Count == 0)
-            {
-                return;
-            }
-
-            var argument = _outputArguments[^1];
-            _outputArguments.RemoveAt(_outputArguments.Count - 1);
-            _model.RemoveArgument(argument);
-            OnReorderArguments(-1, -1);
-            obj.Rebuild();
-        }
-
-        private void OnReorderArguments(int oldIndex, int newIndex)
-        {
-            for (int i = 0; i < _inputArguments.Count; i++)
-            {
-                _inputArguments[i].ParameterIndex = i;
-            }
-
-            for (int i = 0; i < _outputArguments.Count; i++)
-            {
-                int shiftedIndex = i + _inputArguments.Count;
-                if (_outputArguments[i].IsReturn)
-                {
-                    _outputArguments[i].ParameterIndex = -1;
-                }
-                else
-                {
-                    _outputArguments[i].ParameterIndex = shiftedIndex;
-                }
-            }
-            _model.OnArgumentsReordered();
         }
     }
 
-    public class BlueprintInspectorSwitchView : VisualElement
+    public class BlueprintInspectorConstructorView : VisualElement
     {
-        public BlueprintInspectorSwitchView(BlueprintSwitchNodeView model)
+        private readonly ConstructorNode _constructorNode;
+        private readonly BlueprintConstructorNodeView _view;
+
+        public BlueprintInspectorConstructorView(BlueprintConstructorNodeView model)
         {
-            var controller = model.Controller;
-                
-            var wire = controller.InputWires.FirstOrDefault(w => w.RightSidePin.PinName == PinNames.VALUE_IN);
-            if (!wire.IsValid())
-            {
-                return;
-            }
+            style.marginBottom = 4;
+            style.marginTop = 4;
+            style.marginLeft = 4;
+            style.marginRight = 4;
             
-            var node = controller.Method.Nodes.FirstOrDefault(n => n.Value.Guid == wire.LeftSidePin.NodeGuid).Value;
-            if (node == null)
+            var labelStyle = Resources.Load<StyleSheet>("LabelStyle");
+            _view = model;
+            _constructorNode = (ConstructorNode)model.Controller;
+            var toggleArray = new Toggle("Is Array")
             {
-                return;
-            }
+                toggleOnLabelClick = false,
+            };
+            toggleArray.SetValueWithoutNotify(_constructorNode.IsArray);
+            toggleArray.RegisterValueChangedCallback(OnIsArrayChanged);
+            toggleArray.styleSheets.Add(labelStyle);
+            toggleArray.AddToClassList("toggle-fix");
+            toggleArray.Q<Label>().AddToClassList("flex-label");
+            Add(toggleArray);
+        }
 
-            var pin = node.NodeType == NodeType.Conversion ? node.InputPins[PinNames.SET_IN] : node.OutputPins[wire.LeftSidePin.PinName];
-            if (!pin.Type.IsEnum)
-            {
-                return;
-            }
-
-            var enumNames = pin.Type.GetEnumNames();
-            foreach (var enumName in enumNames)
-            {
-                Add(new Label(enumName));
-            }
+        private void OnIsArrayChanged(ChangeEvent<bool> evt)
+        {
+            _constructorNode.SetIsArray(evt.newValue);
+            _view.UpdateIsArray();
         }
     }
 }

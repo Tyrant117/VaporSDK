@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 using Vapor.Blueprints;
 
 namespace VaporEditor.Blueprints
@@ -27,7 +28,7 @@ namespace VaporEditor.Blueprints
             { NodeType.Cast, CreateEditorNode<BlueprintCastNodeView> },
             
             { NodeType.Redirect, CreateRerouteNode },
-            { NodeType.Inline, CreateEditorNode },
+            { NodeType.Constructor, CreateEditorNode<BlueprintConstructorNodeView> },
         };
         
         public static void AddNode(NodeModelBase nodeController, BlueprintView view, List<IBlueprintNodeView> editorNodes, Dictionary<string, NodeModelBase> refNodes)
@@ -40,6 +41,17 @@ namespace VaporEditor.Blueprints
             var editorNode = func(view, nodeController);
             editorNodes.Add(editorNode);
             refNodes?.Add(nodeController.Guid, nodeController);
+        }
+
+        public static IBlueprintNodeView CreateNodeView(BlueprintView view, NodeModelBase node)
+        {
+            if (!s_NodeFactory.TryGetValue(node.NodeType, out var func))
+            {
+                Debug.LogError($"No factory for {node.NodeType}");
+                return null;
+            }
+            var editorNode = func(view, node);
+            return editorNode;
         }
 
         private static IBlueprintNodeView CreateEditorNode(BlueprintView view, NodeModelBase nodeController)

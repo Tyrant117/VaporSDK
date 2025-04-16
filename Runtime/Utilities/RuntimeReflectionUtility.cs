@@ -76,25 +76,16 @@ namespace Vapor
                     return declaringType.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, paramTypes, null);
                 }
             }
-
-            // if (parameterTypes.Length > 0)
-            // {
-            //     var paramTypes = new Type[parameterTypes.Length];
-            //     for (int i = 0; i < parameterTypes.Length; i++)
-            //     {
-            //         paramTypes[i] = Type.GetType(parameterTypes[i]);
-            //         Assert.IsNotNull(parameterTypes[i], $"Invalid parameter type: {parameterTypes[i]}");
-            //     }
-            //
-            //     return declaringType.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, paramTypes, null);
-            // }
-            //
-            // return declaringType.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
         }
 
         public static FieldInfo GetFieldInfo(Type declaringType, string fieldName)
         {
             return declaringType.GetField(fieldName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+        }
+        
+        public static PropertyInfo GetPropertyInfo(Type declaringType, string fieldName)
+        {
+            return declaringType.GetProperty(fieldName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
         }
     }
 }

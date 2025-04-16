@@ -58,10 +58,10 @@ namespace Vapor.DataTables
                 return;
             }
 
-            string namespaceName = KeyGenerator.FindNearestAssemblyDefinition(this);
+            string namespaceName = FileUtility.FindNearestNamespace(this);
             namespaceName = namespaceName == null ? KeyGenerator.NamespaceName : $"{namespaceName}.{KeyGenerator.NamespaceName}";
 
-            var path = KeyGenerator.ConvertFullPathToRelative(KeyGenerator.FindNearestDirectory(this));
+            var path = FileUtility.ConvertFullPathToRelative(KeyGenerator.FindNearestDirectory(this));
             KeyGenerator.FormatKeyFiles(path, namespaceName, $"{name}Keys", $"{GetRowType().Name}RowHandles", kvps);
                 
             RuntimeEditorUtility.SaveAndRefresh();

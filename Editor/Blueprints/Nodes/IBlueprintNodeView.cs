@@ -10,8 +10,6 @@ namespace VaporEditor.Blueprints
         Dictionary<string, BlueprintPortView> InPorts { get; }
         Dictionary<string, BlueprintPortView> OutPorts { get; }
         
-        void OnConnectedInputEdge(BlueprintWireReference wire, bool shouldModifyDataModel);
-        void OnDisconnectedInputEdge(string portName);
         void InvalidateName();
         void InvalidateType();
     }

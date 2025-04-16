@@ -27,16 +27,51 @@ namespace VaporEditor.Blueprints
                 return;
             }
 
-            WriteEmptyClass(baseType.Namespace, graphSo.name, baseType.Name, out var namespaceSyntax, out var classSyntax);
+            WriteEmptyClass(baseType.Namespace, graphSo.name, baseType.Name, graphSo.GraphType == BlueprintGraphSo.BlueprintGraphType.BehaviourGraph, out var namespaceSyntax, out var classSyntax);
 
-            foreach (var field in classGraphModel.Variables)
+            foreach (var field in classGraphModel.Variables.Values)
             {
-                var fieldDeclaration = SyntaxFactory.FieldDeclaration(
-                        SyntaxFactory.VariableDeclaration(GetTypeSyntax(field.Type)) // field.Key = type
-                            .AddVariables(SyntaxFactory.VariableDeclarator(field.Name))) // field.Value = name
-                    .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword)); // Make it public
+                var constructor = BlueprintEditorUtility.GetConstructor(field.Type, field.ConstructorName);
+                if (constructor == null)
+                {
+                    // Fall back to default value
+                    var defaultValue = GetExpressionForObjectInitializer(field.DefaultValue);
 
-                classSyntax = classSyntax.AddMembers(fieldDeclaration);
+                    var defaultDecl = SyntaxFactory.FieldDeclaration(
+                        SyntaxFactory.VariableDeclaration(GetTypeSyntax(field.Type))
+                            .AddVariables(SyntaxFactory.VariableDeclarator(field.VariableName)
+                                .WithInitializer(SyntaxFactory.EqualsValueClause(defaultValue)))
+                    ).AddModifiers(SyntaxFactory.Token(GetAccessModifier(field.AccessModifier)));
+                    classSyntax = classSyntax.AddMembers(defaultDecl);
+                    continue;
+                }
+
+                
+                // Build constructor arguments
+                var argumentExpressions = constructor.GetParameters()
+                    .Select((p, i) =>
+                        GetExpressionForObjectInitializer(field.ParameterValues[i])
+                    )
+                    .Select(SyntaxFactory.Argument)
+                    .ToArray();
+
+                var constructorCall = SyntaxFactory.ObjectCreationExpression(BlueprintScriptWriter.GetTypeSyntax(field.Type))
+                    .WithArgumentList(SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(argumentExpressions)));
+
+                var constructorDecl = SyntaxFactory.FieldDeclaration(
+                    SyntaxFactory.VariableDeclaration(GetTypeSyntax(field.Type))
+                        .AddVariables(SyntaxFactory.VariableDeclarator(field.VariableName)
+                            .WithInitializer(SyntaxFactory.EqualsValueClause(constructorCall)))
+                ).AddModifiers(SyntaxFactory.Token(GetAccessModifier(field.AccessModifier)));
+
+                classSyntax = classSyntax.AddMembers(constructorDecl);
+                
+                // var fieldDeclaration = SyntaxFactory.FieldDeclaration(
+                //         SyntaxFactory.VariableDeclaration(GetTypeSyntax(field.Type)) // field.Key = type
+                //             .AddVariables(SyntaxFactory.VariableDeclarator(field.VariableName))) // field.Value = name
+                //     .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword)); // Make it public
+                //
+                // classSyntax = classSyntax.AddMembers(fieldDeclaration);
             }
 
             foreach (var method in classGraphModel.Methods)
@@ -45,7 +80,7 @@ namespace VaporEditor.Blueprints
                 EntrySyntaxNode entry = null;
                 foreach (var n in method.Nodes.Values)
                 {
-                    var syntaxNode = BlueprintSyntaxNodeBase.ConvertToSyntaxNode(n);
+                    var syntaxNode = BlueprintSyntaxNodeBase.ConvertToSyntaxNode(n, method.Arguments);
                     if (syntaxNode is EntrySyntaxNode esn)
                     {
                         entry = esn;
@@ -62,8 +97,9 @@ namespace VaporEditor.Blueprints
                 
                 if (method.IsOverride)
                 {
-                    TypeSyntax returnTypeSyntax = GetTypeSyntax(method.MethodInfo.ReturnType);
+                    // TypeSyntax returnTypeSyntax = GetTypeSyntax(method.MethodInfo.ReturnType);
                     var body = SyntaxFactory.Block();
+                    body = InjectPlayModeCall(method.MethodInfo, body);
 
                     // if (method.MethodInfo.ReturnType != typeof(void))
                     // {
@@ -82,16 +118,35 @@ namespace VaporEditor.Blueprints
                     
                     body = entry.AddStatementAndContinue(body);
                     
-                    var methodDeclaration = SyntaxFactory.MethodDeclaration(
-                            returnTypeSyntax, // Corrected return type
-                            SyntaxFactory.Identifier(method.MethodInfo.Name)) // Method name
-                        .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword), SyntaxFactory.Token(SyntaxKind.OverrideKeyword)) // Make it public
-                        .AddParameterListParameters(method.MethodInfo.GetParameters().Select(param =>
-                                SyntaxFactory.Parameter(SyntaxFactory.Identifier(param.Name))
-                                    .WithType(GetTypeSyntax(param.ParameterType)) // Use the refined type syntax
-                        ).ToArray())
-                        .WithBody(body); // Blueprint Body
+                    var methodNameSyntax = SyntaxFactory.Identifier(method.MethodName);
+                    var parameters = CreateMethodParameters(method.Arguments);
+                    var returnType = CreateMethodReturnType(method.Arguments);
+                    var methodDeclaration = CreateMethodDeclaration(methodNameSyntax, parameters, returnType, true);
+                    methodDeclaration = methodDeclaration.AddBodyStatements(body.Statements.ToArray());
+                    
+                    // var methodDeclaration = SyntaxFactory.MethodDeclaration(
+                    //         returnTypeSyntax, // Corrected return type
+                    //         SyntaxFactory.Identifier(method.MethodInfo.Name)) // Method name
+                    //     .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword), SyntaxFactory.Token(SyntaxKind.OverrideKeyword)) // Make it public
+                    //     .AddParameterListParameters(method.MethodInfo.GetParameters().Select(param =>
+                    //             SyntaxFactory.Parameter(SyntaxFactory.Identifier(param.Name))
+                    //                 .WithType(GetTypeSyntax(param.ParameterType)) // Use the refined type syntax
+                    //     ).ToArray())
+                    //     .WithBody(body); // Blueprint Body
 
+                    classSyntax = classSyntax.AddMembers(methodDeclaration);
+                }
+                else if (method.IsUnityOverride)
+                {
+                    var methodNameSyntax = SyntaxFactory.Identifier(method.MethodName);
+                    var parameters = CreateMethodParameters(method.Arguments);
+                    var returnType = CreateMethodReturnType(method.Arguments);
+                    var methodDeclaration = CreateMethodDeclaration(methodNameSyntax, parameters, returnType, false);
+                    var body = SyntaxFactory.Block();
+                    body = InjectPlayModeCall(method, body);
+                    body = entry.AddStatementAndContinue(body);
+                    
+                    methodDeclaration = methodDeclaration.AddBodyStatements(body.Statements.ToArray());
                     classSyntax = classSyntax.AddMembers(methodDeclaration);
                 }
                 else
@@ -99,8 +154,9 @@ namespace VaporEditor.Blueprints
                     var methodNameSyntax = SyntaxFactory.Identifier(method.MethodName);
                     var parameters = CreateMethodParameters(method.Arguments);
                     var returnType = CreateMethodReturnType(method.Arguments);
-                    var methodDeclaration = CreateMethodDeclaration(methodNameSyntax, parameters, returnType);
+                    var methodDeclaration = CreateMethodDeclaration(methodNameSyntax, parameters, returnType, false);
                     var body = SyntaxFactory.Block();
+                    body = InjectPlayModeCall(method, body);
                     body = entry.AddStatementAndContinue(body);
                     
                     methodDeclaration = methodDeclaration.AddBodyStatements(body.Statements.ToArray());
@@ -121,7 +177,7 @@ namespace VaporEditor.Blueprints
             EntrySyntaxNode entry = null;
             foreach (var n in classGraphModel.Current.Nodes.Values)
             {
-                var syntaxNode = BlueprintSyntaxNodeBase.ConvertToSyntaxNode(n);
+                var syntaxNode = BlueprintSyntaxNodeBase.ConvertToSyntaxNode(n, classGraphModel.Current.Arguments);
                 if (syntaxNode is EntrySyntaxNode esn)
                 {
                     entry = esn;
@@ -136,7 +192,7 @@ namespace VaporEditor.Blueprints
             var methodNameSyntax = SyntaxFactory.Identifier($"{graphSo.name}_Implementation");
             var parameters = CreateMethodParameters(classGraphModel.Current.Arguments);
             var returnType = CreateMethodReturnType(classGraphModel.Current.Arguments);
-            var methodDeclaration = CreateMethodDeclaration(methodNameSyntax, parameters, returnType);
+            var methodDeclaration = CreateMethodDeclaration(methodNameSyntax, parameters, returnType, false);
             s_CurrentBody = SyntaxFactory.Block();
             s_CurrentBody = entry.AddStatementAndContinue(s_CurrentBody);
             
@@ -204,8 +260,29 @@ namespace VaporEditor.Blueprints
         {
             // Create parameters for the input arguments
             return SyntaxFactory.ParameterList(
-                SyntaxFactory.SeparatedList(arguments.Where(arg => !arg.IsReturn).Select(arg => SyntaxFactory.Parameter(SyntaxFactory.Identifier(arg.DisplayName))
-                    .WithType(GetTypeSyntax(arg.Type))))
+                SyntaxFactory.SeparatedList(
+                    arguments.Where(arg => !arg.IsReturn).Select(arg =>
+                    {
+                        var parameter = SyntaxFactory.Parameter(SyntaxFactory.Identifier(arg.ArgumentName))
+                            .WithType(GetTypeSyntax(arg.Type));
+
+                        if (arg.IsOut)
+                        {
+                            parameter = parameter.WithModifiers(
+                                SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.OutKeyword))
+                            );
+                        }
+
+                        if (arg.IsRef)
+                        {
+                            parameter = parameter.WithModifiers(
+                                SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.RefKeyword))
+                            );
+                        }
+
+                        return parameter;
+                    })
+                )
             );
         }
 
@@ -226,10 +303,11 @@ namespace VaporEditor.Blueprints
             //     : SyntaxFactory.type .type .TupleType(SyntaxFactory.SeparatedList(arguments.Select(a => a.Type).Select(t => SyntaxFactory.TupleElement(SyntaxFactory.ParseTypeName(t.FullName ?? t.Name)))));
         }
 
-        private static MethodDeclarationSyntax CreateMethodDeclaration(SyntaxToken methodName, ParameterListSyntax parameters, TypeSyntax returnType)
+        private static MethodDeclarationSyntax CreateMethodDeclaration(SyntaxToken methodName, ParameterListSyntax parameters, TypeSyntax returnType, bool withOverride)
         {
+            var tkl = withOverride ? SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword), SyntaxFactory.Token(SyntaxKind.OverrideKeyword)) : SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
             return SyntaxFactory.MethodDeclaration(returnType, methodName)
-                .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
+                .WithModifiers(tkl)
                 .WithParameterList(parameters)
                 .NormalizeWhitespace();
         }
@@ -429,21 +507,31 @@ namespace VaporEditor.Blueprints
         
         #region - Class Generation Helpers -
 
-        private static void WriteEmptyClass(string namespaceName, string typeName, string baseTypeName, out NamespaceDeclarationSyntax namespaceDeclarationSyntax, out ClassDeclarationSyntax classDeclarationSyntax)
+        private static void WriteEmptyClass(string namespaceName, string typeName, string baseTypeName, bool isBehaviour, out NamespaceDeclarationSyntax namespaceDeclarationSyntax,
+            out ClassDeclarationSyntax classDeclarationSyntax)
         {
             // Define the namespace
             namespaceDeclarationSyntax = CreateNamespace(namespaceName);
 
-            // Define the class
-            classDeclarationSyntax = SyntaxFactory.ClassDeclaration(typeName)
-                .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
-                .AddBaseListTypes(SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(baseTypeName)))
-                .AddMembers(
-                    // Public constructor
-                    SyntaxFactory.ConstructorDeclaration(typeName)
-                        .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
-                        .WithBody(SyntaxFactory.Block())
-                );
+            if (isBehaviour)
+            {
+                classDeclarationSyntax = SyntaxFactory.ClassDeclaration(typeName)
+                    .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
+                    .AddBaseListTypes(SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(baseTypeName)));
+            }
+            else
+            {
+                // Define the class
+                classDeclarationSyntax = SyntaxFactory.ClassDeclaration(typeName)
+                    .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
+                    .AddBaseListTypes(SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(baseTypeName)))
+                    .AddMembers(
+                        // Public constructor
+                        SyntaxFactory.ConstructorDeclaration(typeName)
+                            .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
+                            .WithBody(SyntaxFactory.Block())
+                    );
+            }
         }
 
         private static NamespaceDeclarationSyntax CreateNamespace(string @namespace)
@@ -494,6 +582,11 @@ namespace VaporEditor.Blueprints
             if (type == typeof(void))
             {
                 return SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword));
+            }
+
+            if (type.IsByRef)
+            {
+                type = type.GetElementType();
             }
 
             // Handle primitive and common types
@@ -753,6 +846,130 @@ namespace VaporEditor.Blueprints
             return methodBody;
         }
 
+        internal static BlockSyntax InjectPlayModeCall(MethodInfo methodInfo, BlockSyntax methodBody)
+        {
+            var parameterInfos = methodInfo.GetParameters();
+            var outParams = parameterInfos
+                .Select((p, i) => new { Param = p, Index = i })
+                .Where(x => x.Param.IsOut)
+                .ToList();
+
+             var arguments = parameterInfos.Where(p => p is { IsOut: false, IsRetval: false }).Select(p => p.Name).ToArray();
+             var argString = $"new object[]{{{string.Join(", ", arguments)}}}";
+
+            // out param assignments
+            var assignmentStatements = outParams.Select(x =>
+                SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.AssignmentExpression(
+                        SyntaxKind.SimpleAssignmentExpression,
+                        SyntaxFactory.IdentifierName(x.Param.Name),
+                        SyntaxFactory.CastExpression(
+                            GetTypeSyntax(x.Param.ParameterType),
+                            SyntaxFactory.ElementAccessExpression(
+                                SyntaxFactory.IdentifierName("outArgs"),
+                                SyntaxFactory.BracketedArgumentList(SyntaxFactory.SingletonSeparatedList(
+                                    SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(x.Index)))
+                                ))
+                            )
+                        )
+                    )
+                )
+            ).ToArray();
+
+            // return if needed
+            StatementSyntax returnStatement;
+            if (methodInfo.ReturnType != typeof(void))
+            {
+                returnStatement = SyntaxFactory.ReturnStatement(
+                    SyntaxFactory.CastExpression(
+                        GetTypeSyntax(methodInfo.ReturnType),
+                        SyntaxFactory.IdentifierName("__editorResult")
+                    )
+                );
+            }
+            else
+            {
+                returnStatement = SyntaxFactory.ReturnStatement();
+            }
+            // Combine all editor statements
+            var invokeStr = $"var __editorResult = PlayMode.Invoke(nameof({methodInfo.Name}), {argString}, out var outArgs);";
+            var invokeExpr = SyntaxFactory.ParseStatement(invokeStr);
+            var editorStatements = new List<StatementSyntax> { invokeExpr };
+            editorStatements.AddRange(assignmentStatements);
+            editorStatements.Add(returnStatement);
+            var editorBlock = SyntaxFactory.Block(editorStatements);
+            
+            var fullEditorBlock = editorBlock
+                .WithLeadingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.Trivia(SyntaxFactory.IfDirectiveTrivia(
+                    SyntaxFactory.IdentifierName("UNITY_EDITOR"), true, false, true))))
+                .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.Trivia(SyntaxFactory.EndIfDirectiveTrivia(true))));
+            
+            methodBody = methodBody.AddStatements(fullEditorBlock);
+            return methodBody;
+        }
+        
+        internal static BlockSyntax InjectPlayModeCall(BlueprintMethodGraph method, BlockSyntax methodBody)
+        {
+            var outParams = method.Arguments
+                .Select((p, i) => new { Arg = p, Index = i })
+                .Where(x => x.Arg.IsOut)
+                .ToList();
+
+             var arguments = method.Arguments.Where(p => p is { IsOut: false, IsReturn: false }).Select(p => p.ArgumentName).ToArray();
+             var argString = $"new object[]{{{string.Join(", ", arguments)}}}";
+
+            // out param assignments
+            var assignmentStatements = outParams.Select(x =>
+                SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.AssignmentExpression(
+                        SyntaxKind.SimpleAssignmentExpression,
+                        SyntaxFactory.IdentifierName(x.Arg.ArgumentName),
+                        SyntaxFactory.CastExpression(
+                            GetTypeSyntax(x.Arg.Type),
+                            SyntaxFactory.ElementAccessExpression(
+                                SyntaxFactory.IdentifierName("outArgs"),
+                                SyntaxFactory.BracketedArgumentList(SyntaxFactory.SingletonSeparatedList(
+                                    SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(x.Index)))
+                                ))
+                            )
+                        )
+                    )
+                )
+            ).ToArray();
+
+            // return if needed
+            StatementSyntax returnStatement;
+            var returnArg = method.Arguments.FirstOrDefault(arg => arg.IsReturn);
+            if (returnArg != null)
+            {
+                returnStatement = SyntaxFactory.ReturnStatement(
+                    SyntaxFactory.CastExpression(
+                        GetTypeSyntax(returnArg.Type),
+                        SyntaxFactory.IdentifierName("__editorResult")
+                    )
+                );
+            }
+            else
+            {
+                returnStatement = SyntaxFactory.ReturnStatement();
+            }
+            // Combine all editor statements
+            var invokeStr = $"var __editorResult = PlayMode.Invoke(nameof({method.MethodName}), {argString}, out var outArgs);";
+            var invokeExpr = SyntaxFactory.ParseStatement(invokeStr);
+            var editorStatements = new List<StatementSyntax> { invokeExpr };
+            editorStatements.AddRange(assignmentStatements);
+            editorStatements.Add(returnStatement);
+            var editorBlock = SyntaxFactory.Block(editorStatements);
+            
+            var fullEditorBlock = editorBlock
+                .WithLeadingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.Trivia(SyntaxFactory.IfDirectiveTrivia(
+                    SyntaxFactory.IdentifierName("UNITY_EDITOR"), true, false, true))))
+                .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.Trivia(SyntaxFactory.EndIfDirectiveTrivia(true))));
+            
+            methodBody = methodBody.AddStatements(fullEditorBlock);
+            return methodBody;
+        }
+
         #endregion
 
         #region - Field Generation Helpers -
@@ -795,6 +1012,22 @@ namespace VaporEditor.Blueprints
             block = block.AddStatements(SyntaxFactory.ExpressionStatement(assignmentExpression));
             return block;
         }
+        #endregion
+
+        #region - Misc Helpers -
+
+        private static SyntaxKind GetAccessModifier(VariableAccessModifier accessModifier)
+        {
+            return accessModifier switch
+            {
+                VariableAccessModifier.Public => SyntaxKind.PublicKeyword,
+                VariableAccessModifier.Protected => SyntaxKind.ProtectedKeyword,
+                VariableAccessModifier.Private => SyntaxKind.PrivateKeyword,
+                _ => throw new ArgumentOutOfRangeException(nameof(accessModifier), accessModifier, null)
+            };
+        }
+        
+
         #endregion
     }
 }

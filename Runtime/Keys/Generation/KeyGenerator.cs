@@ -1,17 +1,17 @@
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
-using System.Collections.Generic;
-using System.Text;
-using System.Text.RegularExpressions;
-using UnityEngine;
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
-using Vapor;
-using Object = UnityEngine.Object;
-using Vapor.Inspector;
+using System.Text;
+using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
+using UnityEngine;
+using Vapor.Inspector;
+using Object = UnityEngine.Object;
 
 namespace Vapor.Keys
 {
@@ -47,7 +47,7 @@ namespace Vapor.Keys
             public KeyValuePair(string name, int key, string guid)
             {
 #if UNITY_EDITOR
-                DisplayName = UnityEditor.ObjectNames.NicifyVariableName(name);
+                DisplayName = ObjectNames.NicifyVariableName(name);
 #else
                 DisplayName = name;
 #endif
@@ -141,12 +141,12 @@ namespace Vapor.Keys
                     takenKeys.Add(key.Key);
                     var guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(item));
                     guid = hasOptions ? options.UseNameAsGuid ? key.DisplayName : guid : guid;
-                    var path = ConvertFullPathToRelative(FindNearestDirectory(item));
+                    var path = FileUtility.ConvertFullPathToRelative(FindNearestDirectory(item));
                     if (!formattedKeys.TryGetValue(path, out var list))
                     {
                         list = new();
                         formattedKeys.Add(path, list);
-                        namespaces.Add(FindNearestAssemblyDefinition(item) + $".{NamespaceName}");
+                        namespaces.Add(FileUtility.FindNearestNamespace(item) + $".{NamespaceName}");
                     }
                     list.Add(new KeyValuePair(item.name, key.Key, guid));
                 }
@@ -200,12 +200,12 @@ namespace Vapor.Keys
                     {
                         var soGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(refVal));
                         soGuid = hasOptions ? options.UseNameAsGuid ? refVal.name : soGuid : soGuid;
-                        var path = ConvertFullPathToRelative(FindNearestDirectory(refVal));
+                        var path = FileUtility.ConvertFullPathToRelative(FindNearestDirectory(refVal));
                         if (!formattedKeys.TryGetValue(path, out var list))
                         {
                             list = new();
                             formattedKeys.Add(path, list);
-                            namespaces.Add(FindNearestAssemblyDefinition(refVal) + $".{NamespaceName}");
+                            namespaces.Add(FileUtility.FindNearestNamespace(refVal) + $".{NamespaceName}");
                         }
                         list.Add(new KeyValuePair(refVal.name, key, soGuid));
                     }
@@ -284,13 +284,13 @@ namespace Vapor.Keys
                     EditorUtility.SetDirty(item);
                     takenKeys.Add(item.Key);
                     var guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(item));
-                    var path = ConvertFullPathToRelative(FindNearestDirectory(item));
+                    var path = FileUtility.ConvertFullPathToRelative(FindNearestDirectory(item));
                     guid = hasOptions ? options.UseNameAsGuid ? item.DisplayName : guid : guid;
                     if (!formattedKeys.TryGetValue(path, out var list))
                     {
                         list = new();
                         formattedKeys.Add(path, list);
-                        namespaces.Add(FindNearestAssemblyDefinition(item) + $".{NamespaceName}");
+                        namespaces.Add(FileUtility.FindNearestNamespace(item) + $".{NamespaceName}");
                     }
                     list.Add(new KeyValuePair(item.name, item.Key, guid));
                 }
@@ -520,22 +520,22 @@ namespace Vapor.Keys
             string path = AssetDatabase.GetAssetPath(obj);
 
             // Get the parent directory
-            string currentDirectory = System.IO.Path.GetDirectoryName(path);
+            string currentDirectory = Path.GetDirectoryName(path);
 
             Debug.Log(currentDirectory);
 
             // Move up to the parent directory
-            currentDirectory = System.IO.Directory.GetParent(currentDirectory)?.FullName;
-            string parentFolder = System.IO.Path.GetFileName(currentDirectory);
+            currentDirectory = Directory.GetParent(currentDirectory)?.FullName;
+            string parentFolder = Path.GetFileName(currentDirectory);
             Debug.Log(parentFolder);
             while (!(parentFolder.Equals("Assets") || parentFolder.Equals("Packages")))
             {
                 // Get all directories in the current path
-                string[] directories = System.IO.Directory.GetDirectories(currentDirectory);
+                string[] directories = Directory.GetDirectories(currentDirectory);
 
                 foreach (var dir in directories)
                 {
-                    var dirName = System.IO.Path.GetFileName(dir);
+                    var dirName = Path.GetFileName(dir);
                     Debug.Log(dirName);
                     if (dirName.Equals(KeyFolderName))
                     {
@@ -543,88 +543,11 @@ namespace Vapor.Keys
                         return dirFixed;
                     }
                 }
-                currentDirectory = System.IO.Directory.GetParent(currentDirectory)?.FullName;
-                parentFolder = System.IO.Path.GetFileName(currentDirectory);
+                currentDirectory = Directory.GetParent(currentDirectory)?.FullName;
+                parentFolder = Path.GetFileName(currentDirectory);
             }
 
             return FullFolderPath;
-        }
-
-        public static string FindNearestAssemblyDefinition(Object obj)
-        {
-            string path = AssetDatabase.GetAssetPath(obj);
-            path = System.IO.Path.GetDirectoryName(path);
-
-            // Loop until reaching the root of the project
-            while (!path.EmptyOrNull())
-            {
-                // Search for .asmdef files in the current directory
-                string[] asmdefFiles = System.IO.Directory.GetFiles(path, "*.asmdef");
-
-                if (asmdefFiles.Length > 0)
-                {
-                    // Load the first found .asmdef file
-                    var asmPath = ConvertFullPathToRelative(System.IO.Path.GetFullPath(asmdefFiles[0]));
-                    var assemblyDefinition = AssetDatabase.LoadAssetAtPath<TextAsset>(asmPath);
-                    if (assemblyDefinition != null)
-                    {
-                        // Return the default namespace
-                        string json = assemblyDefinition.text;
-                        JObject jsonObject = JObject.Parse(json);
-                        return jsonObject["rootNamespace"].ToString();
-                    }
-                    else
-                    {
-                        Debug.LogError($"Couldnt Parse Path: {asmdefFiles[0]} -> {asmPath}");
-                    }
-                }
-
-                // Move up to the parent directory
-                path = System.IO.Directory.GetParent(path)?.FullName;
-            }
-
-            // No assembly definition found
-            return null;
-        }
-
-        public static string ConvertRelativeToFullPath(string relativePath)
-        {
-            // Check if the relative path starts with "Assets/"
-            if (relativePath.StartsWith("Assets/"))
-            {
-                // Combine with Application.dataPath
-                return System.IO.Path.Combine(Application.dataPath, relativePath["Assets/".Length..]).Replace('\\', '/');
-            }
-            // Check if the relative path starts with "Packages/"
-            else if (relativePath.StartsWith("Packages/"))
-            {
-                return FileUtil.GetPhysicalPath(relativePath);
-            }
-
-            throw new System.ArgumentException($"Invalid relative path: {relativePath}");
-        }
-
-        public static string ConvertFullPathToRelative(string fullPath)
-        {
-            // Normalize path to use forward slashes
-            fullPath = fullPath.Replace("\\", "/");
-
-            // Get the project's Assets path
-            string assetsPath = Application.dataPath.Replace('\\', '/');
-            string packagesPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "Packages")).Replace('\\', '/');
-
-            // Check if the absolute path starts with the Assets path
-            if (fullPath.StartsWith(assetsPath))
-            {
-                return FileUtil.GetProjectRelativePath(fullPath);
-            }
-            // Check if the absolute path starts with the Packages path
-            else if (fullPath.StartsWith(packagesPath))
-            {
-                return FileUtil.GetLogicalPath(fullPath);
-            }
-
-            throw new System.ArgumentException($"Invalid full path: {fullPath}");
         }
 
         #region Format Keys
@@ -637,7 +560,7 @@ namespace Vapor.Keys
         /// <param name="keys">The keys to be used</param>
         public static void FormatKeyFiles(string relativeFilePath, string namespaceName, string scriptName, string category, List<KeyValuePair> keys)
         {
-            var filePath = $"{ConvertRelativeToFullPath(relativeFilePath)}/{scriptName}.cs".Replace("\\", "/");
+            var filePath = $"{FileUtility.ConvertRelativeToFullPath(relativeFilePath)}/{scriptName}.cs".Replace("\\", "/");
             var relativePath = relativeFilePath.Replace("\\", "/");            
 
             StringBuilder sb = new();
@@ -677,7 +600,7 @@ namespace Vapor.Keys
             sb.Append("\t}\n");
             sb.Append("}");
 
-            System.IO.File.WriteAllText(filePath, sb.ToString());
+            File.WriteAllText(filePath, sb.ToString());
         }
 
         private static void FormatFilePath(StringBuilder sb, string relativePath)

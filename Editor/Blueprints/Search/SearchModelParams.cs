@@ -5,28 +5,28 @@ using UnityEngine;
 
 namespace Vapor.Blueprints
 {
-    public static class SearchModelParams
-    {
-        public const string NODE_TYPE_PARAM = "NodeType";
+    // public static class SearchModelParams
+    // {
+        // public const string NODE_TYPE_PARAM = "NodeType";
         
-        public const string METHOD_INFO_PARAM = "MethodInfo";
+        // public const string METHOD_INFO_PARAM = "MethodInfo";
         
-        public const string FIELD_INFO_PARAM = "FieldInfo";
-        public const string VARIABLE_NAME_PARAM = "VariableName";
-        public const string VARIABLE_ACCESS_PARAM = "VariableAccess";
-        public const string VARIABLE_SCOPE_PARAM = "VariableScope";
+        // public const string FIELD_INFO_PARAM = "FieldInfo";
+        // public const string VARIABLE_NAME_PARAM = "VariableName";
+        // public const string VARIABLE_ACCESS_PARAM = "VariableAccess";
+        // public const string VARIABLE_SCOPE_PARAM = "VariableScope";
         
-        public const string DATA_TYPE_PARAM = "DataType";
+        // public const string DATA_TYPE_PARAM = "DataType";
         
         // Dynamic Fields
-        public const string GRAPH_PARAM = "Graph";
-        public const string PORT_PARAM = "Port";
+        // public const string GRAPH_PARAM = "Graph";
+        // public const string PORT_PARAM = "Port";
 
         // BlueprintNodeController CreateDesignNode(Vector2 position, List<(string, object)> parameters);
         // void UpdateDesignNode(BlueprintNodeController nodeController);
-        // // BlueprintCompiledNodeDto Compile(BlueprintDesignNode node);
+        // BlueprintCompiledNodeDto Compile(BlueprintDesignNode node);
         // BlueprintBaseNode Decompile(BlueprintDesignNodeDto dto);
-    }
+    // }
 
     // internal static class NodeTypeExtensions
     // {

@@ -16,24 +16,53 @@ using Object = UnityEngine.Object;
 
 namespace VaporEditor.Blueprints
 {
+    public struct MemberSearchData
+    {
+        public FieldInfo FieldInfo;
+        public PropertyInfo PropertyInfo;
+        public string Id;
+        public VariableAccessType AccessType;
+        public VariableScopeType ScopeType;
+    }
+
+    public struct ConstructorSearchData
+    {
+        public Type TypeToConstruct;
+        public string ConstructorSignature;
+        public bool IsArray;
+    }
+
     public class BlueprintSearchModel
     {
         // Required
         public string Category { get; }
         public string Name { get; }
         public bool SupportFavorite { get; private set; }
+        public NodeType NodeType { get; private set; }
         
         // Optional
         public List<string> Synonyms { get; private set; }
+        public BlueprintClassGraphModel Class { get; private set; }
+        public BlueprintPortView PortView { get; private set; }
 
         // User Data
-        public List<ValueTuple<string, object>> Parameters { get; private set; }
+        public bool IsStaticAccessor { get; }
+        public object UserData { get; private set; }
+
+        public BlueprintSearchModel(string category, string name, NodeType nodeType, bool supportFavorite = true)
+        {
+            Category = category;
+            Name = name;
+            NodeType = nodeType;
+            SupportFavorite = supportFavorite;
+        }
 
         public BlueprintSearchModel(string category, string name, bool supportFavorite = true)
         {
-               Category = category;
-               Name = name;
-               SupportFavorite = supportFavorite;
+            Category = category;
+            Name = name;
+            SupportFavorite = supportFavorite;
+            IsStaticAccessor = true;
         }
 
         public BlueprintSearchModel WithSynonyms(params string[] synonyms)
@@ -48,74 +77,22 @@ namespace VaporEditor.Blueprints
             return this;
         }
 
-        public BlueprintSearchModel WithParameters(params ValueTuple<string, object>[] parameters)
+        public BlueprintSearchModel WithUserData(object userData)
         {
-            if (parameters == null)
-            {
-                return this;
-            }
-            
-            Parameters ??= new List<ValueTuple<string, object>>();
-            Parameters.AddRange(parameters);
+            UserData = userData;
             return this;
         }
 
-        public BlueprintSearchModel WithGraph(BlueprintClassGraphModel graphModel)
+        public BlueprintSearchModel WithGraph(BlueprintClassGraphModel classModel)
         {
-            Parameters ??= new List<ValueTuple<string, object>>();
-            var idx = Parameters.FindIndex(v => v.Item1 == SearchModelParams.GRAPH_PARAM);
-            if (idx != -1)
-            {
-                Parameters[idx] = (SearchModelParams.GRAPH_PARAM, graphModel.Current);
-            }
-            else
-            {
-                Parameters.Add((SearchModelParams.GRAPH_PARAM, graphModel.Current));
-            }
-            
+            Class = classModel;
             return this;
         }
-
-        public BlueprintSearchModel WithPin(BlueprintPortView portView)
+        
+        public BlueprintSearchModel WithPinView(BlueprintPortView pin)
         {
-            Parameters ??= new List<ValueTuple<string, object>>();
-            var idx = Parameters.FindIndex(v => v.Item1 == SearchModelParams.PORT_PARAM);
-            if (idx != -1)
-            {
-                Parameters[idx] = (SearchModelParams.PORT_PARAM, portView);
-            }
-            else
-            {
-                Parameters.Add((SearchModelParams.PORT_PARAM, portView));
-            }
-            
+            PortView = pin;
             return this;
-        }
-
-        public bool TryGetParameter<T>(string name, out T parameter)
-        {
-            var idx = Parameters.FindIndex(v => v.Item1 == name);
-            if (idx != -1)
-            {
-                parameter = (T)Parameters[idx].Item2;
-                return true;
-            }
-
-            parameter = default;
-            return false;
-        }
-
-        public bool TryGetParameterWithType<T>(out T parameter)
-        {
-            var idx = Parameters.FindIndex(v => v.Item2.GetType() == typeof(T));
-            if (idx != -1)
-            {
-                parameter = (T)Parameters[idx].Item2;
-                return true;
-            }
-
-            parameter = default;
-            return false;
         }
     }
     
@@ -223,9 +200,9 @@ namespace VaporEditor.Blueprints
                     }
                     
                     var callableAtr = methodInfo.GetCustomAttribute<BlueprintCallableAttribute>();
-                    modelDescs.Add(new BlueprintSearchModel(string.Join('/', callableAtr.MenuName), callableAtr.NodeName.EmptyOrNull() ? methodInfo.Name : callableAtr.NodeName)
+                    modelDescs.Add(new BlueprintSearchModel(string.Join('/', callableAtr.MenuName), callableAtr.NodeName.EmptyOrNull() ? methodInfo.Name : callableAtr.NodeName, NodeType.Method)
                         .WithSynonyms(callableAtr.Synonyms)
-                        .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Method), (SearchModelParams.METHOD_INFO_PARAM, methodInfo)));
+                        .WithUserData(methodInfo));
                 }
             }
             return modelDescs;
@@ -235,71 +212,64 @@ namespace VaporEditor.Blueprints
         {
             var modelDescs = new List<BlueprintSearchModel>();
 
-            modelDescs.Add(new BlueprintSearchModel("Utilities", "Cast")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Cast))
+            modelDescs.Add(new BlueprintSearchModel("Utilities", "Cast", NodeType.Cast)
                 .WithSynonyms("Is", "As"));
+            modelDescs.Add(new BlueprintSearchModel("Utilities", "Construct", NodeType.Constructor)
+                .WithSynonyms("New", "Create"));
             
             // Flow Control
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Flow Control", "Branch")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Branch))
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Flow Control", "Branch", NodeType.Branch)
                 .WithSynonyms("If", "Else"));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Flow Control", "Switch")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Switch)));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Flow Control", "While")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.While))
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Flow Control", "Switch", NodeType.Switch));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Flow Control", "While", NodeType.While)
                 .WithSynonyms("Do"));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Flow Control", "Sequence")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Sequence)));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Flow Control", "Continue")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Continue)));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Flow Control", "Break")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Break)));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Flow Control", "Sequence", NodeType.Sequence));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Flow Control", "Continue", NodeType.Continue));
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Flow Control", "Break", NodeType.Break));
             
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Array", "For")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.For))
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Array", "For", NodeType.For)
                 .WithSynonyms("Loop"));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Array", "ForEach")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.ForEach))
+            modelDescs.Add(new BlueprintSearchModel("Utilities/Array", "ForEach", NodeType.ForEach)
                 .WithSynonyms("Loop"));
             
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Float")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Inline), (SearchModelParams.DATA_TYPE_PARAM, typeof(float))));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Double")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Inline),(SearchModelParams.DATA_TYPE_PARAM, typeof(double))));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Int")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Inline),(SearchModelParams.DATA_TYPE_PARAM, typeof(int))));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Long")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Inline),(SearchModelParams.DATA_TYPE_PARAM, typeof(long))));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make String")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Inline),(SearchModelParams.DATA_TYPE_PARAM, typeof(string))));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Color")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Inline),(SearchModelParams.DATA_TYPE_PARAM, typeof(Color))));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Gradient")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Inline),(SearchModelParams.DATA_TYPE_PARAM, typeof(Gradient))));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make LayerMask")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Inline),(SearchModelParams.DATA_TYPE_PARAM, typeof(LayerMask))));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make RenderingLayerMask")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Inline),(SearchModelParams.DATA_TYPE_PARAM, typeof(RenderingLayerMask))));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Vector2")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Inline),(SearchModelParams.DATA_TYPE_PARAM, typeof(Vector2))));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Vector3")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Inline),(SearchModelParams.DATA_TYPE_PARAM, typeof(Vector3))));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Vector4")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Inline),(SearchModelParams.DATA_TYPE_PARAM, typeof(Vector4))));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Vector2Int")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Inline),(SearchModelParams.DATA_TYPE_PARAM, typeof(Vector2Int))));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Vector3Int")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Inline),(SearchModelParams.DATA_TYPE_PARAM, typeof(Vector3Int))));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Rect")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Inline),(SearchModelParams.DATA_TYPE_PARAM, typeof(Rect))));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make RectInt")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Inline),(SearchModelParams.DATA_TYPE_PARAM, typeof(RectInt))));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Bounds")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Inline),(SearchModelParams.DATA_TYPE_PARAM, typeof(Bounds))));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make BoundsInt")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Inline),(SearchModelParams.DATA_TYPE_PARAM, typeof(BoundsInt))));
-            modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make AnimationCurve")
-                .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Inline),(SearchModelParams.DATA_TYPE_PARAM, typeof(AnimationCurve))));
+            // modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Float", NodeType.Inline)
+            //     .WithUserData( typeof(float)));
+            // modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Double", NodeType.Inline)
+            //     .WithUserData(typeof(double)));
+            // modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Int", NodeType.Inline)
+            //     .WithUserData(typeof(int)));
+            // modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Long", NodeType.Inline)
+            //     .WithUserData(typeof(long)));
+            // modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make String", NodeType.Inline)
+            //     .WithUserData(typeof(string)));
+            // modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Color", NodeType.Inline)
+            //     .WithUserData(typeof(Color)));
+            // modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Gradient", NodeType.Inline)
+            //     .WithUserData(typeof(Gradient)));
+            // modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make LayerMask", NodeType.Inline)
+            //     .WithUserData(typeof(LayerMask)));
+            // modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make RenderingLayerMask", NodeType.Inline)
+            //     .WithUserData(typeof(RenderingLayerMask)));
+            // modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Vector2", NodeType.Inline)
+            //     .WithUserData(typeof(Vector2)));
+            // modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Vector3", NodeType.Inline)
+            //     .WithUserData(typeof(Vector3)));
+            // modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Vector4", NodeType.Inline)
+            //     .WithUserData(typeof(Vector4)));
+            // modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Vector2Int", NodeType.Inline)
+            //     .WithUserData(typeof(Vector2Int)));
+            // modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Vector3Int", NodeType.Inline)
+            //     .WithUserData(typeof(Vector3Int)));
+            // modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Rect", NodeType.Inline)
+            //     .WithUserData(typeof(Rect)));
+            // modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make RectInt", NodeType.Inline)
+            //     .WithUserData(typeof(RectInt)));
+            // modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make Bounds", NodeType.Inline)
+            //     .WithUserData(typeof(Bounds)));
+            // modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make BoundsInt", NodeType.Inline)
+            //     .WithUserData(typeof(BoundsInt)));
+            // modelDescs.Add(new BlueprintSearchModel("Utilities/Inline Types", "Make AnimationCurve", NodeType.Inline)
+            //     .WithUserData(typeof(AnimationCurve)));
             return modelDescs;
         }
 
@@ -332,14 +302,14 @@ namespace VaporEditor.Blueprints
                 {
                     continue;
                 }
-                
-                yield return new BlueprintSearchModel($"{category}/Fields", $"Get {ObjectNames.NicifyVariableName(fieldInfo.Name)}")
-                    .WithSynonyms(fieldInfo.Name, type.Name, $"{type.Name}.{fieldInfo.Name}")
-                    .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.MemberAccess), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Get), (SearchModelParams.FIELD_INFO_PARAM, fieldInfo));
 
-                yield return new BlueprintSearchModel($"{category}/Fields", $"Set {ObjectNames.NicifyVariableName(fieldInfo.Name)}")
+                yield return new BlueprintSearchModel($"{category}/Fields", $"Get {ObjectNames.NicifyVariableName(fieldInfo.Name)}", NodeType.MemberAccess)
                     .WithSynonyms(fieldInfo.Name, type.Name, $"{type.Name}.{fieldInfo.Name}")
-                    .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.MemberAccess), (SearchModelParams.VARIABLE_ACCESS_PARAM, VariableAccessType.Set), (SearchModelParams.FIELD_INFO_PARAM, fieldInfo));
+                    .WithUserData(new MemberSearchData { AccessType = VariableAccessType.Get, FieldInfo = fieldInfo });
+
+                yield return new BlueprintSearchModel($"{category}/Fields", $"Set {ObjectNames.NicifyVariableName(fieldInfo.Name)}", NodeType.MemberAccess)
+                    .WithSynonyms(fieldInfo.Name, type.Name, $"{type.Name}.{fieldInfo.Name}")
+                    .WithUserData(new MemberSearchData { AccessType = VariableAccessType.Set, FieldInfo = fieldInfo });
             }
 
             var staticMethods = ReflectionUtility.GetAllMethodsThatMatch(type, ReflectionUtility.IsPublicStatic, false, true);
@@ -365,9 +335,9 @@ namespace VaporEditor.Blueprints
                         .Aggregate((a, b) => a + ", " + b)
                     : string.Empty;
 
-                yield return new BlueprintSearchModel($"{category}/Methods", $"{name}({paramNames})")
+                yield return new BlueprintSearchModel($"{category}/Methods", $"{name}({paramNames})", NodeType.Method)
                     .WithSynonyms(name, type.Name, $"{type.Name}.{methodInfo.Name}")
-                    .WithParameters((SearchModelParams.NODE_TYPE_PARAM, NodeType.Method), (SearchModelParams.METHOD_INFO_PARAM, methodInfo));
+                    .WithUserData(methodInfo);
             }
         }
     }

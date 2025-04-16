@@ -5,33 +5,12 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Serialization;
-using Vapor.Inspector;
 using VaporEditor.Blueprints;
 
 namespace Vapor.Blueprints
 {
-    [Serializable]
-    public struct BlueprintMethodGraphDto
+    public class BlueprintMethodGraph : IBlueprintGraphModel
     {
-        public bool IsTypeOverride;
-        public bool IsBlueprintOverride;
-        public Type MethodDeclaringType;
-        public string MethodName;
-        public string[] MethodParameters;
-        public List<BlueprintArgumentDto> Arguments;
-        public List<BlueprintVariableDto> Variables;
-        public List<BlueprintDesignNodeDto> Nodes;
-    }
-    
-    public class BlueprintMethodGraph
-    {
-        public enum ChangeType
-        {
-            Added,
-            Removed,
-            Updated
-        }
-        
         public BlueprintClassGraphModel ClassGraphModel { get; }
 
 
@@ -40,6 +19,7 @@ namespace Vapor.Blueprints
         public bool IsPure { get; set; }
         public VariableAccessModifier AccessModifier { get; set; }
         public bool IsOverride => _isTypeOverride || _isBlueprintOverride;
+        public bool IsUnityOverride => _isUnityOverride;
         
         public Type MethodDeclaringType { get; set; }
         public string MethodName { get; private set; }
@@ -47,20 +27,20 @@ namespace Vapor.Blueprints
         public MethodInfo MethodInfo { get; }
 
         public List<BlueprintArgument> Arguments { get; }
-        public List<BlueprintVariable> Variables { get; }
-        // public List<NodeModelBase> Nodes { get; }
-        public Dictionary<string, BlueprintWire> Wires { get; }
+        public Dictionary<string, BlueprintVariable> Variables { get; }
         public Dictionary<string, NodeModelBase> Nodes { get; }
+        public Dictionary<string, BlueprintWire> Wires { get; }
 
         private readonly bool _isTypeOverride;
         private readonly bool _isBlueprintOverride;
+        private readonly bool _isUnityOverride;
 
         public event Action<BlueprintMethodGraph> NameChanged;
         public event Action<BlueprintMethodGraph> ArgumentsReordered;
-        public event Action<BlueprintMethodGraph, BlueprintArgument, ChangeType> ArgumentChanged;
-        public event Action<BlueprintMethodGraph, BlueprintVariable, ChangeType> VariableChanged;
-        public event Action<BlueprintMethodGraph, NodeModelBase, ChangeType> NodeChanged;
-        public event Action<BlueprintMethodGraph, BlueprintWire, ChangeType> WireChanged;
+        public event Action<BlueprintMethodGraph, BlueprintArgument, ChangeType, bool> ArgumentChanged;
+        public event Action<BlueprintMethodGraph, BlueprintVariable, ChangeType, bool> VariableChanged;
+        public event Action<BlueprintMethodGraph, NodeModelBase, ChangeType, bool> NodeChanged;
+        public event Action<BlueprintMethodGraph, BlueprintWire, ChangeType, bool> WireChanged;
 
         public BlueprintMethodGraph(BlueprintClassGraphModel graphModel, BlueprintMethodGraphDto dto)
         {
@@ -80,6 +60,13 @@ namespace Vapor.Blueprints
                 MethodDeclaringType = dto.MethodDeclaringType;
                 MethodParameters = dto.MethodParameters;
             }
+
+            if (dto.IsUnityOverride)
+            {
+                _isUnityOverride = true;
+                MethodDeclaringType = dto.MethodDeclaringType;
+                MethodParameters = dto.MethodParameters;
+            }
             
             if(dto.Arguments != null)
             {
@@ -94,13 +81,13 @@ namespace Vapor.Blueprints
             
             if(dto.Variables != null)
             {
-                Variables = new List<BlueprintVariable>(dto.Variables.Count);
+                Variables = new Dictionary<string, BlueprintVariable>(dto.Variables.Count);
                 foreach (var v in dto.Variables)
                 {
-                    Variables.Add(new BlueprintVariable(v).WithMethodGraph(this));
+                    Variables.Add(v.Id, new BlueprintVariable(v).WithMethodGraph(this));
                 }
             }
-            Variables ??= new List<BlueprintVariable>();
+            Variables ??= new Dictionary<string, BlueprintVariable>();
             
             if(dto.Nodes != null)
             {
@@ -121,6 +108,35 @@ namespace Vapor.Blueprints
                 }
             }
             Nodes ??= new Dictionary<string, NodeModelBase>();
+
+            if (dto.Wires != null)
+            {
+                Wires = new Dictionary<string, BlueprintWire>(dto.Wires.Count);
+                foreach (var wireDto in dto.Wires)
+                {
+                    BlueprintWire wire = new BlueprintWire(this, wireDto);
+                    Wires.Add(wire.Guid, wire);
+                }
+            }
+            Wires ??= new Dictionary<string, BlueprintWire>();
+
+            foreach (var w in Wires.Values)
+            {
+                if (Nodes.TryGetValue(w.LeftGuid, out var leftNode) && leftNode.OutputPins.TryGetValue(w.LeftName, out var leftOutputPin))
+                {
+                    leftOutputPin.Wires.Add(w);
+                }
+
+                if (Nodes.TryGetValue(w.RightGuid, out var rightNode) && rightNode.InputPins.TryGetValue(w.RightName, out var rightOutputPin))
+                {
+                    rightOutputPin.Wires.Add(w);
+                }
+            }
+            
+            foreach (var node in Nodes.Values)
+            {
+                node.PostConnectWires();
+            }
         }
         
         public BlueprintMethodGraphDto Serialize()
@@ -129,24 +145,30 @@ namespace Vapor.Blueprints
             {
                 IsTypeOverride = _isTypeOverride,
                 IsBlueprintOverride = _isBlueprintOverride,
+                IsUnityOverride = _isUnityOverride,
                 MethodDeclaringType = MethodDeclaringType,
                 MethodName = MethodName,
                 MethodParameters = MethodParameters,
                 Nodes = new List<BlueprintDesignNodeDto>(Nodes.Count),
                 Arguments = new List<BlueprintArgumentDto>(Arguments.Count),
                 Variables = new List<BlueprintVariableDto>(Variables.Count),
+                Wires = new List<BlueprintWireDto>(Wires.Count),
             };
             foreach (var arg in Arguments)
             {
                 graphDto.Arguments.Add(arg.Serialize());
             }
-            foreach (var v in Variables)
+            foreach (var v in Variables.Values)
             {
                 graphDto.Variables.Add(v.Serialize());
             }
             foreach (var node in Nodes.Values)
             {
                 graphDto.Nodes.Add(node.Serialize());
+            }
+            foreach (var w in Wires.Values)
+            {
+                graphDto.Wires.Add(w.Serialize());
             }
 
             return graphDto;
@@ -162,7 +184,8 @@ namespace Vapor.Blueprints
             var entry = Nodes.FirstOrDefault(x => x.Value.NodeType == NodeType.Entry).Value;
             if (entry == null)
             {
-                eNode = NodeFactory.Build(NodeType.Entry, Vector2.zero, this);
+                eNode = NodeFactory.Build(NodeType.Entry, Vector2.zero, this, null);
+                eNode.PostBuildData();
                 Nodes.Add(eNode.Guid, eNode);
                 valid = false;
                 eNew = true;
@@ -171,7 +194,8 @@ namespace Vapor.Blueprints
             var ret = Nodes.FirstOrDefault(x => x.Value.NodeType == NodeType.Return).Value;
             if (ret == null)
             {
-                rNode = NodeFactory.Build(NodeType.Return, Vector2.zero + Vector2.right * 200, this);
+                rNode = NodeFactory.Build(NodeType.Return, Vector2.zero + Vector2.right * 200, this, null);
+                rNode.PostBuildData();
                 Nodes.Add(rNode.Guid, rNode);
                 valid = false;
                 rNew = true;
@@ -179,11 +203,13 @@ namespace Vapor.Blueprints
 
             if (eNew && rNew)
             {
-                var leftPort = new BlueprintPinReference(PinNames.EXECUTE_OUT, eNode.Guid, true);
-                var rightPort = new BlueprintPinReference(PinNames.EXECUTE_IN, rNode.Guid, true);
-                var wireRef = new BlueprintWireReference(leftPort, rightPort);
-                eNode.OutputWires.Add(wireRef);
-                rNode.InputWires.Add(wireRef);
+                // var leftPort = new BlueprintPinReference(PinNames.EXECUTE_OUT, eNode.Guid, true);
+                // var rightPort = new BlueprintPinReference(PinNames.EXECUTE_IN, rNode.Guid, true);
+                // var wireRef = new BlueprintWireReference(leftPort, rightPort);
+                // eNode.OutputWires.Add(wireRef);
+                // rNode.InputWires.Add(wireRef);
+                
+                AddWire(eNode.OutputPins[PinNames.EXECUTE_OUT], rNode.InputPins[PinNames.EXECUTE_IN]);
             }
             return valid;
         }
@@ -195,6 +221,10 @@ namespace Vapor.Blueprints
             MethodName = newName;
             NameChanged?.Invoke(this);
             ClassGraphModel.OnMethodUpdated(this);
+            if (ClassGraphModel.Current == this)
+            {
+                ClassGraphModel.Graph.LastOpenedMethod = MethodName;
+            }
         }
 
         #endregion
@@ -202,15 +232,15 @@ namespace Vapor.Blueprints
 
         #region - Arguments -
 
-        public BlueprintArgument AddInputArgument(Type type)
+        public BlueprintArgument AddInputArgument(Type type, bool ignoreUndo = false)
         {
             var argument = new BlueprintArgument(this, type, $"InArg_{Arguments.Count}", Arguments.Count, false, false, false);
             Arguments.Add(argument);
-            ArgumentChanged?.Invoke(this, argument, ChangeType.Added);
+            ArgumentChanged?.Invoke(this, argument, ChangeType.Added, ignoreUndo);
             return argument;
         }
 
-        public BlueprintArgument AddOutputArgument(Type type)
+        public BlueprintArgument AddOutputArgument(Type type, bool ignoreUndo = false)
         {
             bool alreadyHasReturn = false;
             foreach (var arg in Arguments)
@@ -224,15 +254,22 @@ namespace Vapor.Blueprints
 
             var argument = new BlueprintArgument(this, type, $"OutArg_{Arguments.Count}", Arguments.Count, false, alreadyHasReturn, !alreadyHasReturn);
             Arguments.Add(argument);
-            ArgumentChanged?.Invoke(this, argument, ChangeType.Added);
+            ArgumentChanged?.Invoke(this, argument, ChangeType.Added, ignoreUndo);
             return argument;
         }
         
-        public void RemoveArgument(BlueprintArgument argument)
+        public BlueprintArgument AddArgument(BlueprintArgument argument, bool ignoreUndo)
+        {
+            Arguments.Add(argument);
+            ArgumentChanged?.Invoke(this, argument, ChangeType.Added, ignoreUndo);
+            return argument;
+        }
+        
+        public void RemoveArgument(BlueprintArgument argument, bool ignoreUndo = false)
         {
             if (Arguments.Remove(argument))
             {
-                ArgumentChanged?.Invoke(this, argument, ChangeType.Removed);
+                ArgumentChanged?.Invoke(this, argument, ChangeType.Removed, ignoreUndo);
                 bool hasReturn = false;
                 foreach (var arg in Arguments)
                 {
@@ -252,15 +289,15 @@ namespace Vapor.Blueprints
                     if (firstOutArg != null)
                     {
                         firstOutArg.IsReturn = true;
-                        ArgumentChanged?.Invoke(this, firstOutArg, ChangeType.Updated);
+                        ArgumentChanged?.Invoke(this, firstOutArg, ChangeType.Modified, ignoreUndo);
                     }
                 }
             }
         }
 
-        public void OnArgumentUpdated(BlueprintArgument argument)
+        public void OnArgumentUpdated(BlueprintArgument argument, bool ignoreUndo = false)
         {
-            ArgumentChanged?.Invoke(this, argument, ChangeType.Updated);
+            ArgumentChanged?.Invoke(this, argument, ChangeType.Modified, ignoreUndo);
         }
 
         public void OnArgumentsReordered()
@@ -273,9 +310,9 @@ namespace Vapor.Blueprints
 
         #region - Variables -
 
-        public BlueprintVariable AddVariable(Type type)
+        public BlueprintVariable AddVariable(Type type, bool ignoreUndo = false)
         {
-            var selection = Variables.FindAll(v => v.Name.StartsWith("LocalVar_")).Select(v => v.Name.Split('_')[1]);
+            var selection = Variables.Values.ToList().FindAll(v => v.DisplayName.StartsWith("LocalVar_")).Select(v => v.DisplayName.Split('_')[1]);
             int idx = 0;
             foreach (var s in selection)
             {
@@ -291,34 +328,39 @@ namespace Vapor.Blueprints
             }
             
             var variable = new BlueprintVariable($"LocalVar_{idx}", type, VariableScopeType.Method).WithMethodGraph(this);
-            Variables.Add(variable);
-            VariableChanged?.Invoke(this, variable, ChangeType.Added);
+            Variables.Add(variable.Id, variable);
+            VariableChanged?.Invoke(this, variable, ChangeType.Added, ignoreUndo);
             return variable;
         }
 
-        public void RemoveVariable(BlueprintVariable variable)
+        public BlueprintVariable AddVariable(BlueprintVariable variable, bool ignoreUndo)
         {
-            if (Variables.Remove(variable))
+            Variables.Add(variable.Id, variable);
+            VariableChanged?.Invoke(this, variable, ChangeType.Added, ignoreUndo);
+            return variable;
+        }
+        
+        public void RemoveVariable(BlueprintVariable variable, bool ignoreUndo = false)
+        {
+            if (Variables.Remove(variable.Id))
             {
-                VariableChanged?.Invoke(this, variable, ChangeType.Removed);
+                VariableChanged?.Invoke(this, variable, ChangeType.Removed, ignoreUndo);
             }
         }
         
-        public void OnVariableUpdated(BlueprintVariable variable)
+        public void OnVariableUpdated(BlueprintVariable variable, bool ignoreUndo = false)
         {
-            VariableChanged?.Invoke(this, variable, ChangeType.Updated);
+            VariableChanged?.Invoke(this, variable, ChangeType.Modified, ignoreUndo);
         }
 
-        public bool TryGetVariable(VariableScopeType variableScope, string variableName, out BlueprintVariable variable)
+        public bool TryGetVariable(VariableScopeType variableScope, string variableId, out BlueprintVariable variable)
         {
             switch (variableScope)
             {
                 case VariableScopeType.Method:
-                    variable = Variables.FirstOrDefault(x => x.Name == variableName);
-                    return variable != null;
+                    return Variables.TryGetValue(variableId, out variable);
                 case VariableScopeType.Class:
-                    variable = ClassGraphModel.Variables.FirstOrDefault(x => x.Name == variableName);
-                    return variable != null;
+                    return ClassGraphModel.Variables.TryGetValue(variableId, out variable);
                 default:
                     variable = null;
                     return false;
@@ -329,48 +371,117 @@ namespace Vapor.Blueprints
 
         #region - Wires -
 
-        public BlueprintWire AddWire(BlueprintPin left, BlueprintPin right)
+        public BlueprintWire AddWire(BlueprintPin left, BlueprintPin right, bool ignoreUndo = false)
         {
             var wire = new BlueprintWire(this);
             wire.Connect(left, right);
-            WireChanged?.Invoke(this, wire, ChangeType.Added);
+            Wires.Add(wire.Guid, wire);
+            WireChanged?.Invoke(this, wire, ChangeType.Added, ignoreUndo);
             return wire;
         }
+        
+        public BlueprintWire AddWire(BlueprintWire wire, bool ignoreUndo)
+        {
+            Wires.Add(wire.Guid, wire);
+            if (Nodes.TryGetValue(wire.LeftGuid, out var leftNode) 
+                && leftNode.OutputPins.TryGetValue(wire.LeftName, out var leftPin) 
+                && Nodes.TryGetValue(wire.RightGuid, out var rightNode) 
+                && rightNode.InputPins.TryGetValue(wire.RightName, out var rightPin))
+            {
+                wire.Connect(leftPin, rightPin);
+            }
+            WireChanged?.Invoke(this, wire, ChangeType.Added, ignoreUndo);
+            return wire;
+        }
+        
 
-        public bool RemoveWire(BlueprintWire wire)
+        public bool RemoveWire(BlueprintWire wire, bool ignoreUndo = false)
         {
             if (Wires.Remove(wire.Guid))
             {
-                WireChanged?.Invoke(this, wire, ChangeType.Removed);
+                if (Nodes.TryGetValue(wire.LeftGuid, out var leftNode))
+                {
+                    leftNode.OnWireRemoved(wire);
+                }
+
+                if (Nodes.TryGetValue(wire.RightGuid, out var rightNode))
+                {
+                    rightNode.OnWireRemoved(wire);
+                }
+                WireChanged?.Invoke(this, wire, ChangeType.Removed, ignoreUndo);
             }
 
             return false;
         }
 
-        public void OnWireUpdated(BlueprintWire wire)
+        public void OnWireUpdated(BlueprintWire wire, bool ignoreUndo = false)
         {
-            WireChanged?.Invoke(this, wire, ChangeType.Updated);
+            WireChanged?.Invoke(this, wire, ChangeType.Modified, ignoreUndo);
         }
         
         #endregion
 
         #region - Nodes -
 
-        public NodeModelBase AddNode()
+        public NodeModelBase AddNode(NodeType nodeType, Vector2 position, object userData, bool ignoreUndo = false)
         {
-            return null;
+            var node = NodeFactory.Build(nodeType, position, this, userData);
+            node.PostBuildData();
+            Nodes.Add(node.Guid, node);
+            NodeChanged?.Invoke(this, node, ChangeType.Added, ignoreUndo);
+            return node;
+        }
+        
+        public NodeModelBase AddNode(NodeModelBase node, bool ignoreUndo)
+        {
+            Nodes.Add(node.Guid, node);
+            NodeChanged?.Invoke(this, node, ChangeType.Added, ignoreUndo);
+            return node;
+        }
+        
+        public NodeModelBase PasteNode(NodeModelBase node, bool ignoreUndo = false)
+        {
+            node.ResetGuid();
+            Nodes.Add(node.Guid, node);
+            NodeChanged?.Invoke(this, node, ChangeType.Added, ignoreUndo);
+            return node;
         }
 
-        public bool RemoveNode(NodeModelBase node)
+        public bool RemoveNode(NodeModelBase node, bool ignoreUndo = false)
         {
+            if (Nodes.Remove(node.Guid))
+            {
+                var wires = new List<BlueprintWire>();
+                foreach (var pin in node.InputPins.Values)
+                {
+                    wires.AddRange(pin.Wires);
+                }
+                foreach (var pin in node.OutputPins.Values)
+                {
+                    wires.AddRange(pin.Wires);
+                }
+
+                foreach (var wire in wires)
+                {
+                    wire.Delete();
+                }
+
+                NodeChanged?.Invoke(this, node, ChangeType.Removed, ignoreUndo);
+                return true;
+            }
             return false;
         }
         
-        public void OnUpdateNode(NodeModelBase node)
+        public void OnUpdateNode(NodeModelBase node, bool ignoreUndo = false)
         {
-            NodeChanged?.Invoke(this, node, ChangeType.Updated);
+            NodeChanged?.Invoke(this, node, ChangeType.Modified, ignoreUndo);
         }
 
+        public void OverwriteNode(NodeModelBase overwrite, bool ignoreUndo = false)
+        {
+            Nodes[overwrite.Guid] = overwrite;
+            OnUpdateNode(overwrite, ignoreUndo);
+        }
         #endregion
 
         public void Edit()
@@ -381,101 +492,6 @@ namespace Vapor.Blueprints
         public void Delete()
         {
             ClassGraphModel.RemoveMethod(this);
-        }
-    }
-
-    [Serializable]
-    public struct BlueprintWireDto
-    {
-        public string Guid;
-        public uint Uuid;
-        public bool IsExecuteWire;
-        
-        public string LeftGuid;
-        public string LeftName;
-
-        public string RightGuid;
-        public string RightName;
-    }
-    
-    public class BlueprintWire
-    {
-        
-        public string Guid { get; set; }
-        public uint Uuid { get; }
-        public bool IsExecuteWire { get; set; }
-
-        public string LeftGuid { get; set; }
-        public string LeftName { get; set; }
-        
-        public string RightGuid { get; set; }
-        public string RightName { get; set; }
-        
-        
-        private readonly BlueprintMethodGraph _graph;
-
-        public BlueprintWire(BlueprintMethodGraph graph)
-        {
-            _graph = graph;
-            Guid = System.Guid.NewGuid().ToString();
-            Uuid = Guid.GetStableHashU32();
-        }
-
-        public bool IsConnected()
-        {
-            if (LeftGuid.EmptyOrNull() || RightGuid.EmptyOrNull())
-            {
-                return false;
-            }
-
-            if (!_graph.Nodes.TryGetValue(LeftGuid, out var leftNode))
-            {
-                return false;
-            }
-            
-            if (!_graph.Nodes.TryGetValue(RightGuid, out var rightNode))
-            {
-                return false;
-            }
-            
-            return leftNode.OutputPins.ContainsKey(LeftName) && rightNode.InputPins.ContainsKey(RightName);
-        }
-
-        public void Connect(BlueprintPin leftPin, BlueprintPin rightPin)
-        {
-            IsExecuteWire = leftPin.IsExecutePin;
-            
-            LeftGuid = leftPin.Node.Guid;
-            LeftName = leftPin.PortName;
-            
-            RightGuid = rightPin.Node.Guid;
-            RightName = rightPin.PortName;
-        }
-        
-        public void Disconnect()
-        {
-            LeftGuid = null;
-            LeftName = null;
-            
-            RightGuid = null;
-            RightName = null;
-        }
-        
-
-        public BlueprintWireDto Serialize()
-        {
-            return new BlueprintWireDto()
-            {
-                Guid = Guid,
-                Uuid = Uuid,
-                IsExecuteWire = IsExecuteWire,
-                
-                LeftGuid = LeftGuid,
-                LeftName = LeftName,
-                
-                RightGuid = RightGuid,
-                RightName = RightName,
-            };
         }
     }
 }

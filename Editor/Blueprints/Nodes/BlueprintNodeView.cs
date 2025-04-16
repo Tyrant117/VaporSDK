@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UIElements;
+using Vapor;
 using Vapor.Blueprints;
 using Vapor.Inspector;
 using VaporEditor.Inspector;
@@ -99,6 +99,11 @@ namespace VaporEditor.Blueprints
         public void InvalidateType()
         {
             
+        }
+
+        public void Delete()
+        {
+            Controller.Delete();
         }
     }
     
@@ -279,8 +284,8 @@ namespace VaporEditor.Blueprints
         
         private List<FieldInfo> _nodeContentData;
 
-        public event Action<BlueprintWireReference, bool> ConnectedPort;
-        public event Action<string> DisconnectedPort;
+        // public event Action<BlueprintWireReference, bool> ConnectedPort;
+        // public event Action<string> DisconnectedPort;
 
         public BlueprintNodeView(BlueprintView view, NodeModelBase nodeController)
         {
@@ -314,49 +319,58 @@ namespace VaporEditor.Blueprints
             CreateFlowInPorts();
             CreateFlowOutPorts();
 
-            // if (nodeController.Model.NodeType == NodeType.Method && nodeController.ModelAs<MethodNodeModel>().MethodInfo.IsGenericMethod)
-            // {
-            //     const string n = "Gen_";
-            //     int i = 0;
-            //     foreach (var genM in nodeController.ModelAs<MethodNodeModel>().MethodInfo.GetGenericArguments())
-            //     {
-            //         int idx = i;
-            //         var ts = new TypeSelectorField($"{n}{idx}", typeof(bool));
-            //         ts.TypeChanged += type =>
-            //         {
-            //             Debug.Log("Update Type " + type.Name + " " + idx);
-            //             if (nodeController.GenericArgumentPortMap.TryGetValue(idx, out var port))
-            //             {
-            //                 port.Type = type;
-            //                 OutPorts[port.PortName].UpdateType();
-            //                 Debug.Log("Update Type " + port.PortName);
-            //             }
-            //         };
-            //         Add(ts);
-            //         i++;
-            //     }
-            // }
-
             RefreshExpandedState();
 
-            ConnectedPort += OnConnectedPort;
-            DisconnectedPort += OnDisconnectedPort;
+            // ConnectedPort += OnConnectedPort;
+            // DisconnectedPort += OnDisconnectedPort;
+
+            nodeController.Changed += OnNodeChanged;
         }
 
-        protected virtual void OnConnectedPort(BlueprintWireReference wire, bool shouldModifyDataModel)
+        private void OnNodeChanged(NodeModelBase node, NodeModelBase.ChangeType changeType)
         {
-            if (Controller.NodeType == NodeType.Switch && wire.RightSidePin.PinName == PinNames.VALUE_IN)
+            switch (changeType)
             {
-                if(shouldModifyDataModel && Controller.OnEnumChanged())
+                case NodeModelBase.ChangeType.Deleted:
+                    break;
+                case NodeModelBase.ChangeType.Renamed:
                 {
-                    ClearOutputPins();
+                    title = node.GetNodeName().Item1;
+                    break;
                 }
+                case NodeModelBase.ChangeType.ReTyped:
+                {
+                    if (Controller is MemberNodeModel memberNode)
+                    {
+                        if (memberNode.Variable != null)
+                        {
+                            if (memberNode.VariableAccess == VariableAccessType.Get)
+                            {
+                                OutPorts[PinNames.GET_OUT].UpdateType();
+                            }
+                            else
+                            {
+                                InPorts[PinNames.SET_IN].UpdateType();
+                                OutPorts[PinNames.GET_OUT].UpdateType();
+                            }
+                        }
+                    }
+
+                    if (Controller is SwitchNode switchNode)
+                    {
+                        InPorts[PinNames.VALUE_IN].UpdateType();
+                    }
+                    break;
+                }
+                case NodeModelBase.ChangeType.InputPins:
+                    CreateFlowInPorts(true);
+                    break;
+                case NodeModelBase.ChangeType.OutputPins:
+                    CreateFlowOutPorts(true);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(changeType), changeType, null);
             }
-        }
-        
-        protected virtual void OnDisconnectedPort(string portName)
-        {
-            
         }
 
         private void StyleNode()
@@ -408,8 +422,18 @@ namespace VaporEditor.Blueprints
             }
         }
         
-        private void CreateFlowInPorts()
+        protected void CreateFlowInPorts(bool recreate = false)
         {
+            if (recreate)
+            {
+                foreach (var pin in InPorts.Values)
+                {
+                    pin.Connected -= OnConnectedToPin;
+                    pin.Disconnected -= OnDisconnectedFromPin;
+                    pin.PinTypeChanged -= OnPinTypeChanged;
+                    pin.parent.RemoveFromHierarchy();
+                }
+            }
             if (Controller.InputPins == null)
             {
                 return;
@@ -418,6 +442,13 @@ namespace VaporEditor.Blueprints
             foreach (var pin in Controller.InputPins.Values)
             {
                 CreateInputPin(pin);
+            }
+            if (recreate)
+            {
+                foreach (var pin in InPorts.Values)
+                {
+                    pin.Reconnect();
+                }
             }
         }
 
@@ -430,6 +461,9 @@ namespace VaporEditor.Blueprints
             }
             InPorts.Add(pin.PortName, port);
             inputContainer.Add(portContainer);
+            port.Connected += OnConnectedToPin;
+            port.Disconnected += OnDisconnectedFromPin;
+            port.PinTypeChanged += OnPinTypeChanged;
                 
             // inputContainer.Add(port.DrawnField);
             if (pin.IsGenericPin)
@@ -446,14 +480,27 @@ namespace VaporEditor.Blueprints
             {
                 return;
             }
+            
+            pin.Connected -= OnConnectedToPin;
+            pin.Disconnected -= OnDisconnectedFromPin;
+            pin.PinTypeChanged -= OnPinTypeChanged;
 
             pin.DisconnectAll();
-            // pin.DrawnField?.RemoveFromHierarchy();
             pin.parent.RemoveFromHierarchy();
         }
         
-        private void CreateFlowOutPorts()
+        protected void CreateFlowOutPorts(bool recreate = false)
         {
+            if (recreate)
+            {
+                foreach (var pin in OutPorts.Values)
+                {
+                    pin.Connected -= OnConnectedToPin;
+                    pin.Disconnected -= OnDisconnectedFromPin;
+                    pin.PinTypeChanged -= OnPinTypeChanged;
+                    pin.parent.RemoveFromHierarchy();
+                }
+            }
             if (Controller.OutputPins == null)
             {
                 return;
@@ -462,6 +509,13 @@ namespace VaporEditor.Blueprints
             foreach (var pin in Controller.OutputPins.Values)
             {
                 CreateOutputPin(pin);
+            }
+            if (recreate)
+            {
+                foreach (var pin in OutPorts.Values)
+                {
+                    pin.Reconnect();
+                }
             }
         }
 
@@ -475,6 +529,9 @@ namespace VaporEditor.Blueprints
                 
             OutPorts.Add(pin.PortName, port);
             outputContainer.Add(portContainer);
+            port.Connected += OnConnectedToPin;
+            port.Disconnected += OnDisconnectedFromPin;
+            port.PinTypeChanged += OnPinTypeChanged;
 
             if (pin.IsGenericPin)
             {
@@ -490,22 +547,41 @@ namespace VaporEditor.Blueprints
             {
                 return;
             }
+            
+            pin.Connected -= OnConnectedToPin;
+            pin.Disconnected -= OnDisconnectedFromPin;
+            pin.PinTypeChanged -= OnPinTypeChanged;
 
             pin.DisconnectAll();
             pin.parent.RemoveFromHierarchy();
         }
 
-        public void OnConnectedInputEdge(BlueprintWireReference wire, bool shouldModifyDataModel)
+        protected virtual void OnConnectedToPin(BlueprintPortView pinView)
         {
-            Debug.Log($"Connected {wire}");
-            ConnectedPort?.Invoke(wire, shouldModifyDataModel);
+            
         }
-
-        public void OnDisconnectedInputEdge(string portName)
+        
+        protected virtual void OnDisconnectedFromPin(BlueprintPortView pinView)
         {
-            Debug.Log($"Disconnected {portName}");
-            DisconnectedPort?.Invoke(portName);
+            
         }
+        
+        protected virtual void OnPinTypeChanged(BlueprintPortView pinView)
+        {
+            
+        }
+        
+        // public void OnConnectedInputEdge(BlueprintWireReference wire, bool shouldModifyDataModel)
+        // {
+        //     Debug.Log($"Connected {wire}");
+        //     ConnectedPort?.Invoke(wire, shouldModifyDataModel);
+        // }
+        //
+        // public void OnDisconnectedInputEdge(string portName)
+        // {
+        //     Debug.Log($"Disconnected {portName}");
+        //     DisconnectedPort?.Invoke(portName);
+        // }
 
         public void InvalidateName()
         {
@@ -617,6 +693,9 @@ namespace VaporEditor.Blueprints
         {
             foreach (var port in InPorts.Values)
             {
+                port.Connected -= OnConnectedToPin;
+                port.Disconnected -= OnDisconnectedFromPin;
+                port.PinTypeChanged -= OnPinTypeChanged;
                 port.DisconnectAll();
             }
             InPorts.Clear();
@@ -633,6 +712,9 @@ namespace VaporEditor.Blueprints
         {
             foreach (var port in OutPorts.Values)
             {
+                port.Connected -= OnConnectedToPin;
+                port.Disconnected -= OnDisconnectedFromPin;
+                port.PinTypeChanged -= OnPinTypeChanged;
                 port.DisconnectAll();
             }
             OutPorts.Clear();
@@ -659,13 +741,13 @@ namespace VaporEditor.Blueprints
         }
 
 
-        private void GenericTypePinChanged(VisualElement sender, Type newType, Type oldType)
+        private void GenericTypePinChanged(VisualElement sender, Type oldType, Type newType)
         {
             if (sender.userData is not BlueprintPortView view)
             {
                 return;
             }
-
+            
             view.Pin.Type = newType;
             view.UpdateType();
 
@@ -684,6 +766,11 @@ namespace VaporEditor.Blueprints
             
         }
         #endregion
+
+        public void Delete()
+        {
+            Controller.Delete();
+        }
     }
 
     public class BlueprintCastNodeView : BlueprintNodeView
@@ -694,7 +781,7 @@ namespace VaporEditor.Blueprints
             GetDrawnFieldForOutPort<TypeSelectorField>(PinNames.AS_OUT).TypeChanged += OnTypeChanged;
         }
 
-        private void OnTypeChanged(VisualElement sender, Type newType, Type oldType)
+        private void OnTypeChanged(VisualElement sender, Type oldType, Type newType)
         {
             title = $"Cast<{GetDrawnFieldForOutPort<TypeSelectorField>(PinNames.AS_OUT).LabelName}>";
             OutPorts[PinNames.AS_OUT].Pin.Type = newType;
@@ -757,8 +844,11 @@ namespace VaporEditor.Blueprints
 
     public class BlueprintSwitchNodeView : BlueprintNodeView
     {
+        private readonly SwitchNode _switchNode;
+
         public BlueprintSwitchNodeView(BlueprintView view, SwitchNode nodeController) : base(view, nodeController)
         {
+            _switchNode = nodeController;
         }
 
         public override void OnSelected()
@@ -768,6 +858,125 @@ namespace VaporEditor.Blueprints
             {
                 View.Window.InspectorView.SetInspectorTarget(new BlueprintInspectorSwitchView(this));
             }
+        }
+
+        protected override void OnConnectedToPin(BlueprintPortView pinView)
+        {
+            if (pinView.Pin.Direction == PinDirection.In && pinView.Pin.PortName == PinNames.VALUE_IN)
+            {
+                _switchNode.UpdateCases();
+            }
+        }
+
+        protected override void OnDisconnectedFromPin(BlueprintPortView pinView)
+        {
+            if (pinView.Pin.Direction == PinDirection.In && pinView.Pin.PortName == PinNames.VALUE_IN)
+            {
+                if (_switchNode.CurrentEnumType.IsEnum)
+                {
+                    _switchNode.CurrentEnumType = typeof(EnumPin);
+                }
+                _switchNode.ClearCases();
+            }
+        }
+
+        protected override void OnPinTypeChanged(BlueprintPortView pinView)
+        {
+            if (pinView.Pin.Direction == PinDirection.In && pinView.Pin.PortName == PinNames.VALUE_IN)
+            {
+                _switchNode.CurrentEnumType = pinView.Pin.Type;
+                Debug.Log("Switching Pin " + _switchNode.CurrentEnumType);
+            }
+        }
+    }
+
+    public class BlueprintConstructorNodeView : BlueprintNodeView
+    {
+        private readonly ConstructorNode _constructorNode;
+        public BlueprintConstructorNodeView(BlueprintView view, NodeModelBase nodeController) : base(view, nodeController)
+        {
+            _constructorNode = (ConstructorNode)nodeController;
+            ConstructorInfo[] constructors = null;
+            if(_constructorNode.TypeToConstruct.IsGenericType)
+            {
+                titleContainer[0].style.paddingLeft = 28;
+                var ts = new TypeSelectorField(string.Empty, null, typeLabelVisible: false)
+                {
+                    tooltip = "Change Type",
+                    style =
+                    {
+                        marginRight = 12,
+                        alignSelf = Align.Center,
+                    }
+                }.WithGenericDefinition(_constructorNode.TypeToConstruct);
+                ts.TypeChanged += OnConstructorTypeChanged;
+                titleContainer.Add(ts);
+                constructors = _constructorNode.TypeToConstruct.GetGenericTypeDefinition().GetConstructors(BindingFlags.Public | BindingFlags.Instance);
+            }
+            else
+            {
+                constructors = _constructorNode.TypeToConstruct.GetConstructors(BindingFlags.Public | BindingFlags.Instance);
+            }
+            
+            List<string> choices = new(constructors.Length);
+            List<object> values = new(constructors.Length);
+            if (constructors.Length == 0 || _constructorNode.TypeToConstruct == typeof(string) || _constructorNode.TypeToConstruct.IsPrimitive)
+            {
+                choices.Add("Default(T)");
+                values.Add(null);
+            }
+
+            foreach (var c in constructors)
+            {
+                var constructorSignature = BlueprintEditorUtility.FormatConstructorSignature(c);
+                choices.Add(constructorSignature);
+                values.Add(c);
+            }
+
+            var idx = choices.IndexOf(_constructorNode.CurrentConstructorSignature);
+            idx = idx < 0 ? 0 : idx;
+            var combo = new ComboBox("Constructor", idx, choices, values, false);
+            combo.SelectionChanged += OnConstructorChanged;
+            
+            inputContainer.Add(combo);
+            RefreshExpandedState();
+        }
+
+        private void OnConstructorTypeChanged(TypeSelectorField field, Type previousType, Type currentType)
+        {
+            _constructorNode.FinalizedType = currentType;
+            string arrayBrackets = _constructorNode.IsArray ? "[]" : string.Empty;
+            title = $"Construct <b><i>{BlueprintEditorUtility.FormatTypeName(currentType)}{arrayBrackets}</i></b>";
+            OutPorts[PinNames.RETURN].Pin.Type = _constructorNode.GetConstructedType();
+            CreateFlowOutPorts(true);
+        }
+
+        private void OnConstructorChanged(ComboBox comboBox, List<int> indices)
+        {
+            if(!indices.IsValidIndex(0)) return;
+            var constructor = comboBox.Values[indices[0]];
+            var formattedName = comboBox.Choices[indices[0]];
+            
+            _constructorNode.UpdateConstructor(formattedName, constructor as ConstructorInfo);
+            CreateFlowInPorts(true);
+        }
+
+        public override void OnSelected()
+        {
+            base.OnSelected();
+            if(View.selection.Count == 1)
+            {
+                View.Window.InspectorView.SetInspectorTarget(new BlueprintInspectorConstructorView(this));
+            }
+        }
+
+        public void UpdateIsArray()
+        {
+            string arrayBrackets = _constructorNode.IsArray ? "[]" : string.Empty;
+            title = $"Construct <b><i>{BlueprintEditorUtility.FormatTypeName(_constructorNode.FinalizedType)}{arrayBrackets}</i></b>";
+            OutPorts[PinNames.RETURN].Pin.IsArray = _constructorNode.IsArray;
+            OutPorts[PinNames.RETURN].Pin.Type = _constructorNode.GetConstructedType();
+            CreateFlowOutPorts(true);
         }
     }
 }

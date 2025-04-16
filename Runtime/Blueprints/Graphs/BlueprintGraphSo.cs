@@ -25,7 +25,7 @@ namespace Vapor.Blueprints
     //     public List<BlueprintCompiledNodeDto> Nodes;
     // }
 
-    [DatabaseKeyValuePair, KeyOptions(includeNone: false, category: "Graphs")]
+    [DatabaseKeyValuePair, KeyOptions(includeNone: true, category: "Blueprints")]
     public class BlueprintGraphSo : NamedKeySo, IDatabaseInitialize
     {
         public enum BlueprintGraphType
@@ -39,6 +39,10 @@ namespace Vapor.Blueprints
         public string ParentType;
         [HideInInspector]
         public BlueprintGraphSo ParentObject;
+        [HideInInspector]
+        public long Version;
+        [HideInInspector] 
+        public string LastOpenedMethod;
         
         [HideLabel]
         public string GraphJson;
@@ -47,21 +51,24 @@ namespace Vapor.Blueprints
         private void ResetGraph()
         {
             GraphJson = string.Empty;
+            LastOpenedMethod = string.Empty;
+            Version = 0;
         }
-        
-        public IBlueprintGraph Graph { get; set; }
 
         public void InitializedInDatabase()
         {
-            // Validate();
-            Graph = new BlueprintFunctionGraph(this);
-            RuntimeDataStore<IBlueprintGraph>.InitDatabase(RuntimeDatabase<BlueprintGraphSo>.Count);
+            RuntimeDataStore<BlueprintTypeContainer>.InitDatabase(100);
         }
 
         public void PostInitializedInDatabase()
         {
-            Debug.Log("Post Initialized Graph: " + Key);
-            RuntimeDataStore<IBlueprintGraph>.Add(Key, Graph);
+            var type = Type.GetType("MyAssemblyQualifiedType");
+            RuntimeDataStore<BlueprintTypeContainer>.Add(Key, new BlueprintTypeContainer { Type = type });
         }
+    }
+
+    public struct BlueprintTypeContainer
+    {
+        public Type Type;
     }
 }
